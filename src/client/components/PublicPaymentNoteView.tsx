@@ -11,6 +11,7 @@ import {
   Check,
   Clock,
   ChevronDown,
+  ChevronUp,
   Share2,
   ZoomIn,
   X,
@@ -45,6 +46,8 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [zoomedQr, setZoomedQr] = useState<{ url: string; title: string } | null>(null);
   const [viewingVoucher, setViewingVoucher] = useState<{ url: string; name: string } | null>(null);
+  const [showAllInstallments, setShowAllInstallments] = useState(false);
+  const [installmentFilter, setInstallmentFilter] = useState<'all' | 'pending' | 'paid'>('all');
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   // Forzar siempre modo claro en la vista pública
@@ -455,156 +458,191 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
 
           {/* DETALLE DEL COBRO / MESES DE MEMBRESÍA O SERVICIOS */}
           <div>
-            {paymentNote.isMembership && paymentNote.membershipInstallments && paymentNote.membershipInstallments.length > 0 ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="p-1 rounded-lg bg-purple-100 text-purple-700">
-                      <Crown className="w-4 h-4" />
-                    </span>
-                    <span className="text-xs font-black uppercase tracking-wider text-slate-800">
-                      MESES CONTRATADOS DE LA MEMBRESÍA ({paymentNote.membershipInstallments.length})
+            {paymentNote.isMembership && paymentNote.membershipInstallments && paymentNote.membershipInstallments.length > 0 ? (() => {
+              const installments = paymentNote.membershipInstallments;
+              const totalMonths = installments.length;
+              const paidCount = installments.filter((i) => i.status === 'paid').length;
+              const pendingCount = installments.filter((i) => i.status !== 'paid').length;
+              const percentPaid = totalMonths > 0 ? Math.round((paidCount / totalMonths) * 100) : 0;
+
+              // Identificar meses visibles en vista compacta inteligente
+              const visibleIndices = new Set<number>();
+              if (showAllInstallments || installmentFilter !== 'all' || totalMonths <= 4) {
+                installments.forEach((_, idx) => visibleIndices.add(idx));
+              } else {
+                const firstPendingIndex = installments.findIndex((i) => i.status !== 'paid');
+                if (firstPendingIndex === -1) {
+                  // Todos pagados: mostrar los últimos 4
+                  for (let i = Math.max(0, totalMonths - 4); i < totalMonths; i++) visibleIndices.add(i);
+                } else if (firstPendingIndex === 0) {
+                  // Todos pendientes: mostrar los primeros 4
+                  for (let i = 0; i < Math.min(totalMonths, 4); i++) visibleIndices.add(i);
+                } else {
+                  // En curso: mostrar 1 previo y hasta 3 siguientes
+                  const start = Math.max(0, firstPendingIndex - 1);
+                  const end = Math.min(totalMonths, start + 4);
+                  for (let i = start; i < end; i++) visibleIndices.add(i);
+                }
+              }
+
+              const isMatchFilter = (inst: any) =>
+                installmentFilter === 'all' ||
+                (installmentFilter === 'paid' ? inst.status === 'paid' : inst.status !== 'paid');
+
+              return (
+                <div className="space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="p-1 rounded-lg bg-purple-100 text-purple-700">
+                        <Crown className="w-4 h-4" />
+                      </span>
+                      <span className="text-xs font-black uppercase tracking-wider text-slate-800">
+                        MESES CONTRATADOS DE LA MEMBRESÍA ({totalMonths})
+                      </span>
+                    </div>
+                    <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                      {paymentNote.membershipPlanName || 'Plan Recurrente'}
                     </span>
                   </div>
-                  <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                    {paymentNote.membershipPlanName || 'Plan Recurrente'}
-                  </span>
-                </div>
 
-                {/* VISTA MÓVIL MEMBRESÍA */}
-                <div className="sm:hidden print:hidden space-y-2.5">
-                  {paymentNote.membershipInstallments.map((inst, idx) => (
-                    <div
-                      key={inst.id || idx}
-                      className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-2"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="w-6 h-6 rounded-lg bg-purple-600 text-white font-black text-xs flex items-center justify-center shrink-0">
-                            {inst.monthNumber || idx + 1}
+                  {/* WIDGET DE RESUMEN Y PROGRESO (CUANDO SON MÁS DE 4 MESES) */}
+                  {totalMonths > 4 && (
+                    <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-50/80 via-slate-50 to-emerald-50/60 border border-purple-100/90 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-slate-800">
+                            Progreso del Contrato:
                           </span>
-                          <div className="min-w-0">
-                            <p className="font-extrabold text-slate-900 text-xs truncate">
-                              {inst.periodName}
-                            </p>
-                            <p className="text-[11px] text-slate-500 font-semibold">
-                              {inst.planName}
-                            </p>
-                            {inst.operationNumber && (
-                              <p className="text-[10px] font-mono text-slate-500 mt-0.5">
-                                N° Op: <strong className="text-slate-700">{inst.operationNumber}</strong>
-                              </p>
-                            )}
-                            {inst.notes && (
-                              <p className="text-[10px] text-slate-500 italic mt-0.5">
-                                {inst.notes}
-                              </p>
-                            )}
-                          </div>
+                          <span className="inline-flex items-center gap-1 font-black text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-300 text-[11px]">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            {paidCount} {paidCount === 1 ? 'Mes Pagado' : 'Meses Pagados'}
+                          </span>
+                          {pendingCount > 0 && (
+                            <span className="inline-flex items-center gap-1 font-black text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-md border border-amber-300 text-[11px]">
+                              <Clock className="w-3.5 h-3.5 text-amber-600" />
+                              {pendingCount} {pendingCount === 1 ? 'Mes Pendiente' : 'Meses Pendientes'}
+                            </span>
+                          )}
                         </div>
-
-                        <span className="font-mono font-black text-xs text-slate-900 bg-white px-2 py-0.5 rounded-lg border border-slate-200 shrink-0">
-                          {paymentNote.currencySymbol}{' '}
-                          {Number(inst.amount).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                        <span className="font-black text-purple-700 text-xs">
+                          {percentPaid}% completado
                         </span>
                       </div>
 
-                      <div className="pt-2 border-t border-slate-200/70 flex items-center justify-between gap-2">
-                        {/* Estado del Mes */}
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
-                            inst.status === 'paid'
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                              : inst.status === 'overdue'
-                              ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                              : 'bg-amber-100 text-amber-800 border border-amber-300'
-                          }`}
-                        >
-                          {inst.status === 'paid' ? (
-                            <>
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                              <span>Pagado</span>
-                            </>
-                          ) : inst.status === 'overdue' ? (
-                            <>
-                              <AlertCircle className="w-3 h-3 text-rose-600" />
-                              <span>Vencido</span>
-                            </>
-                          ) : (
-                            <>
-                              <Clock className="w-3 h-3 text-amber-600" />
-                              <span>En Proceso</span>
-                            </>
-                          )}
-                        </span>
-
-                        {/* Botón Ver Comprobante */}
-                        {inst.voucherUrl ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setViewingVoucher({
-                                url: inst.voucherUrl!,
-                                name: inst.voucherName || `Voucher_Mes_${idx + 1}`,
-                              })
-                            }
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-[11px] font-bold cursor-pointer transition shadow-2xs"
-                          >
-                            <Paperclip className="w-3 h-3 text-purple-600" />
-                            <span>Ver Voucher</span>
-                          </button>
-                        ) : (
-                          <span className="text-[10px] text-slate-400 italic">
-                            Sin voucher
-                          </span>
-                        )}
+                      {/* Barra de progreso */}
+                      <div className="w-full bg-slate-200/90 rounded-full h-2.5 overflow-hidden p-0.5 shadow-inner flex">
+                        <div
+                          className="bg-gradient-to-r from-emerald-500 to-teal-500 h-full rounded-full transition-all duration-500 shadow-xs"
+                          style={{ width: `${percentPaid}%` }}
+                        />
                       </div>
                     </div>
-                  ))}
-                </div>
+                  )}
 
-                {/* VISTA DESKTOP / PRINT MEMBRESÍA */}
-                <div className="hidden sm:block print:block overflow-x-auto rounded-2xl border border-slate-200">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold text-[11px]">
-                        <th className="py-3 px-4 w-12 text-center">#</th>
-                        <th className="py-3 px-4">Mes / Período</th>
-                        <th className="py-3 px-4">Plan Contratado</th>
-                        <th className="py-3 px-4 text-right w-28">Monto</th>
-                        <th className="py-3 px-4 text-center w-36">Estado</th>
-                        <th className="py-3 px-4 text-center w-36">Voucher</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {paymentNote.membershipInstallments.map((inst, idx) => (
-                        <tr key={inst.id || idx} className="hover:bg-slate-50/50">
-                          <td className="py-3.5 px-4 text-center font-bold text-slate-400">
-                            {inst.monthNumber || idx + 1}
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <p className="font-extrabold text-slate-900 text-xs">
-                              {inst.periodName}
-                            </p>
-                            {inst.operationNumber && (
-                              <p className="text-[10px] font-mono text-slate-500 mt-0.5">
-                                N° Op: <strong className="text-slate-700">{inst.operationNumber}</strong>
-                              </p>
-                            )}
-                            {inst.notes && (
-                              <p className="text-[10px] text-slate-500 italic mt-0.5">
-                                {inst.notes}
-                              </p>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-4 font-semibold text-slate-700">
-                            {inst.planName}
-                          </td>
-                          <td className="py-3.5 px-4 text-right font-black text-slate-900 font-mono">
-                            {paymentNote.currencySymbol}{' '}
-                            {Number(inst.amount).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
+                  {/* SELECTORES RÁPIDOS E INDICADOR DE MESES (PRINT:HIDDEN) */}
+                  {totalMonths > 4 && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5 print:hidden">
+                      <div className="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setInstallmentFilter('all')}
+                          className={`px-3 py-1 rounded-lg font-bold transition text-xs cursor-pointer ${
+                            installmentFilter === 'all'
+                              ? 'bg-white text-slate-900 shadow-2xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Todos ({totalMonths})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setInstallmentFilter('pending');
+                            setShowAllInstallments(true);
+                          }}
+                          className={`px-3 py-1 rounded-lg font-bold transition text-xs cursor-pointer ${
+                            installmentFilter === 'pending'
+                              ? 'bg-white text-amber-800 shadow-2xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Pendientes ({pendingCount})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setInstallmentFilter('paid');
+                            setShowAllInstallments(true);
+                          }}
+                          className={`px-3 py-1 rounded-lg font-bold transition text-xs cursor-pointer ${
+                            installmentFilter === 'paid'
+                              ? 'bg-white text-emerald-800 shadow-2xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Pagados ({paidCount})
+                        </button>
+                      </div>
+
+                      <div className="text-[11px] font-semibold text-slate-500">
+                        {installmentFilter === 'all' && !showAllInstallments
+                          ? `Vista compacta: ${visibleIndices.size} de ${totalMonths} meses clave`
+                          : `Mostrando ${
+                              installmentFilter === 'all'
+                                ? totalMonths
+                                : installmentFilter === 'paid'
+                                ? paidCount
+                                : pendingCount
+                            } meses`}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* VISTA MÓVIL MEMBRESÍA */}
+                  <div className="sm:hidden print:hidden space-y-2.5">
+                    {installments.map((inst, idx) => {
+                      const matches = isMatchFilter(inst);
+                      const isVisible = matches && (showAllInstallments || visibleIndices.has(idx) || installmentFilter !== 'all');
+                      if (!isVisible) return null;
+
+                      return (
+                        <div
+                          key={inst.id || idx}
+                          className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-2 animate-in fade-in duration-200"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="w-6 h-6 rounded-lg bg-purple-600 text-white font-black text-xs flex items-center justify-center shrink-0">
+                                {inst.monthNumber || idx + 1}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="font-extrabold text-slate-900 text-xs truncate">
+                                  {inst.periodName}
+                                </p>
+                                <p className="text-[11px] text-slate-500 font-semibold">
+                                  {inst.planName}
+                                </p>
+                                {inst.operationNumber && (
+                                  <p className="text-[10px] font-mono text-slate-500 mt-0.5">
+                                    N° Op: <strong className="text-slate-700">{inst.operationNumber}</strong>
+                                  </p>
+                                )}
+                                {inst.notes && (
+                                  <p className="text-[10px] text-slate-500 italic mt-0.5">
+                                    {inst.notes}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            <span className="font-mono font-black text-xs text-slate-900 bg-white px-2 py-0.5 rounded-lg border border-slate-200 shrink-0">
+                              {paymentNote.currencySymbol}{' '}
+                              {Number(inst.amount).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+
+                          <div className="pt-2 border-t border-slate-200/70 flex items-center justify-between gap-2">
+                            {/* Estado del Mes */}
                             <span
                               className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
                                 inst.status === 'paid'
@@ -631,8 +669,8 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
                                 </>
                               )}
                             </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
+
+                            {/* Botón Ver Comprobante */}
                             {inst.voucherUrl ? (
                               <button
                                 type="button"
@@ -648,18 +686,148 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
                                 <span>Ver Voucher</span>
                               </button>
                             ) : (
-                              <span className="text-[11px] text-slate-400 italic">
-                                Sin adjunto
+                              <span className="text-[10px] text-slate-400 italic">
+                                Sin voucher
                               </span>
                             )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
 
-                {/* SERVICIOS ADICIONALES / EXTRAS FUERA DE PLAN (OPCIÓN 2) */}
+                  {/* VISTA DESKTOP / PRINT MEMBRESÍA */}
+                  <div className="hidden sm:block print:block overflow-x-auto rounded-2xl border border-slate-200">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold text-[11px]">
+                          <th className="py-3 px-4 w-12 text-center">#</th>
+                          <th className="py-3 px-4">Mes / Período</th>
+                          <th className="py-3 px-4">Plan Contratado</th>
+                          <th className="py-3 px-4 text-right w-28">Monto</th>
+                          <th className="py-3 px-4 text-center w-36">Estado</th>
+                          <th className="py-3 px-4 text-center w-36">Voucher</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {installments.map((inst, idx) => {
+                          const matches = isMatchFilter(inst);
+                          const isVisible = matches && (showAllInstallments || visibleIndices.has(idx) || installmentFilter !== 'all');
+
+                          return (
+                            <tr
+                              key={inst.id || idx}
+                              className={`hover:bg-slate-50/50 ${
+                                isVisible ? '' : 'hidden print:table-row'
+                              }`}
+                            >
+                              <td className="py-3.5 px-4 text-center font-bold text-slate-400">
+                                {inst.monthNumber || idx + 1}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <p className="font-extrabold text-slate-900 text-xs">
+                                  {inst.periodName}
+                                </p>
+                                {inst.operationNumber && (
+                                  <p className="text-[10px] font-mono text-slate-500 mt-0.5">
+                                    N° Op: <strong className="text-slate-700">{inst.operationNumber}</strong>
+                                  </p>
+                                )}
+                                {inst.notes && (
+                                  <p className="text-[10px] text-slate-500 italic mt-0.5">
+                                    {inst.notes}
+                                  </p>
+                                )}
+                              </td>
+                              <td className="py-3.5 px-4 font-semibold text-slate-700">
+                                {inst.planName}
+                              </td>
+                              <td className="py-3.5 px-4 text-right font-black text-slate-900 font-mono">
+                                {paymentNote.currencySymbol}{' '}
+                                {Number(inst.amount).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="py-3.5 px-4 text-center">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                                    inst.status === 'paid'
+                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                      : inst.status === 'overdue'
+                                      ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                      : 'bg-amber-100 text-amber-800 border border-amber-300'
+                                  }`}
+                                >
+                                  {inst.status === 'paid' ? (
+                                    <>
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                      <span>Pagado</span>
+                                    </>
+                                  ) : inst.status === 'overdue' ? (
+                                    <>
+                                      <AlertCircle className="w-3 h-3 text-rose-600" />
+                                      <span>Vencido</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Clock className="w-3 h-3 text-amber-600" />
+                                      <span>En Proceso</span>
+                                    </>
+                                  )}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-center">
+                                {inst.voucherUrl ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setViewingVoucher({
+                                        url: inst.voucherUrl!,
+                                        name: inst.voucherName || `Voucher_Mes_${idx + 1}`,
+                                      })
+                                    }
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-[11px] font-bold cursor-pointer transition shadow-2xs"
+                                  >
+                                    <Paperclip className="w-3 h-3 text-purple-600" />
+                                    <span>Ver Voucher</span>
+                                  </button>
+                                ) : (
+                                  <span className="text-[11px] text-slate-400 italic">
+                                    Sin adjunto
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* BOTÓN COLAPSAR / EXPANDIR (PRINT:HIDDEN) */}
+                  {installmentFilter === 'all' && totalMonths > 4 && (
+                    <div className="pt-1 text-center print:hidden flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => setShowAllInstallments(!showAllInstallments)}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-black transition-all shadow-2xs hover:shadow-xs cursor-pointer active:scale-98"
+                      >
+                        {showAllInstallments ? (
+                          <>
+                            <ChevronUp className="w-4 h-4 text-purple-600" />
+                            <span>Mostrar vista compacta ({visibleIndices.size} meses clave)</span>
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="w-4 h-4 text-purple-600" />
+                            <span>
+                              Ver todos los {totalMonths} meses contratados ({totalMonths - visibleIndices.size} meses ocultos)
+                            </span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* SERVICIOS ADICIONALES / EXTRAS FUERA DE PLAN (OPCIÓN 2) */}
                 {paymentNote.extraItems && paymentNote.extraItems.length > 0 && (
                   <div className="pt-4 border-t border-slate-200/80 space-y-3">
                     <div className="flex items-center justify-between">
@@ -843,7 +1011,8 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
                   </div>
                 )}
               </div>
-            ) : (
+            );
+          })() : (
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">

@@ -22,6 +22,8 @@ import {
   AlertCircle,
   Crown,
   Paperclip,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 export interface PaymentNoteFormData {
@@ -103,6 +105,7 @@ export const PaymentNoteLivePreview: React.FC<PaymentNoteLivePreviewProps> = ({
   tenant,
   onClose,
 }) => {
+  const [showAllInstallments, setShowAllInstallments] = React.useState(false);
   const company = tenant?.companyInfo || {};
   const commercialName = company.commercialName || company.brandName || tenant?.name || 'ROMA Agencia';
   const companyRuc = company.ruc || company.taxId || '';
@@ -232,80 +235,148 @@ export const PaymentNoteLivePreview: React.FC<PaymentNoteLivePreviewProps> = ({
         </div>
 
         {/* Tabla / Lista de Conceptos a Cobrar O Meses de Membresía */}
-        {formData.isMembership && formData.membershipInstallments && formData.membershipInstallments.length > 0 ? (
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
-                <Crown className="w-3.5 h-3.5" />
-                Meses Contratados ({formData.membershipInstallments.length})
-              </span>
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800">
-                {formData.membershipPlanName || 'Plan Recurrente'}
-              </span>
-            </div>
+        {formData.isMembership && formData.membershipInstallments && formData.membershipInstallments.length > 0 ? (() => {
+          const installments = formData.membershipInstallments;
+          const totalMonths = installments.length;
+          const paidCount = installments.filter((i) => i.status === 'paid').length;
+          const pendingCount = installments.filter((i) => i.status !== 'paid').length;
+          const percentPaid = totalMonths > 0 ? Math.round((paidCount / totalMonths) * 100) : 0;
 
-            <div className="space-y-2">
-              {formData.membershipInstallments.map((inst, idx) => (
-                <div
-                  key={inst.id || idx}
-                  className="p-3 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 space-y-1.5 shadow-2xs"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-5 h-5 rounded-lg bg-purple-600 flex items-center justify-center font-bold text-[10px] text-white shrink-0">
-                        {inst.monthNumber || idx + 1}
-                      </span>
-                      <div className="min-w-0">
-                        <h5 className="font-black text-xs text-slate-900 dark:text-slate-100 truncate">
-                          {inst.periodName}
-                        </h5>
-                        <p className="text-[10px] font-semibold text-slate-400">
-                          {inst.planName}
-                        </p>
-                      </div>
-                    </div>
+          const visibleIndices = new Set<number>();
+          if (showAllInstallments || totalMonths <= 4) {
+            installments.forEach((_, idx) => visibleIndices.add(idx));
+          } else {
+            const firstPendingIndex = installments.findIndex((i) => i.status !== 'paid');
+            if (firstPendingIndex === -1) {
+              for (let i = Math.max(0, totalMonths - 4); i < totalMonths; i++) visibleIndices.add(i);
+            } else if (firstPendingIndex === 0) {
+              for (let i = 0; i < Math.min(totalMonths, 4); i++) visibleIndices.add(i);
+            } else {
+              const start = Math.max(0, firstPendingIndex - 1);
+              const end = Math.min(totalMonths, start + 4);
+              for (let i = start; i < end; i++) visibleIndices.add(i);
+            }
+          }
 
-                    <div className="text-right shrink-0">
-                      <span className="font-mono font-black text-xs text-slate-900 dark:text-slate-100 block">
-                        {formData.currencySymbol} {(Number(inst.amount) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                      </span>
-                      <span
-                        className={`inline-block mt-0.5 text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
-                          inst.status === 'paid'
-                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
-                            : inst.status === 'overdue'
-                            ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200 dark:border-rose-800'
-                            : 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
-                        }`}
-                      >
-                        {inst.status === 'paid' ? 'Pagado' : inst.status === 'overdue' ? 'Vencido' : 'En proceso'}
-                      </span>
-                    </div>
+          return (
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                  <Crown className="w-3.5 h-3.5" />
+                  Meses Contratados ({totalMonths})
+                </span>
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800">
+                  {formData.membershipPlanName || 'Plan Recurrente'}
+                </span>
+              </div>
+
+              {totalMonths > 4 && (
+                <div className="p-2.5 rounded-xl bg-purple-50/50 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-900/40 space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                      Avance: <strong className="text-emerald-600 dark:text-emerald-400">{paidCount} pagados</strong> • <strong className="text-amber-600 dark:text-amber-400">{pendingCount} pendientes</strong>
+                    </span>
+                    <span className="font-black text-purple-600 dark:text-purple-400">
+                      {percentPaid}%
+                    </span>
                   </div>
-
-                  {inst.operationNumber && (
-                    <div className="pt-0.5 text-[10px] text-slate-500 font-mono pl-7">
-                      N° Op: <span className="font-bold text-slate-700 dark:text-slate-300">{inst.operationNumber}</span>
-                    </div>
-                  )}
-
-                  {inst.notes && (
-                    <div className="pt-0.5 text-[10px] text-slate-500 italic pl-7 line-clamp-2">
-                      Nota: {inst.notes}
-                    </div>
-                  )}
-
-                  {inst.voucherName && (
-                    <div className="pt-1 flex items-center gap-1.5 text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold pl-7">
-                      <Paperclip className="w-3 h-3" />
-                      <span className="truncate">Voucher: {inst.voucherName}</span>
-                    </div>
-                  )}
+                  <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden flex">
+                    <div
+                      className="bg-emerald-500 h-1.5 transition-all duration-300"
+                      style={{ width: `${percentPaid}%` }}
+                    />
+                  </div>
                 </div>
-              ))}
-            </div>
+              )}
 
-            {/* SERVICIOS ADICIONALES / EXTRAS EN VISTA PREVIA (OPCIÓN 2) */}
+              <div className="space-y-2">
+                {installments.map((inst, idx) => {
+                  if (!showAllInstallments && !visibleIndices.has(idx)) return null;
+
+                  return (
+                    <div
+                      key={inst.id || idx}
+                      className="p-3 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 space-y-1.5 shadow-2xs"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-5 h-5 rounded-lg bg-purple-600 flex items-center justify-center font-bold text-[10px] text-white shrink-0">
+                            {inst.monthNumber || idx + 1}
+                          </span>
+                          <div className="min-w-0">
+                            <h5 className="font-black text-xs text-slate-900 dark:text-slate-100 truncate">
+                              {inst.periodName}
+                            </h5>
+                            <p className="text-[10px] font-semibold text-slate-400">
+                              {inst.planName}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className="font-mono font-black text-xs text-slate-900 dark:text-slate-100 block">
+                            {formData.currencySymbol} {(Number(inst.amount) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                          </span>
+                          <span
+                            className={`inline-block mt-0.5 text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
+                              inst.status === 'paid'
+                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                                : inst.status === 'overdue'
+                                ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200 dark:border-rose-800'
+                                : 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                            }`}
+                          >
+                            {inst.status === 'paid' ? 'Pagado' : inst.status === 'overdue' ? 'Vencido' : 'En proceso'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {inst.operationNumber && (
+                        <div className="pt-0.5 text-[10px] text-slate-500 font-mono pl-7">
+                          N° Op: <span className="font-bold text-slate-700 dark:text-slate-300">{inst.operationNumber}</span>
+                        </div>
+                      )}
+
+                      {inst.notes && (
+                        <div className="pt-0.5 text-[10px] text-slate-500 italic pl-7 line-clamp-2">
+                          Nota: {inst.notes}
+                        </div>
+                      )}
+
+                      {inst.voucherName && (
+                        <div className="pt-1 flex items-center gap-1.5 text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold pl-7">
+                          <Paperclip className="w-3 h-3" />
+                          <span className="truncate">Voucher: {inst.voucherName}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {totalMonths > 4 && (
+                <div className="pt-1 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllInstallments(!showAllInstallments)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/50 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-[11px] font-bold transition shadow-2xs cursor-pointer"
+                  >
+                    {showAllInstallments ? (
+                      <>
+                        <ChevronUp className="w-3.5 h-3.5" />
+                        <span>Vista reducida</span>
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-3.5 h-3.5" />
+                        <span>Ver los {totalMonths} meses ({totalMonths - visibleIndices.size} ocultos)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {/* SERVICIOS ADICIONALES / EXTRAS EN VISTA PREVIA (OPCIÓN 2) */}
             {formData.extraItems && formData.extraItems.length > 0 && (
               <div className="pt-2 space-y-2">
                 <div className="flex items-center justify-between">
@@ -387,7 +458,8 @@ export const PaymentNoteLivePreview: React.FC<PaymentNoteLivePreviewProps> = ({
               </div>
             )}
           </div>
-        ) : (
+        );
+      })() : (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
