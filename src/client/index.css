@@ -1,0 +1,183 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light dark;
+  font-family: var(--app-font-family, 'Inter', system-ui, -apple-system, sans-serif);
+
+  /* Variables dinámicas por Tenant - Modo Claro por defecto */
+  --lt-primary: #7c3aed;
+  --lt-secondary: #ec4899;
+  --lt-bg: #f8fafc;
+  --lt-surface: #ffffff;
+  --lt-text: #0f172a;
+  --lt-muted: #64748b;
+
+  /* Variables dinámicas por Tenant - Modo Oscuro por defecto */
+  --dk-primary: #a78bfa;
+  --dk-secondary: #f472b6;
+  --dk-bg: #090d16;
+  --dk-surface: #111827;
+  --dk-text: #f8fafc;
+  --dk-muted: #94a3b8;
+
+  /* Resolución automática light-dark() según modern-web-guidance */
+  --app-primary: light-dark(var(--lt-primary), var(--dk-primary));
+  --app-secondary: light-dark(var(--lt-secondary), var(--dk-secondary));
+  --app-bg: light-dark(var(--lt-bg), var(--dk-bg));
+  --app-surface: light-dark(var(--lt-surface), var(--dk-surface));
+  --app-text: light-dark(var(--lt-text), var(--dk-text));
+  --app-muted: light-dark(var(--lt-muted), var(--dk-muted));
+  --app-border: light-dark(rgba(15, 23, 42, 0.09), rgba(248, 250, 252, 0.1));
+  --app-card-hover: light-dark(rgba(15, 23, 42, 0.03), rgba(255, 255, 255, 0.03));
+
+  /* Escala tipográfica global configurable por Tenant */
+  --app-font-size: 15px;
+}
+
+:root.dark,
+html.dark {
+  color-scheme: dark !important;
+  --app-primary: var(--dk-primary);
+  --app-secondary: var(--dk-secondary);
+  --app-bg: var(--dk-bg);
+  --app-surface: var(--dk-surface);
+  --app-text: var(--dk-text);
+  --app-muted: var(--dk-muted);
+  --app-border: rgba(255, 255, 255, 0.09);
+
+  /* Overrides dinámicos para tokens Tailwind v4 en modo oscuro */
+  --color-slate-950: var(--dk-bg);
+  --color-slate-900: var(--dk-surface);
+  --color-slate-800: color-mix(in srgb, var(--dk-surface) 80%, white 20%);
+  --color-indigo-600: var(--dk-primary);
+  --color-indigo-500: var(--dk-primary);
+  --color-indigo-400: var(--dk-primary);
+}
+
+:root.light,
+html.light {
+  color-scheme: light !important;
+  --app-primary: var(--lt-primary);
+  --app-secondary: var(--lt-secondary);
+  --app-bg: var(--lt-bg);
+  --app-surface: var(--lt-surface);
+  --app-text: var(--lt-text);
+  --app-muted: var(--lt-muted);
+  --app-border: rgba(15, 23, 42, 0.09);
+
+  /* Overrides dinámicos para tokens Tailwind v4 en modo claro */
+  --color-slate-50: var(--lt-bg);
+  --color-indigo-600: var(--lt-primary);
+  --color-indigo-500: var(--lt-primary);
+  --color-indigo-400: var(--lt-primary);
+}
+
+html {
+  font-size: var(--app-font-size);
+  background-color: var(--app-bg);
+  color: var(--app-text);
+  font-family: var(--app-font-family, 'Inter', system-ui, -apple-system, sans-serif);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+body, button, input, select, textarea {
+  font-family: var(--app-font-family, 'Inter', system-ui, -apple-system, sans-serif);
+}
+
+body {
+  background-color: var(--app-bg);
+  color: var(--app-text);
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+/* Estilo del backdrop para <dialog> nativos tipo app moderna */
+dialog::backdrop {
+  background-color: rgba(3, 7, 18, 0.68);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+dialog[open] {
+  animation: appSheetAppear 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes appSheetAppear {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Utilidades personalizadas ligadas a la paleta del Tenant */
+/* Offcanvas lateral derecho tipo drawer para creación y edición */
+dialog.offcanvas-right {
+  position: fixed !important;
+  margin: 0 0 0 auto !important;
+  inset-block-start: 0 !important;
+  inset-block-end: 0 !important;
+  inset-inline-end: 0 !important;
+  inset-inline-start: auto !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  max-width: 100vw !important;
+  overflow: hidden !important;
+}
+
+dialog.offcanvas-right[open] {
+  animation: offcanvasSlideRight 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+@keyframes offcanvasSlideRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.tenant-bg {
+  background-color: var(--app-bg);
+}
+.tenant-surface {
+  background-color: var(--app-surface);
+}
+.tenant-border {
+  border-color: var(--app-border);
+}
+.tenant-text {
+  color: var(--app-text);
+}
+.tenant-muted {
+  color: var(--app-muted);
+}
+.tenant-btn-primary {
+  background-color: var(--app-primary);
+  color: #ffffff;
+}
+.tenant-btn-primary:hover {
+  filter: brightness(1.06);
+}
+.tenant-ring:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 2px;
+}
+.font-mono-pin {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Soporte para safe-area en dispositivos móviles */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
