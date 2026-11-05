@@ -2181,6 +2181,45 @@ app.get('/api/public/tenants', async (_req: Request, res: Response) => {
   }
 });
 
+// Endpoint dinámico para servir el icono o logo del tenant (compatible con PWA y Open Graph)
+app.get('/api/public/tenant-icon', async (req: Request, res: Response) => {
+  try {
+    const slug = req.query.tenant as string | undefined;
+    const tenant = await db.getPublicTenantBranding(slug);
+    const iconUrl =
+      tenant?.customization?.faviconUrl ||
+      tenant?.customization?.logoPwaUrl ||
+      tenant?.customization?.logoLightUrl ||
+      tenant?.customization?.logoDarkUrl;
+
+    if (iconUrl && iconUrl.startsWith('data:image/')) {
+      const matches = iconUrl.match(/^data:(image\/[a-zA-Z0-9\+\-\.]+);base64,(.+)$/);
+      if (matches) {
+        const mime = matches[1];
+        const buffer = Buffer.from(matches[2], 'base64');
+        res.setHeader('Content-Type', mime);
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.send(buffer);
+        return;
+      }
+    } else if (iconUrl && (iconUrl.startsWith('http://') || iconUrl.startsWith('https://'))) {
+      res.redirect(iconUrl);
+      return;
+    }
+
+    const favPath = path.resolve(process.cwd(), 'public', 'favicon.svg');
+    if (fs.existsSync(favPath)) {
+      res.setHeader('Content-Type', 'image/svg+xml');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.sendFile(favPath);
+    } else {
+      res.status(404).send('Icono no encontrado');
+    }
+  } catch (err) {
+    res.status(500).send('Error');
+  }
+});
+
 // Manifiesto PWA Dinámico por Tenant
 app.get('/api/public/manifest.webmanifest', async (req: Request, res: Response) => {
   try {
@@ -2189,13 +2228,8 @@ app.get('/api/public/manifest.webmanifest', async (req: Request, res: Response) 
     const name = tenant?.companyInfo?.commercialName || tenant?.name || 'ROMA Agencia';
     const shortName = name.slice(0, 15);
     const desc = `Sistema SaaS de Gestión para Agencia de Publicidad y Diseño - ${name}`;
-
-    // Los navegadores exigen URLs válidas para icons en webmanifest, no strings base64 pesados
-    let iconSrc = '/favicon.svg';
-    const customIcon = tenant?.customization?.logoPwaUrl || tenant?.customization?.faviconUrl;
-    if (customIcon && (customIcon.startsWith('http://') || customIcon.startsWith('https://') || (customIcon.startsWith('/') && !customIcon.startsWith('data:')))) {
-      iconSrc = customIcon;
-    }
+    const tenantSlug = tenant?.slug || slug || 'roma-agencia';
+    const iconUrl = `/api/public/tenant-icon?tenant=${encodeURIComponent(tenantSlug)}`;
 
     res.setHeader('Content-Type', 'application/manifest+json');
     res.setHeader('Cache-Control', 'public, max-age=60');
@@ -2203,21 +2237,22 @@ app.get('/api/public/manifest.webmanifest', async (req: Request, res: Response) 
       name,
       short_name: shortName,
       description: desc,
-      start_url: '/',
+      start_url: `/?tenant=${encodeURIComponent(tenantSlug)}`,
+      scope: '/',
       display: 'standalone',
       background_color: tenant?.customization?.darkPalette?.background || '#090d16',
       theme_color: tenant?.customization?.lightPalette?.primary || '#0055ff',
       icons: [
         {
-          src: iconSrc,
+          src: `${iconUrl}&size=192`,
           sizes: '192x192',
-          type: iconSrc.endsWith('.png') ? 'image/png' : 'image/svg+xml',
+          type: 'image/png',
           purpose: 'any maskable',
         },
         {
-          src: iconSrc,
+          src: `${iconUrl}&size=512`,
           sizes: '512x512',
-          type: iconSrc.endsWith('.png') ? 'image/png' : 'image/svg+xml',
+          type: 'image/png',
           purpose: 'any maskable',
         },
       ],
@@ -2244,27 +2279,184 @@ app.get('/api/public/manifest.webmanifest', async (req: Request, res: Response) 
   }
 });
 
-// Rutas cortas de cotización pública y catálogo de servicios (/q/:token, /servicios, /s/:slug)
+// Rutas con Inyección de Open Graph (WhatsApp, Facebook, Twitter, Telegram) y PWA
 const clientDistPath = path.resolve(process.cwd(), 'dist', 'client');
+
+async function serveHtmlWithMetadata(req: Request, res: Response) {
+  try {
+    const indexPath = fs.existsSync(path.join(clientDistPath, 'index.html'))
+      ? path.join(clientDistPath, 'index.html')
+      : path.resolve(process.cwd(), 'index.html');
+
+    if (!fs.existsSync(indexPath)) {
+      res.redirect(`http://localhost:5173${req.originalUrl}`);
+      return;
+    }
+
+    let html = fs.readFileSync(indexPath, 'utf-8');
+
+    const host = req.get('x-forwarded-host') || req.get('host') || 'theromaagency.com';
+    const proto = req.get('x-forwarded-proto') || 'https';
+    const origin = `${proto}://${host}`;
+    const fullUrl = `${origin}${req.originalUrl}`;
+
+    let pageTitle = 'ROMA SaaS — Sistema de Agencia de Publicidad y Diseño';
+    let ogTitle = 'ROMA SaaS — Sistema de Agencia';
+    let ogDescription = 'Plataforma integral de gestión de proyectos, clientes, cotizaciones y notas de pago.';
+    let ogImage = `${origin}/favicon.svg`;
+    let faviconUrl = '/favicon.svg';
+    let themeColor = '#0055ff';
+    let tenantSlug = (req.query.tenant as string) || '';
+
+    const pathname = req.path;
+
+    // 1. Cotizaciones públicas (/c/:token, /q/:token, /p/:token, /cotizacion/:token)
+    if (
+      pathname.startsWith('/c/') ||
+      pathname.startsWith('/q/') ||
+      pathname.startsWith('/p/') ||
+      pathname.startsWith('/cotizacion/')
+    ) {
+      const parts = pathname.split('/');
+      const token = parts[2] || parts[1];
+      if (token) {
+        const quoteData = await db.getQuoteByPublicToken(token);
+        if (quoteData) {
+          const q = quoteData.quote;
+          const t = quoteData.tenant;
+          tenantSlug = t.slug;
+          const agencyName = t.companyInfo?.commercialName || t.name;
+          const currSymbol = t.customization?.currencySymbol || 'S/';
+          pageTitle = `Propuesta ${q.code || ''} — ${q.clientName || 'Cliente'} | ${agencyName}`;
+          ogTitle = `Propuesta Comercial ${q.code || ''} — ${q.clientName || 'Cliente'}`;
+          ogDescription = `Propuesta de servicios profesionales emitida por ${agencyName}. Inversión: ${currSymbol} ${Number(q.total || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
+          ogImage = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
+          faviconUrl = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
+          themeColor = t.customization?.lightPalette?.primary || '#0055ff';
+        }
+      }
+    }
+    // 2. Notas de Pago / Comprobantes públicos (/np/:id, /pago/:id, /nota-pago/:id)
+    else if (
+      pathname.startsWith('/np/') ||
+      pathname.startsWith('/pago/') ||
+      pathname.startsWith('/nota-pago/')
+    ) {
+      const parts = pathname.split('/');
+      const token = parts[2] || parts[1];
+      if (token) {
+        const noteData = await db.getPaymentNoteByPublicToken(token);
+        if (noteData) {
+          const n = noteData.paymentNote;
+          const t = noteData.tenant;
+          tenantSlug = t.slug;
+          const agencyName = t.companyInfo?.commercialName || t.name;
+          const currSymbol = t.customization?.currencySymbol || 'S/';
+          pageTitle = `Comprobante de Pago ${n.code || ''} — ${n.clientName || 'Cliente'} | ${agencyName}`;
+          ogTitle = `Comprobante Oficial de Pago ${n.code || ''}`;
+          ogDescription = `Comprobante emitido para ${n.clientName || 'Cliente'} por ${agencyName}. Total: ${currSymbol} ${Number(n.total || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
+          ogImage = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
+          faviconUrl = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
+          themeColor = t.customization?.lightPalette?.primary || '#0055ff';
+        }
+      }
+    }
+    // 3. Catálogo o Servicio público (/s/:slug, /servicio/:slug)
+    else if (
+      pathname.startsWith('/s/') ||
+      pathname.startsWith('/servicio/') ||
+      pathname.startsWith('/p/servicio/')
+    ) {
+      const parts = pathname.split('/');
+      const slug = parts[2] || parts[1];
+      const tenantParam = (req.query.tenant as string) || '';
+      if (slug) {
+        const srvData = await db.getPublicServiceBySlugOrId(tenantParam || 'roma-agencia', slug);
+        if (srvData && srvData.service) {
+          const s = srvData.service;
+          const t = srvData.tenant;
+          tenantSlug = t.slug;
+          const agencyName = t.companyInfo?.commercialName || t.name;
+          pageTitle = `${s.title} | ${agencyName}`;
+          ogTitle = `${s.title} — ${agencyName}`;
+          ogDescription = s.briefDescription || s.fullDescription || 'Consulta los paquetes, entregables e inversión de este servicio profesional.';
+          ogImage = s.coverImage || `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
+          faviconUrl = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
+        }
+      }
+    } else {
+      // Branding general del tenant
+      const defaultTenant = await db.getPublicTenantBranding(tenantSlug);
+      if (defaultTenant) {
+        tenantSlug = defaultTenant.slug;
+        const name = defaultTenant.companyInfo?.commercialName || defaultTenant.name;
+        pageTitle = `${name} — Sistema SaaS`;
+        ogTitle = name;
+        ogDescription = `Sistema de gestión para agencias de diseño y publicidad — ${name}`;
+        ogImage = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(tenantSlug)}`;
+        faviconUrl = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(tenantSlug)}`;
+        themeColor = defaultTenant.customization?.lightPalette?.primary || '#0055ff';
+      }
+    }
+
+    const escapeHtml = (str: string) =>
+      str
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    const ogTags = `
+    <!-- Open Graph & Meta Tags Dinámicos (WhatsApp, Facebook, Twitter, Telegram) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="${escapeHtml(ogTitle)}" />
+    <meta property="og:title" content="${escapeHtml(ogTitle)}" />
+    <meta property="og:description" content="${escapeHtml(ogDescription)}" />
+    <meta property="og:image" content="${ogImage}" />
+    <meta property="og:url" content="${fullUrl}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(ogTitle)}" />
+    <meta name="twitter:description" content="${escapeHtml(ogDescription)}" />
+    <meta name="twitter:image" content="${ogImage}" />
+    <meta name="theme-color" content="${themeColor}" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="${escapeHtml(ogTitle)}" />
+    <link rel="apple-touch-icon" href="${faviconUrl}" />
+    `;
+
+    html = html.replace(/<title>.*?<\/title>/i, `<title>${escapeHtml(pageTitle)}</title>`);
+    html = html.replace(/<link id="dynamic-favicon"[^>]*>/i, `<link id="dynamic-favicon" rel="icon" href="${faviconUrl}" />`);
+    const manifestHref = tenantSlug
+      ? `/api/public/manifest.webmanifest?tenant=${encodeURIComponent(tenantSlug)}`
+      : '/api/public/manifest.webmanifest';
+    html = html.replace(/<link id="dynamic-manifest"[^>]*>/i, `<link id="dynamic-manifest" rel="manifest" href="${manifestHref}" />`);
+
+    html = html.replace('</head>', `${ogTags}\n  </head>`);
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  } catch (err) {
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  }
+}
+
 app.get(
   [
+    '/c/:token',
     '/q/:token',
     '/p/:token',
     '/cotizacion/:token',
+    '/np/:token',
+    '/pago/:token',
+    '/nota-pago/:token',
     '/servicios',
     '/p/servicios',
     '/s/:slug',
     '/servicio/:slug',
     '/p/servicio/:slug',
   ],
-  (req: Request, res: Response) => {
-    if (fs.existsSync(clientDistPath)) {
-      res.sendFile(path.join(clientDistPath, 'index.html'));
-    } else {
-      // Modo desarrollo: redirigir al dev server de Vite con la misma ruta
-      res.redirect(`http://localhost:5173${req.originalUrl}`);
-    }
-  }
+  serveHtmlWithMetadata
 );
 
 // Servir archivos multimedia subidos (imágenes, referencias, logos, comprobantes)
@@ -2278,7 +2470,7 @@ if (fs.existsSync(clientDistPath)) {
   app.use(express.static(clientDistPath));
   app.get('*', (req: Request, res: Response) => {
     if (!req.path.startsWith('/api')) {
-      res.sendFile(path.join(clientDistPath, 'index.html'));
+      serveHtmlWithMetadata(req, res);
     }
   });
 }

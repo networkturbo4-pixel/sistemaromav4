@@ -501,10 +501,10 @@ export const PublicQuoteView: React.FC<{ publicToken: string }> = ({ publicToken
                   </div>
                 </div>
 
-                {/* DESCRIPCIÓN CON ESTILOS RICOS LIMPIOS */}
+                {/* DESCRIPCIÓN CON ESTILOS RICOS LIMPIOS Y TABLAS */}
                 {item.description && (
                   <div
-                    className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed border-t border-slate-100 dark:border-slate-800/80 pt-3 mt-3.5 [&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold [&_strong]:text-slate-800 dark:[&_strong]:text-slate-200"
+                    className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed border-t border-slate-100 dark:border-slate-800/80 pt-3 mt-3.5 [&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold [&_strong]:text-slate-800 dark:[&_strong]:text-slate-200 [&_table]:w-full [&_table]:my-3 [&_table]:border-collapse [&_th]:border [&_th]:border-slate-200 dark:[&_th]:border-slate-700 [&_th]:p-2.5 [&_th]:bg-slate-100 dark:[&_th]:bg-slate-800 [&_th]:font-bold [&_td]:border [&_td]:border-slate-200 dark:[&_td]:border-slate-700 [&_td]:p-2.5 overflow-x-auto"
                     dangerouslySetInnerHTML={{ __html: item.description }}
                   />
                 )}

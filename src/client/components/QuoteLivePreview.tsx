@@ -244,7 +244,7 @@ export const QuoteLivePreview: React.FC<QuoteLivePreviewProps> = ({
 
                   {item.description && (
                     <div
-                      className="text-[11px] text-slate-500 dark:text-slate-400 pl-7 line-clamp-3 prose prose-xs dark:prose-invert max-w-none"
+                      className="text-[11px] text-slate-600 dark:text-slate-300 pl-7 prose prose-xs dark:prose-invert max-w-none [&_table]:w-full [&_table]:my-2 [&_table]:border-collapse [&_table]:text-[10px] [&_th]:border [&_th]:border-slate-200 dark:[&_th]:border-slate-700 [&_th]:p-1.5 [&_th]:bg-slate-100 dark:[&_th]:bg-slate-800 [&_th]:font-bold [&_td]:border [&_td]:border-slate-200 dark:[&_td]:border-slate-700 [&_td]:p-1.5"
                       dangerouslySetInnerHTML={{ __html: item.description }}
                     />
                   )}
@@ -341,8 +341,22 @@ export const QuoteLivePreview: React.FC<QuoteLivePreviewProps> = ({
         {/* Notas Adicionales */}
         {formData.additionalNotes && (
           <div className="text-[11px] p-3 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 text-amber-800 dark:text-amber-300">
-            <p className="font-bold text-[10px] uppercase mb-0.5">Notas & Observaciones:</p>
-            <p className="whitespace-pre-line">{formData.additionalNotes}</p>
+            <p className="font-bold text-[10px] uppercase mb-1">Notas & Observaciones:</p>
+            <div
+              className="leading-relaxed [&_p]:mb-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_strong]:font-bold [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-amber-200/80 [&_th]:p-1 [&_td]:border [&_td]:border-amber-200/60 [&_td]:p-1"
+              dangerouslySetInnerHTML={{ __html: formData.additionalNotes }}
+            />
+          </div>
+        )}
+
+        {/* Términos & Condiciones */}
+        {formData.termsAndConditions && (
+          <div className="text-[11px] p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-900/50 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300">
+            <p className="font-bold text-[10px] uppercase mb-1 text-slate-500">Términos & Condiciones:</p>
+            <div
+              className="leading-relaxed [&_p]:mb-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_strong]:font-bold [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:p-1 [&_td]:border [&_td]:p-1"
+              dangerouslySetInnerHTML={{ __html: formData.termsAndConditions }}
+            />
           </div>
         )}
 

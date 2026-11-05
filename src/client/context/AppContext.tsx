@@ -330,13 +330,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         FONT_FAMILY_MAP[fontKey] || FONT_FAMILY_MAP['Inter']
       );
 
-      // Favicon dinámico
-      if (cust.faviconUrl) {
-        const fav = document.getElementById('dynamic-favicon') as HTMLLinkElement | null;
-        if (fav) fav.href = cust.faviconUrl;
+      // Favicon dinámico & Manifest PWA por Tenant
+      const activeFavicon =
+        cust.faviconUrl ||
+        cust.logoPwaUrl ||
+        cust.logoLightUrl ||
+        cust.logoDarkUrl ||
+        `/api/public/tenant-icon?tenant=${encodeURIComponent(tenant.slug)}`;
+
+      const fav = document.getElementById('dynamic-favicon') as HTMLLinkElement | null;
+      if (fav) fav.href = activeFavicon;
+
+      let appleIcon = document.querySelector('link[rel="apple-touch-icon"]') as HTMLLinkElement | null;
+      if (!appleIcon) {
+        appleIcon = document.createElement('link');
+        appleIcon.rel = 'apple-touch-icon';
+        document.head.appendChild(appleIcon);
+      }
+      appleIcon.href = activeFavicon;
+
+      const manifest = document.getElementById('dynamic-manifest') as HTMLLinkElement | null;
+      if (manifest) {
+        manifest.href = `/api/public/manifest.webmanifest?tenant=${encodeURIComponent(tenant.slug)}`;
       }
     },
-    [userThemePreference, resolvedTheme]
+    [userThemePreference, resolvedTheme, tenant.slug]
   );
 
   useEffect(() => {
