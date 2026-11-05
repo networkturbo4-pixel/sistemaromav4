@@ -189,11 +189,21 @@ export class DatabaseManager {
   // ===========================================================================
 
   public async getAllTenants(): Promise<Tenant[]> {
-    return this.localState.tenants;
+    return this.localState.tenants.map((t) => ({
+      ...t,
+      companyInfo: t.companyInfo || { ...DEFAULT_COMPANY_INFO, commercialName: t.name, legalName: t.name },
+      customization: t.customization || DEFAULT_CUSTOMIZATION,
+    }));
   }
 
   public async getTenantById(id: string): Promise<Tenant | null> {
-    return this.localState.tenants.find((t) => t.id === id) || null;
+    const t = this.localState.tenants.find((item) => item.id === id);
+    if (!t) return null;
+    return {
+      ...t,
+      companyInfo: t.companyInfo || { ...DEFAULT_COMPANY_INFO, commercialName: t.name, legalName: t.name },
+      customization: t.customization || DEFAULT_CUSTOMIZATION,
+    };
   }
 
   public async getPublicTenantBranding(slug?: string) {

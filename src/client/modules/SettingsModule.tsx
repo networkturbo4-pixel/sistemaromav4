@@ -1018,14 +1018,14 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     setTenantForm({
       name: t.name,
       slug: t.slug,
-      currencyCode: t.customization.currencyCode,
-      commercialName: t.companyInfo.commercialName,
-      legalName: t.companyInfo.legalName,
-      ruc: t.companyInfo.ruc,
-      email: t.companyInfo.email,
-      whatsapp: t.companyInfo.whatsapp,
-      address: t.companyInfo.address,
-      status: t.status,
+      currencyCode: t.customization?.currencyCode || 'PEN',
+      commercialName: t.companyInfo?.commercialName || t.name || '',
+      legalName: t.companyInfo?.legalName || t.name || '',
+      ruc: t.companyInfo?.ruc || '',
+      email: t.companyInfo?.email || '',
+      whatsapp: t.companyInfo?.whatsapp || '+51 ',
+      address: t.companyInfo?.address || '',
+      status: t.status || 'active',
       adminName: '',
       adminEmail: '',
       adminPin: '',
@@ -3783,8 +3783,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                   const isCurrent = t.id === tenant.id;
                   const activeTenantLogo =
                     resolvedTheme === 'dark'
-                      ? t.customization.logoDarkUrl || t.customization.logoLightUrl
-                      : t.customization.logoLightUrl || t.customization.logoDarkUrl;
+                      ? t.customization?.logoDarkUrl || t.customization?.logoLightUrl
+                      : t.customization?.logoLightUrl || t.customization?.logoDarkUrl;
 
                   return (
                     <div
@@ -3825,7 +3825,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                                 /{t.slug}
                               </span>
                               <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                                {t.customization.currencySymbol} ({t.customization.currencyCode})
+                                {t.customization?.currencySymbol || 'S/'} ({t.customization?.currencyCode || 'PEN'})
                               </span>
                             </div>
                           </div>
@@ -3846,13 +3846,13 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                         <div className="flex items-center justify-between">
                           <span>Razón Social:</span>
                           <span className="font-medium text-slate-700 dark:text-slate-300 truncate max-w-[190px]">
-                            {t.companyInfo.legalName || t.companyInfo.commercialName}
+                            {t.companyInfo?.legalName || t.companyInfo?.commercialName || t.name}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
                           <span>RUC / ID:</span>
                           <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
-                            {t.companyInfo.ruc || 'Sin RUC'}
+                            {t.companyInfo?.ruc || 'Sin RUC'}
                           </span>
                         </div>
                         <div className="flex items-center justify-between pt-1 border-t border-slate-200/40 dark:border-slate-800/40 text-[11px]">

@@ -144,10 +144,21 @@ class DatabaseManager {
     // TENANTS & BRANDING
     // ===========================================================================
     async getAllTenants() {
-        return this.localState.tenants;
+        return this.localState.tenants.map((t) => ({
+            ...t,
+            companyInfo: t.companyInfo || { ...types_1.DEFAULT_COMPANY_INFO, commercialName: t.name, legalName: t.name },
+            customization: t.customization || types_1.DEFAULT_CUSTOMIZATION,
+        }));
     }
     async getTenantById(id) {
-        return this.localState.tenants.find((t) => t.id === id) || null;
+        const t = this.localState.tenants.find((item) => item.id === id);
+        if (!t)
+            return null;
+        return {
+            ...t,
+            companyInfo: t.companyInfo || { ...types_1.DEFAULT_COMPANY_INFO, commercialName: t.name, legalName: t.name },
+            customization: t.customization || types_1.DEFAULT_CUSTOMIZATION,
+        };
     }
     async getPublicTenantBranding(slug) {
         const tenant = slug
