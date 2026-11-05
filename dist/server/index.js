@@ -918,7 +918,7 @@ app.post('/api/services/categories', auth_1.requireAuth, (0, auth_1.requirePermi
 });
 app.put('/api/services/categories/:id', auth_1.requireAuth, (0, auth_1.requirePermission)('services.categories.manage'), async (req, res) => {
     try {
-        const updated = await db_1.db.updateServiceCategory(req.auth.tenant.id, req.params.id, req.body);
+        const updated = await db_1.db.updateServiceCategory(req.params.id, req.auth.tenant.id, req.body);
         if (!updated) {
             res.status(404).json({ error: 'Categoría no encontrada.' });
             return;
@@ -931,7 +931,7 @@ app.put('/api/services/categories/:id', auth_1.requireAuth, (0, auth_1.requirePe
 });
 app.delete('/api/services/categories/:id', auth_1.requireAuth, (0, auth_1.requirePermission)('services.categories.manage'), async (req, res) => {
     try {
-        const ok = await db_1.db.deleteServiceCategory(req.auth.tenant.id, req.params.id);
+        const ok = await db_1.db.deleteServiceCategory(req.params.id, req.auth.tenant.id);
         if (!ok) {
             res.status(404).json({ error: 'Categoría no encontrada.' });
             return;
@@ -960,7 +960,7 @@ app.get('/api/services', auth_1.requireAuth, (0, auth_1.requirePermission)('serv
 });
 app.get('/api/services/:id', auth_1.requireAuth, (0, auth_1.requirePermission)('services.view'), async (req, res) => {
     try {
-        const service = await db_1.db.getServiceById(req.auth.tenant.id, req.params.id);
+        const service = await db_1.db.getServiceById(req.params.id, req.auth.tenant.id);
         if (!service) {
             res.status(404).json({ error: 'Servicio no encontrado.' });
             return;
@@ -982,7 +982,7 @@ app.post('/api/services', auth_1.requireAuth, (0, auth_1.requirePermission)('ser
 });
 app.put('/api/services/:id', auth_1.requireAuth, (0, auth_1.requirePermission)('services.edit'), async (req, res) => {
     try {
-        const updated = await db_1.db.updateService(req.auth.tenant.id, req.params.id, req.body);
+        const updated = await db_1.db.updateService(req.params.id, req.auth.tenant.id, req.body);
         if (!updated) {
             res.status(404).json({ error: 'Servicio no encontrado.' });
             return;
@@ -995,7 +995,7 @@ app.put('/api/services/:id', auth_1.requireAuth, (0, auth_1.requirePermission)('
 });
 app.delete('/api/services/:id', auth_1.requireAuth, (0, auth_1.requirePermission)('services.delete'), async (req, res) => {
     try {
-        const ok = await db_1.db.deleteService(req.auth.tenant.id, req.params.id);
+        const ok = await db_1.db.deleteService(req.params.id, req.auth.tenant.id);
         if (!ok) {
             res.status(404).json({ error: 'Servicio no encontrado.' });
             return;

@@ -1258,8 +1258,8 @@ app.put(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const updated = await db.updateServiceCategory(
-        req.auth!.tenant.id,
         req.params.id as string,
+        req.auth!.tenant.id,
         req.body
       );
       if (!updated) {
@@ -1279,7 +1279,7 @@ app.delete(
   requirePermission('services.categories.manage'),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const ok = await db.deleteServiceCategory(req.auth!.tenant.id, req.params.id as string);
+      const ok = await db.deleteServiceCategory(req.params.id as string, req.auth!.tenant.id);
       if (!ok) {
         res.status(404).json({ error: 'Categoría no encontrada.' });
         return;
@@ -1323,7 +1323,7 @@ app.get(
   requirePermission('services.view'),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const service = await db.getServiceById(req.auth!.tenant.id, req.params.id as string);
+      const service = await db.getServiceById(req.params.id as string, req.auth!.tenant.id);
       if (!service) {
         res.status(404).json({ error: 'Servicio no encontrado.' });
         return;
@@ -1356,8 +1356,8 @@ app.put(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const updated = await db.updateService(
-        req.auth!.tenant.id,
         req.params.id as string,
+        req.auth!.tenant.id,
         req.body
       );
       if (!updated) {
@@ -1377,7 +1377,7 @@ app.delete(
   requirePermission('services.delete'),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const ok = await db.deleteService(req.auth!.tenant.id, req.params.id as string);
+      const ok = await db.deleteService(req.params.id as string, req.auth!.tenant.id);
       if (!ok) {
         res.status(404).json({ error: 'Servicio no encontrado.' });
         return;
