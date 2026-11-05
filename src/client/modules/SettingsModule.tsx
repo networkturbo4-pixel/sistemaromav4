@@ -1071,6 +1071,10 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     canBuild?: boolean;
     hasPrecompiledDist?: boolean;
     isPrecompiled?: boolean;
+    updateAvailable?: boolean;
+    remoteCommit?: string | null;
+    remoteCommitMessage?: string | null;
+    remoteCommitDate?: string | null;
   }
 
   const [updateInfo, setUpdateInfo] = useState<SystemUpdateStatusResponse | null>(null);
@@ -1096,6 +1100,12 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     try {
       const data = await apiFetch<SystemUpdateStatusResponse>('/api/system/update-status');
       setUpdateInfo(data);
+      if (data.updateAvailable) {
+        toast(
+          `🚀 ¡Nueva actualización disponible en GitHub! (${data.remoteCommit || 'Nueva versión'}).`,
+          'success'
+        );
+      }
       setUpdateOptions((prev) => ({
         ...prev,
         branch: data.branch || prev.branch,
@@ -3848,6 +3858,45 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                 </div>
               </div>
 
+              {/* Banner de Nueva Actualización Disponible */}
+              {updateInfo?.updateAvailable && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-indigo-500/15 border-2 border-emerald-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn shadow-xs">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-md">
+                      <Sparkles className="w-5 h-5 animate-spin" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-extrabold text-slate-900 dark:text-slate-100">
+                          ¡Nueva Actualización Disponible en GitHub!
+                        </h3>
+                        {updateInfo.remoteCommit && (
+                          <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500 text-white">
+                            {updateInfo.remoteCommit}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                        "{updateInfo.remoteCommitMessage || 'Nueva versión lista para descargar'}"
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                        Versión instalada actual: <span className="font-mono font-bold text-slate-700 dark:text-slate-200">{updateInfo.currentCommit}</span>. Presiona "Actualizar Sistema Ahora" para sincronizarla en 1 Clic.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isUpdating}
+                    onClick={handleRunSystemUpdate}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-2 shrink-0 cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isUpdating ? 'animate-spin' : ''}`} />
+                    <span>Actualizar Ahora (1 Clic)</span>
+                  </button>
+                </div>
+              )}
+
               {/* Cards de Información de Estado */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* 1. Git & Repositorio */}
@@ -3859,12 +3908,18 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                     </span>
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                        updateInfo?.isGitRepo
+                        updateInfo?.updateAvailable
+                          ? 'bg-emerald-500 text-white animate-pulse'
+                          : updateInfo?.isGitRepo
                           ? 'bg-emerald-500/10 text-emerald-600'
                           : 'bg-amber-500/10 text-amber-600'
                       }`}
                     >
-                      {updateInfo?.isGitRepo ? 'Conectado' : 'Sin .git local'}
+                      {updateInfo?.updateAvailable
+                        ? 'Actualización disponible'
+                        : updateInfo?.isGitRepo
+                        ? 'Al día'
+                        : 'Sin .git local'}
                     </span>
                   </div>
 

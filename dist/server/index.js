@@ -1281,6 +1281,64 @@ function getGitExecutable() {
     }
     return 'git -c safe.directory=*';
 }
+let remoteUpdateCache = null;
+const CACHE_TTL_MS = 60 * 1000; // 60 segundos de caché
+async function checkRemoteGitHubUpdate() {
+    const now = Date.now();
+    if (remoteUpdateCache && now - remoteUpdateCache.timestamp < CACHE_TTL_MS) {
+        return {
+            remoteCommit: remoteUpdateCache.remoteCommit,
+            remoteCommitMessage: remoteUpdateCache.remoteCommitMessage,
+            remoteCommitDate: remoteUpdateCache.remoteCommitDate,
+        };
+    }
+    // 1. Vía GitHub API (muy rápido y ligero, sin requerir binario git)
+    try {
+        const res = await fetch('https://api.github.com/repos/networkturbo4-pixel/sistemaromav4/commits/main', {
+            headers: {
+                'User-Agent': 'ROMA-SaaS-SystemUpdate',
+                'Accept': 'application/vnd.github.v3+json',
+            },
+            signal: AbortSignal.timeout(3500),
+        });
+        if (res.ok) {
+            const data = (await res.json());
+            const sha = typeof data.sha === 'string' ? data.sha.slice(0, 7) : null;
+            const msg = data.commit?.message ? String(data.commit.message).split('\n')[0] : null;
+            const date = data.commit?.committer?.date || null;
+            if (sha) {
+                remoteUpdateCache = {
+                    timestamp: now,
+                    remoteCommit: sha,
+                    remoteCommitMessage: msg,
+                    remoteCommitDate: date,
+                };
+                return { remoteCommit: sha, remoteCommitMessage: msg, remoteCommitDate: date };
+            }
+        }
+    }
+    catch { }
+    // 2. Fallback vía git ls-remote si la API de GitHub no responde
+    try {
+        const gitCmd = getGitExecutable();
+        const { stdout } = await execAsync(`${gitCmd} ls-remote origin refs/heads/main`, {
+            timeout: 5000,
+        });
+        const hash = stdout.trim().split(/\s+/)[0];
+        if (hash && hash.length >= 7) {
+            const sha = hash.slice(0, 7);
+            remoteUpdateCache = {
+                timestamp: now,
+                remoteCommit: sha,
+                remoteCommitMessage: 'Actualización remota disponible en GitHub',
+                remoteCommitDate: null,
+            };
+            return { remoteCommit: sha, remoteCommitMessage: 'Actualización remota disponible en GitHub', remoteCommitDate: null };
+        }
+    }
+    catch { }
+    return { remoteCommit: null, remoteCommitMessage: null, remoteCommitDate: null };
+}
 app.get('/api/system/update-status', auth_1.requireAuth, (0, auth_1.requireAnyPermission)(['settings.system.update', 'settings.customization.manage', 'settings.tenants.manage']), async (req, res) => {
     try {
         let isGitRepo = false;
@@ -1369,6 +1427,13 @@ app.get('/api/system/update-status', auth_1.requireAuth, (0, auth_1.requireAnyPe
         const hasVite = fs_1.default.existsSync(viteBin);
         const canBuild = srcExists && hasVite;
         const isPrecompiled = hasPrecompiledDist && !canBuild;
+        // 3. Comprobar si hay una versión más reciente disponible en GitHub
+        const { remoteCommit, remoteCommitMessage, remoteCommitDate } = await checkRemoteGitHubUpdate();
+        const updateAvailable = Boolean(remoteCommit &&
+            currentCommit &&
+            currentCommit !== 'Sin Git' &&
+            !remoteCommit.toLowerCase().startsWith(currentCommit.toLowerCase()) &&
+            !currentCommit.toLowerCase().startsWith(remoteCommit.toLowerCase()));
         res.json({
             gitAvailable,
             isGitRepo,
@@ -1386,6 +1451,10 @@ app.get('/api/system/update-status', auth_1.requireAuth, (0, auth_1.requireAnyPe
             canBuild,
             hasPrecompiledDist,
             isPrecompiled,
+            updateAvailable,
+            remoteCommit,
+            remoteCommitMessage,
+            remoteCommitDate,
         });
     }
     catch (err) {
@@ -1498,6 +1567,7 @@ app.post('/api/system/update', auth_1.requireAuth, (0, auth_1.requireAnyPermissi
         }
         // 4. PASO 4: RECARGA AUTOMÁTICA EN CPANEL (PASSENGER)
         try {
+            remoteUpdateCache = null;
             const tmpDir = path_1.default.resolve(process.cwd(), 'tmp');
             if (!fs_1.default.existsSync(tmpDir)) {
                 fs_1.default.mkdirSync(tmpDir, { recursive: true });

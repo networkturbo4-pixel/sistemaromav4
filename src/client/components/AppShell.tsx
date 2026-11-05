@@ -37,6 +37,7 @@ import {
   HardDrive,
   Search,
   Zap,
+  RefreshCw,
 } from 'lucide-react';
 import { SettingsTab } from '../modules/SettingsModule';
 import { CommandPalette } from './CommandPalette';
@@ -94,7 +95,61 @@ export const AppShell: React.FC<AppShellProps> = ({
     switchTenant,
     tenantsList,
     isSwitchingTenant,
+    apiFetch,
+    toast,
   } = useApp();
+
+  // Detección automática en segundo plano de actualizaciones en GitHub
+  const [updateAvailableInfo, setUpdateAvailableInfo] = useState<{
+    available: boolean;
+    remoteCommit?: string | null;
+    remoteCommitMessage?: string | null;
+  }>({ available: false });
+  const hasNotifiedUpdateRef = useRef(false);
+
+  useEffect(() => {
+    if (!can('settings.view') && !can('settings.system.update')) return;
+
+    let isMounted = true;
+    const checkUpdates = async () => {
+      try {
+        const data = await apiFetch<{
+          updateAvailable?: boolean;
+          remoteCommit?: string | null;
+          remoteCommitMessage?: string | null;
+        }>('/api/system/update-status');
+
+        if (!isMounted) return;
+
+        if (data.updateAvailable) {
+          setUpdateAvailableInfo({
+            available: true,
+            remoteCommit: data.remoteCommit,
+            remoteCommitMessage: data.remoteCommitMessage,
+          });
+
+          if (!hasNotifiedUpdateRef.current) {
+            hasNotifiedUpdateRef.current = true;
+            toast(
+              `🚀 ¡Nueva actualización disponible del sistema! (${data.remoteCommit || 'GitHub'}). Ve a Configuración para actualizar en 1 Clic.`,
+              'success'
+            );
+          }
+        } else {
+          setUpdateAvailableInfo({ available: false });
+        }
+      } catch {}
+    };
+
+    const initialTimer = setTimeout(checkUpdates, 2000);
+    const intervalTimer = setInterval(checkUpdates, 4 * 60 * 1000);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(initialTimer);
+      clearInterval(intervalTimer);
+    };
+  }, [can, apiFetch, toast]);
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarWorkspaceOpen, setSidebarWorkspaceOpen] = useState(false);
@@ -493,17 +548,26 @@ export const AppShell: React.FC<AppShellProps> = ({
                         {item.icon}
                       </div>
                       <div className="min-w-0">
-                        <span
-                          className={`text-xs font-extrabold block truncate ${
-                            isActive
-                              ? 'text-indigo-600 dark:text-indigo-400'
-                              : 'text-slate-900 dark:text-slate-100'
-                          }`}
-                        >
-                          {item.label}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`text-xs font-extrabold block truncate ${
+                              isActive
+                                ? 'text-indigo-600 dark:text-indigo-400'
+                                : 'text-slate-900 dark:text-slate-100'
+                            }`}
+                          >
+                            {item.label}
+                          </span>
+                          {item.id === 'settings' && updateAvailableInfo.available && (
+                            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-emerald-500 text-white animate-pulse shadow-xs">
+                              1-CLIC
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate block">
-                          {item.description}
+                          {item.id === 'settings' && updateAvailableInfo.available
+                            ? '¡Nueva versión disponible!'
+                            : item.description}
                         </span>
                       </div>
                     </div>
@@ -873,7 +937,46 @@ export const AppShell: React.FC<AppShellProps> = ({
             color: 'var(--app-text)',
           }}
         >
-          <div className="w-full max-w-[1680px] mx-auto">{children}</div>
+          <div className="w-full max-w-[1680px] mx-auto space-y-4">
+            {/* BANNER NOTIFICACIÓN DE ACTUALIZACIÓN DEL SISTEMA */}
+            {updateAvailableInfo.available && (
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-indigo-500/15 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs animate-fadeIn">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <Sparkles className="w-4 h-4 animate-spin" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-slate-900 dark:text-slate-100">
+                        ¡Nueva actualización del sistema disponible!
+                      </span>
+                      {updateAvailableInfo.remoteCommit && (
+                        <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-500 text-white">
+                          {updateAvailableInfo.remoteCommit}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                      {updateAvailableInfo.remoteCommitMessage || 'Mejoras y nuevas funciones listas en GitHub.'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelectModule('settings');
+                    onSelectSettingsTab?.('system-update');
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs shrink-0 transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5 self-start sm:self-auto"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Actualizar en 1 Clic</span>
+                </button>
+              </div>
+            )}
+
+            {children}
+          </div>
         </main>
       </div>
 
