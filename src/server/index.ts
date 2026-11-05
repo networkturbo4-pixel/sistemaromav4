@@ -1790,6 +1790,7 @@ function getGitExecutable(): string {
   if (process.platform === 'win32') {
     return 'git';
   }
+  const cwd = process.cwd();
   const candidates = [
     '/usr/bin/git',
     '/usr/local/bin/git',
@@ -1797,9 +1798,9 @@ function getGitExecutable(): string {
     '/opt/cpanel/ea-git/bin/git',
   ];
   for (const cmd of candidates) {
-    if (fs.existsSync(cmd)) return `"${cmd}" -c safe.directory=*`;
+    if (fs.existsSync(cmd)) return `"${cmd}" -c "safe.directory=${cwd}" -c "safe.directory=*"`;
   }
-  return 'git -c safe.directory=*';
+  return `git -c "safe.directory=${cwd}" -c "safe.directory=*"`;
 }
 
 interface RemoteUpdateCache {
@@ -2021,22 +2022,28 @@ app.post(
       // 1. PASO 1: DESCARGA DE CAMBIOS DESDE EL REPOSITORIO GIT
       if (runGitPull) {
         const gitCmd = getGitExecutable();
-        try {
-          const { stdout: insideWorkTree } = await execAsync(`${gitCmd} rev-parse --is-inside-work-tree`);
-          if (insideWorkTree.trim() === 'true' || fs.existsSync(path.resolve(process.cwd(), '.git'))) {
-            addLog('git', 'pending', `Conectando con repositorio remoto y trayendo cambios (rama: ${branch})...`);
+        const gitDir = path.resolve(process.cwd(), '.git');
+        const hasGitDir = fs.existsSync(gitDir);
+
+        if (hasGitDir) {
+          addLog('git', 'pending', `Conectando con repositorio remoto y trayendo cambios (rama: ${branch})...`);
+          try {
+            await execAsync(`${gitCmd} fetch origin`);
+            const { stdout: pullOut, stderr: pullErr } = await execAsync(`${gitCmd} pull origin ${branch}`);
+            addLog('git', 'success', `Git pull exitoso: ${pullOut.trim() || pullErr.trim() || 'Actualizado al día'}`);
+
+            // Protección automática contra plantilla dev de Vite:
             try {
-              await execAsync(`${gitCmd} fetch origin`);
-              const { stdout: pullOut, stderr: pullErr } = await execAsync(`${gitCmd} pull origin ${branch}`);
-              addLog('git', 'success', `Git pull exitoso: ${pullOut.trim() || pullErr.trim() || 'Actualizado al día'}`);
-            } catch (pullEx) {
-              addLog('git', 'warning', `Aviso en git pull: ${(pullEx as Error).message}`);
-            }
-          } else {
-            addLog('git', 'warning', 'No se detectó un repositorio Git local (.git). Se continúa con la migración segura de base de datos.');
+              const rootIndexHtml = path.resolve(process.cwd(), 'index.html');
+              if (fs.existsSync(rootIndexHtml)) {
+                fs.unlinkSync(rootIndexHtml);
+              }
+            } catch {}
+          } catch (pullEx) {
+            addLog('git', 'warning', `Aviso en git pull: ${(pullEx as Error).message}`);
           }
-        } catch {
-          addLog('git', 'warning', 'Entorno Git no inicializado localmente. Se continúa con la migración segura de base de datos.');
+        } else {
+          addLog('git', 'warning', 'No se detectó la carpeta .git en el servidor. Se continúa con la migración segura de base de datos.');
         }
       } else {
         addLog('git', 'warning', 'Sincronización Git omitida.');
