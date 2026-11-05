@@ -22,6 +22,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { copyTextToClipboard } from '../utils/clipboard';
+import { computeInstallmentStatus, formatDueDate } from '../utils/paymentNoteUtils';
 
 interface PublicPaymentNoteData {
   paymentNote: PaymentNote;
@@ -461,8 +462,18 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
             {paymentNote.isMembership && paymentNote.membershipInstallments && paymentNote.membershipInstallments.length > 0 ? (() => {
               const installments = paymentNote.membershipInstallments;
               const totalMonths = installments.length;
-              const paidCount = installments.filter((i) => i.status === 'paid').length;
-              const pendingCount = installments.filter((i) => i.status !== 'paid').length;
+
+              // Calcular estados dinámicos según reglas del negocio
+              const computedList = installments.map((inst) => ({
+                inst,
+                comp: computeInstallmentStatus(inst.status, inst.dueDate),
+              }));
+
+              const paidCount = computedList.filter((x) => x.comp.status === 'paid').length;
+              const delayedCount = computedList.filter((x) => x.comp.status === 'delayed').length;
+              const inProcessCount = computedList.filter((x) => x.comp.status === 'in_process').length;
+              const inactiveCount = computedList.filter((x) => x.comp.status === 'inactive').length;
+              const pendingCount = totalMonths - paidCount;
               const percentPaid = totalMonths > 0 ? Math.round((paidCount / totalMonths) * 100) : 0;
 
               // Identificar meses visibles en vista compacta inteligente
@@ -470,7 +481,7 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
               if (showAllInstallments || installmentFilter !== 'all' || totalMonths <= 4) {
                 installments.forEach((_, idx) => visibleIndices.add(idx));
               } else {
-                const firstPendingIndex = installments.findIndex((i) => i.status !== 'paid');
+                const firstPendingIndex = computedList.findIndex((x) => x.comp.status !== 'paid');
                 if (firstPendingIndex === -1) {
                   // Todos pagados: mostrar los últimos 4
                   for (let i = Math.max(0, totalMonths - 4); i < totalMonths; i++) visibleIndices.add(i);
@@ -485,9 +496,11 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
                 }
               }
 
-              const isMatchFilter = (inst: any) =>
-                installmentFilter === 'all' ||
-                (installmentFilter === 'paid' ? inst.status === 'paid' : inst.status !== 'paid');
+              const isMatchFilter = (compStatus: string) => {
+                if (installmentFilter === 'all') return true;
+                if (installmentFilter === 'paid') return compStatus === 'paid';
+                return compStatus !== 'paid';
+              };
 
               return (
                 <div className="space-y-3.5">
@@ -509,18 +522,29 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
                   {totalMonths > 4 && (
                     <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-50/80 via-slate-50 to-emerald-50/60 border border-purple-100/90 space-y-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-extrabold text-slate-800">
                             Progreso del Contrato:
                           </span>
                           <span className="inline-flex items-center gap-1 font-black text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-300 text-[11px]">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            {paidCount} {paidCount === 1 ? 'Mes Pagado' : 'Meses Pagados'}
+                            {paidCount} {paidCount === 1 ? 'Pagado' : 'Pagados'}
                           </span>
-                          {pendingCount > 0 && (
+                          {delayedCount > 0 && (
+                            <span className="inline-flex items-center gap-1 font-black text-rose-800 bg-rose-100/80 px-2 py-0.5 rounded-md border border-rose-300 text-[11px]">
+                              <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                              {delayedCount} {delayedCount === 1 ? 'Retrasado' : 'Retrasados'}
+                            </span>
+                          )}
+                          {inProcessCount > 0 && (
                             <span className="inline-flex items-center gap-1 font-black text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-md border border-amber-300 text-[11px]">
                               <Clock className="w-3.5 h-3.5 text-amber-600" />
-                              {pendingCount} {pendingCount === 1 ? 'Mes Pendiente' : 'Meses Pendientes'}
+                              {inProcessCount} En Proceso
+                            </span>
+                          )}
+                          {inactiveCount > 0 && (
+                            <span className="inline-flex items-center gap-1 font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-300 text-[11px]">
+                              {inactiveCount} No Activos
                             </span>
                           )}
                         </div>
@@ -600,35 +624,30 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
 
                   {/* VISTA MÓVIL MEMBRESÍA */}
                   <div className="sm:hidden print:hidden space-y-2.5">
-                    {installments.map((inst, idx) => {
-                      const matches = isMatchFilter(inst);
+                    {computedList.map(({ inst, comp }, idx) => {
+                      const matches = isMatchFilter(comp.status);
                       const isVisible = matches && (showAllInstallments || visibleIndices.has(idx) || installmentFilter !== 'all');
                       if (!isVisible) return null;
 
                       return (
                         <div
                           key={inst.id || idx}
-                          className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-2 animate-in fade-in duration-200"
+                          className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-2.5 animate-in fade-in duration-200"
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="w-6 h-6 rounded-lg bg-purple-600 text-white font-black text-xs flex items-center justify-center shrink-0">
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <span className="w-6 h-6 rounded-lg bg-purple-600 text-white font-black text-xs flex items-center justify-center shrink-0 mt-0.5">
                                 {inst.monthNumber || idx + 1}
                               </span>
                               <div className="min-w-0">
-                                <p className="font-extrabold text-slate-900 text-xs truncate">
+                                <p className="font-extrabold text-slate-900 text-xs">
+                                  {inst.planName || paymentNote.membershipPlanName || 'Plan Recurrente'}
+                                </p>
+                                <p className="text-[11px] font-bold text-slate-700">
                                   {inst.periodName}
                                 </p>
-                                <p className="text-[11px] text-slate-500 font-semibold">
-                                  {inst.planName}
-                                </p>
-                                {inst.operationNumber && (
-                                  <p className="text-[10px] font-mono text-slate-500 mt-0.5">
-                                    N° Op: <strong className="text-slate-700">{inst.operationNumber}</strong>
-                                  </p>
-                                )}
                                 {inst.notes && (
-                                  <p className="text-[10px] text-slate-500 italic mt-0.5">
+                                  <p className="text-[11px] text-slate-400 italic mt-0.5">
                                     {inst.notes}
                                   </p>
                                 )}
@@ -641,141 +660,146 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
                             </span>
                           </div>
 
-                          <div className="pt-2 border-t border-slate-200/70 flex items-center justify-between gap-2">
-                            {/* Estado del Mes */}
-                            <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
-                                inst.status === 'paid'
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                  : inst.status === 'overdue'
-                                  ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                                  : 'bg-amber-100 text-amber-800 border border-amber-300'
-                              }`}
-                            >
-                              {inst.status === 'paid' ? (
-                                <>
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                  <span>Pagado</span>
-                                </>
-                              ) : inst.status === 'overdue' ? (
-                                <>
-                                  <AlertCircle className="w-3 h-3 text-rose-600" />
-                                  <span>Vencido</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Clock className="w-3 h-3 text-amber-600" />
-                                  <span>En Proceso</span>
-                                </>
-                              )}
-                            </span>
-
-                            {/* Botón Ver Comprobante */}
-                            {inst.voucherUrl ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setViewingVoucher({
-                                    url: inst.voucherUrl!,
-                                    name: inst.voucherName || `Voucher_Mes_${idx + 1}`,
-                                  })
-                                }
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-[11px] font-bold cursor-pointer transition shadow-2xs"
-                              >
-                                <Paperclip className="w-3 h-3 text-purple-600" />
-                                <span>Ver Voucher</span>
-                              </button>
-                            ) : (
-                              <span className="text-[10px] text-slate-400 italic">
-                                Sin voucher
+                          <div className="pt-2 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <div className="flex items-center gap-3">
+                              <span className="text-[11px] font-semibold text-slate-500">
+                                Vence: <strong className="text-slate-700">{formatDueDate(inst.dueDate)}</strong>
                               </span>
-                            )}
+                              {inst.operationNumber && (
+                                <span className="text-[11px] font-mono text-slate-500">
+                                  Op: <strong className="text-slate-700">{inst.operationNumber}</strong>
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              {/* Botón Ver Comprobante */}
+                              {inst.voucherUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setViewingVoucher({
+                                      url: inst.voucherUrl!,
+                                      name: inst.voucherName || `Voucher_Mes_${idx + 1}`,
+                                    })
+                                  }
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-[10px] font-bold cursor-pointer transition"
+                                >
+                                  <Paperclip className="w-3 h-3 text-purple-600" />
+                                  <span>Voucher</span>
+                                </button>
+                              )}
+
+                              {/* Estado del Mes */}
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
+                                  comp.status === 'paid'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                    : comp.status === 'delayed'
+                                    ? 'bg-rose-50 text-rose-700 border-rose-300'
+                                    : comp.status === 'in_process'
+                                    ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                    : 'bg-slate-100 text-slate-500 border-slate-300'
+                                }`}
+                              >
+                                {comp.status === 'paid' ? (
+                                  <>
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                    <span>PAGADO</span>
+                                  </>
+                                ) : comp.status === 'delayed' ? (
+                                  <>
+                                    <AlertCircle className="w-3 h-3 text-rose-600" />
+                                    <span>RETRASADO</span>
+                                  </>
+                                ) : comp.status === 'in_process' ? (
+                                  <>
+                                    <Clock className="w-3 h-3 text-amber-600" />
+                                    <span>EN PROCESO</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Clock className="w-3 h-3 text-slate-400" />
+                                    <span>NO ACTIVO</span>
+                                  </>
+                                )}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       );
                     })}
                   </div>
 
-                  {/* VISTA DESKTOP / PRINT MEMBRESÍA */}
+                  {/* VISTA DESKTOP / PRINT MEMBRESÍA (ORDEN SEGÚN IMAGEN 1) */}
                   <div className="hidden sm:block print:block overflow-x-auto rounded-2xl border border-slate-200">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold text-[11px]">
-                          <th className="py-3 px-4 w-12 text-center">#</th>
-                          <th className="py-3 px-4">Mes / Período</th>
-                          <th className="py-3 px-4">Plan Contratado</th>
-                          <th className="py-3 px-4 text-right w-28">Monto</th>
-                          <th className="py-3 px-4 text-center w-36">Estado</th>
-                          <th className="py-3 px-4 text-center w-36">Voucher</th>
+                          <th className="py-3.5 px-4 w-12 text-center">#</th>
+                          <th className="py-3.5 px-4">Plan Contratado / mes</th>
+                          <th className="py-3.5 px-4">Fecha de vencimiento</th>
+                          <th className="py-3.5 px-4 text-right w-28">Monto</th>
+                          <th className="py-3.5 px-4 text-center w-36">Número de operación</th>
+                          <th className="py-3.5 px-4 text-center w-36">Estado</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {installments.map((inst, idx) => {
-                          const matches = isMatchFilter(inst);
+                        {computedList.map(({ inst, comp }, idx) => {
+                          const matches = isMatchFilter(comp.status);
                           const isVisible = matches && (showAllInstallments || visibleIndices.has(idx) || installmentFilter !== 'all');
 
                           return (
                             <tr
                               key={inst.id || idx}
-                              className={`hover:bg-slate-50/50 ${
+                              className={`hover:bg-slate-50/50 transition-colors ${
                                 isVisible ? '' : 'hidden print:table-row'
                               }`}
                             >
-                              <td className="py-3.5 px-4 text-center font-bold text-slate-400">
+                              <td className="py-4 px-4 text-center font-bold text-purple-600">
                                 {inst.monthNumber || idx + 1}
                               </td>
-                              <td className="py-3.5 px-4">
+                              <td className="py-4 px-4">
                                 <p className="font-extrabold text-slate-900 text-xs">
+                                  {inst.planName || paymentNote.membershipPlanName || 'Plan Recurrente'}
+                                </p>
+                                <p className="text-[11px] font-bold text-slate-700 mt-0.5">
                                   {inst.periodName}
                                 </p>
-                                {inst.operationNumber && (
-                                  <p className="text-[10px] font-mono text-slate-500 mt-0.5">
-                                    N° Op: <strong className="text-slate-700">{inst.operationNumber}</strong>
-                                  </p>
-                                )}
                                 {inst.notes && (
-                                  <p className="text-[10px] text-slate-500 italic mt-0.5">
+                                  <p className="text-[11px] text-slate-400 italic mt-0.5">
                                     {inst.notes}
                                   </p>
                                 )}
                               </td>
-                              <td className="py-3.5 px-4 font-semibold text-slate-700">
-                                {inst.planName}
+                              <td className="py-4 px-4 font-semibold text-slate-600">
+                                {formatDueDate(inst.dueDate)}
                               </td>
-                              <td className="py-3.5 px-4 text-right font-black text-slate-900 font-mono">
+                              <td className="py-4 px-4 text-right font-black text-slate-900 font-mono">
                                 {paymentNote.currencySymbol}{' '}
                                 {Number(inst.amount).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                               </td>
-                              <td className="py-3.5 px-4 text-center">
-                                <span
-                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
-                                    inst.status === 'paid'
-                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                      : inst.status === 'overdue'
-                                      ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                                      : 'bg-amber-100 text-amber-800 border border-amber-300'
-                                  }`}
-                                >
-                                  {inst.status === 'paid' ? (
-                                    <>
-                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                      <span>Pagado</span>
-                                    </>
-                                  ) : inst.status === 'overdue' ? (
-                                    <>
-                                      <AlertCircle className="w-3 h-3 text-rose-600" />
-                                      <span>Vencido</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Clock className="w-3 h-3 text-amber-600" />
-                                      <span>En Proceso</span>
-                                    </>
-                                  )}
-                                </span>
-                              </td>
-                              <td className="py-3.5 px-4 text-center">
-                                {inst.voucherUrl ? (
+                              <td className="py-4 px-4 text-center">
+                                {inst.operationNumber ? (
+                                  <div className="inline-flex items-center justify-center gap-1.5 font-mono font-bold text-slate-700 text-xs">
+                                    <span>{inst.operationNumber}</span>
+                                    {inst.voucherUrl && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setViewingVoucher({
+                                            url: inst.voucherUrl!,
+                                            name: inst.voucherName || `Voucher_Mes_${idx + 1}`,
+                                          })
+                                        }
+                                        className="text-purple-600 hover:text-purple-800 p-0.5 hover:bg-purple-100 rounded transition cursor-pointer"
+                                        title="Ver comprobante adjunto"
+                                      >
+                                        <Paperclip className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : inst.voucherUrl ? (
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -790,10 +814,43 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
                                     <span>Ver Voucher</span>
                                   </button>
                                 ) : (
-                                  <span className="text-[11px] text-slate-400 italic">
-                                    Sin adjunto
-                                  </span>
+                                  <span className="text-slate-400 font-medium">—</span>
                                 )}
+                              </td>
+                              <td className="py-4 px-4 text-center">
+                                <span
+                                  className={`inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider border ${
+                                    comp.status === 'paid'
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                      : comp.status === 'delayed'
+                                      ? 'bg-rose-50 text-rose-700 border-rose-300'
+                                      : comp.status === 'in_process'
+                                      ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                      : 'bg-slate-100 text-slate-500 border-slate-300'
+                                  }`}
+                                >
+                                  {comp.status === 'paid' ? (
+                                    <>
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                      <span>PAGADO</span>
+                                    </>
+                                  ) : comp.status === 'delayed' ? (
+                                    <>
+                                      <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                                      <span>RETRASADO</span>
+                                    </>
+                                  ) : comp.status === 'in_process' ? (
+                                    <>
+                                      <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                      <span>EN PROCESO</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                      <span>NO ACTIVO</span>
+                                    </>
+                                  )}
+                                </span>
                               </td>
                             </tr>
                           );

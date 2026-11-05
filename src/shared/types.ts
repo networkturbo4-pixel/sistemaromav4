@@ -167,6 +167,8 @@ export interface ClientBrand {
   serviceDescription?: string;
   servicePrice?: number;
   serviceMonths?: number;
+  servicePaymentDate?: string;
+  servicePaymentDay?: number;
   includedServices?: string[];
   createdAt: string;
   updatedAt: string;
@@ -493,7 +495,7 @@ export interface Service {
 // =============================================================================
 export type PaymentNoteStatus = 'pending' | 'paid' | 'partial' | 'cancelled';
 
-export type MembershipMonthStatus = 'paid' | 'in_process' | 'overdue';
+export type MembershipMonthStatus = 'paid' | 'in_process' | 'overdue' | 'delayed' | 'inactive';
 
 export interface MembershipMonthItem {
   id: string;

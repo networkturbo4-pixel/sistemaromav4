@@ -56,6 +56,7 @@ import {
 import { PaymentNoteLivePreview } from '../components/PaymentNoteLivePreview';
 import { copyTextToClipboard } from '../utils/clipboard';
 import { parseVoucherWithOcr } from '../utils/voucherOcr';
+import { computeInstallmentStatus, formatDueDate } from '../utils/paymentNoteUtils';
 
 export const PaymentNotesModule: React.FC = () => {
   const { tenant, apiFetch, toast, confirmAction, can } = useApp();
@@ -392,25 +393,110 @@ export const PaymentNotesModule: React.FC = () => {
     planName: string,
     unitPrice: number,
     monthsCount: number,
-    baseIssueDate: string
+    baseIssueDate: string,
+    paymentDateStr?: string
   ): MembershipMonthItem[] => {
-    const baseDate = baseIssueDate ? new Date(baseIssueDate + 'T00:00:00') : new Date();
+    let baseDate: Date;
+    let paymentDay = 15;
+
+    if (paymentDateStr && paymentDateStr.includes('-')) {
+      const parts = paymentDateStr.split('-');
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      const d = parseInt(parts[2], 10);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        baseDate = new Date(y, m - 1, 1);
+        paymentDay = d;
+      } else {
+        baseDate = baseIssueDate ? new Date(baseIssueDate + 'T00:00:00') : new Date();
+      }
+    } else {
+      baseDate = baseIssueDate ? new Date(baseIssueDate + 'T00:00:00') : new Date();
+    }
+
     const installments: MembershipMonthItem[] = [];
     for (let i = 0; i < monthsCount; i++) {
-      const d = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1);
+      const targetYear = baseDate.getFullYear();
+      const targetMonth = baseDate.getMonth() + i;
+      const d = new Date(targetYear, targetMonth, 1);
       const monthName = d.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
       const formattedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+
+      // Limitar al último día del mes
+      const lastDayOfMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+      const actualDay = Math.min(paymentDay, lastDayOfMonth);
+      const calculatedDueDate = new Date(targetYear, targetMonth, actualDay).toISOString().split('T')[0];
+      const initialComputed = computeInstallmentStatus('in_process', calculatedDueDate);
+
       installments.push({
         id: `inst-${Date.now()}-${i + 1}-${Math.random().toString(36).substring(2, 5)}`,
         monthNumber: i + 1,
         planName: planName || 'Plan Membresía',
         periodName: `Mes ${i + 1}: ${formattedMonth}`,
         amount: unitPrice || 0,
-        status: 'in_process',
-        dueDate: new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 15).toISOString().split('T')[0],
+        status: initialComputed.status as any,
+        dueDate: calculatedDueDate,
       });
     }
     return installments;
+  };
+
+  // Dividir cuota en 50% adelanto (quincena) y 50% saldo (fin de mes)
+  const handleSplitInstallment5050 = (idx: number) => {
+    const current = formData.membershipInstallments?.[idx];
+    if (!current) return;
+
+    const totalAmount = Number(current.amount) || 0;
+    const halfAmount = Math.round((totalAmount / 2) * 100) / 100;
+    const secondHalf = Math.round((totalAmount - halfAmount) * 100) / 100;
+
+    const cleanPeriod = current.periodName.replace(/\s*\((1ra|2da)\s*Quincena[^)]*\)/gi, '').trim();
+
+    // Fechas de quincena (15) y fin de mes basadas en el dueDate actual o fecha de emisión
+    const baseDueDateStr = current.dueDate || formData.issueDate || new Date().toISOString().split('T')[0];
+    const parts = baseDueDateStr.split('-');
+    const y = parseInt(parts[0], 10) || new Date().getFullYear();
+    const m = (parseInt(parts[1], 10) || 1) - 1;
+
+    const quincenaDate = new Date(y, m, 15).toISOString().split('T')[0];
+    const lastDayOfMonth = new Date(y, m + 1, 0).getDate();
+    const finDeMesDate = new Date(y, m, lastDayOfMonth).toISOString().split('T')[0];
+
+    const part1: MembershipMonthItem = {
+      ...current,
+      id: `inst-${Date.now()}-q1`,
+      monthNumber: current.monthNumber,
+      periodName: `${cleanPeriod} (1ra Quincena / 50% Adelanto)`,
+      amount: halfAmount,
+      dueDate: quincenaDate,
+      notes: current.notes || '50% del plan mensual (Adelanto)',
+    };
+
+    const part2: MembershipMonthItem = {
+      ...current,
+      id: `inst-${Date.now()}-q2`,
+      monthNumber: current.monthNumber,
+      periodName: `${cleanPeriod} (2da Quincena / 50% Saldo)`,
+      amount: secondHalf,
+      dueDate: finDeMesDate,
+      notes: '50% saldo restante (Fin de mes)',
+      status: 'in_process',
+      operationNumber: undefined,
+      voucherUrl: undefined,
+      voucherName: undefined,
+      paidDate: undefined,
+    };
+
+    const nextList = [...(formData.membershipInstallments || [])];
+    nextList.splice(idx, 1, part1, part2);
+
+    setFormData((prev) => ({
+      ...prev,
+      membershipInstallments: nextList,
+      items: syncAllItems(nextList, prev.extraItems || []),
+    }));
+
+    toast(`Mes dividido en 50% Adelanto (${formData.currencySymbol}${halfAmount}) y 50% Saldo (${formData.currencySymbol}${secondHalf}).`);
   };
 
   const syncItemsFromInstallments = (installments: MembershipMonthItem[]): PaymentNoteItem[] => {
@@ -543,7 +629,8 @@ export const PaymentNotesModule: React.FC = () => {
         brand.serviceName,
         unitPrice,
         monthsCount,
-        formData.issueDate
+        formData.issueDate,
+        brand.servicePaymentDate
       );
       setFormData((prev) => ({
         ...prev,
@@ -591,7 +678,8 @@ export const PaymentNotesModule: React.FC = () => {
         brand.serviceName,
         unitPrice,
         monthsCount,
-        formData.issueDate
+        formData.issueDate,
+        brand.servicePaymentDate
       );
       setFormData((prev) => ({
         ...prev,
@@ -1833,12 +1921,20 @@ export const PaymentNotesModule: React.FC = () => {
                             </div>
                           </div>
 
-                          {/* Botón Eliminar Mes */}
-                          <div className="sm:col-span-2 flex justify-end">
+                          {/* Botón Eliminar Mes y Dividir 50/50 */}
+                          <div className="sm:col-span-2 flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleSplitInstallment5050(idx)}
+                              className="px-2 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 transition cursor-pointer text-[10px] font-black flex items-center gap-1 shadow-2xs active:scale-95"
+                              title="Dividir este mes en 50% Adelanto (Quincena) y 50% Saldo (Fin de mes)"
+                            >
+                              <span>➗ 50% / 50%</span>
+                            </button>
                             <button
                               type="button"
                               onClick={() => handleDeleteInstallment(idx)}
-                              className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer"
+                              className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer"
                               title="Eliminar este mes de la membresía"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -1947,10 +2043,10 @@ export const PaymentNotesModule: React.FC = () => {
                             )}
                           </div>
 
-                          {/* CAMPO DE ESTADO: PAGADO, EN PROCESO, VENCIDO */}
-                          <div className="flex items-center gap-1.5">
+                          {/* CAMPO DE ESTADO: PAGADO, EN PROCESO, RETRASADO, NO ACTIVO */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-[11px] font-bold text-slate-400 mr-1">
-                              Estado del Mes:
+                              Estado:
                             </span>
 
                             {/* Botón Pagado */}
@@ -1986,24 +2082,53 @@ export const PaymentNotesModule: React.FC = () => {
                               <span>En Proceso</span>
                             </button>
 
-                            {/* Botón Vencido */}
+                            {/* Botón Retrasado */}
                             <button
                               type="button"
                               onClick={() => handleUpdateInstallment(idx, { status: 'overdue' })}
                               className={`px-2.5 py-1 rounded-xl text-xs font-extrabold transition flex items-center gap-1 cursor-pointer ${
-                                inst.status === 'overdue'
+                                inst.status === 'overdue' || inst.status === 'delayed'
                                   ? 'bg-rose-600 text-white shadow-xs ring-2 ring-rose-500/30'
                                   : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 opacity-60 hover:opacity-100'
                               }`}
                             >
                               <AlertCircle className="w-3 h-3" />
-                              <span>Vencido</span>
+                              <span>Retrasado</span>
+                            </button>
+
+                            {/* Botón No Activo */}
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateInstallment(idx, { status: 'inactive' })}
+                              className={`px-2.5 py-1 rounded-xl text-xs font-extrabold transition flex items-center gap-1 cursor-pointer ${
+                                inst.status === 'inactive'
+                                  ? 'bg-slate-700 text-white shadow-xs ring-2 ring-slate-500/30'
+                                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 opacity-60 hover:opacity-100'
+                              }`}
+                            >
+                              <Clock className="w-3 h-3" />
+                              <span>No Activo</span>
                             </button>
                           </div>
                         </div>
 
-                        {/* Fila Terciaria: N° de Operación, Fecha de Abono y Nota Adicional */}
+                        {/* Fila Terciaria: Fecha Vencimiento, N° de Operación, Fecha de Abono y Nota Adicional */}
                         <div className="pt-2 border-t border-slate-200/50 dark:border-slate-800/60 grid grid-cols-1 sm:grid-cols-12 gap-2 text-xs">
+                          {/* Fecha de Vencimiento */}
+                          <div className="sm:col-span-3">
+                            <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
+                              Fecha Vencimiento
+                            </label>
+                            <input
+                              type="date"
+                              value={inst.dueDate || ''}
+                              onChange={(e) =>
+                                handleUpdateInstallment(idx, { dueDate: e.target.value })
+                              }
+                              className="w-full px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-semibold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                            />
+                          </div>
+
                           {/* N° de Operación */}
                           <div className="sm:col-span-3">
                             <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
@@ -2021,9 +2146,9 @@ export const PaymentNotesModule: React.FC = () => {
                           </div>
 
                           {/* Fecha de Abono */}
-                          <div className="sm:col-span-3">
+                          <div className="sm:col-span-2">
                             <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
-                              Fecha de Abono
+                              Fecha Abono
                             </label>
                             <input
                               type="date"
@@ -2036,9 +2161,9 @@ export const PaymentNotesModule: React.FC = () => {
                           </div>
 
                           {/* Nota Adicional / Desglose */}
-                          <div className="sm:col-span-6">
+                          <div className="sm:col-span-4">
                             <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
-                              Nota Adicional / Desglose de Abono
+                              Nota / Desglose (ej. 50% adelanto)
                             </label>
                             <input
                               type="text"
@@ -2046,7 +2171,7 @@ export const PaymentNotesModule: React.FC = () => {
                               onChange={(e) =>
                                 handleUpdateInstallment(idx, { notes: e.target.value })
                               }
-                              placeholder="Ej. Transfirió S/ 700 en total (400 membresía + 300 menú)..."
+                              placeholder="Ej. 50% adelanto mensual..."
                               className="w-full px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
                             />
                           </div>

@@ -25,6 +25,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
+import { computeInstallmentStatus, formatDueDate } from '../utils/paymentNoteUtils';
 
 export interface PaymentNoteFormData {
   code: string;
@@ -292,6 +293,7 @@ export const PaymentNoteLivePreview: React.FC<PaymentNoteLivePreviewProps> = ({
               <div className="space-y-2">
                 {installments.map((inst, idx) => {
                   if (!showAllInstallments && !visibleIndices.has(idx)) return null;
+                  const comp = computeInstallmentStatus(inst.status, inst.dueDate);
 
                   return (
                     <div
@@ -318,24 +320,27 @@ export const PaymentNoteLivePreview: React.FC<PaymentNoteLivePreviewProps> = ({
                             {formData.currencySymbol} {(Number(inst.amount) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                           </span>
                           <span
-                            className={`inline-block mt-0.5 text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
-                              inst.status === 'paid'
-                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
-                                : inst.status === 'overdue'
-                                ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200 dark:border-rose-800'
-                                : 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                            className={`inline-block mt-0.5 text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                              comp.status === 'paid'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-800'
+                                : comp.status === 'delayed'
+                                ? 'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/60 dark:text-rose-400 dark:border-rose-800'
+                                : comp.status === 'in_process'
+                                ? 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/60 dark:text-amber-400 dark:border-amber-800'
+                                : 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
                             }`}
                           >
-                            {inst.status === 'paid' ? 'Pagado' : inst.status === 'overdue' ? 'Vencido' : 'En proceso'}
+                            {comp.label}
                           </span>
                         </div>
                       </div>
 
-                      {inst.operationNumber && (
-                        <div className="pt-0.5 text-[10px] text-slate-500 font-mono pl-7">
-                          N° Op: <span className="font-bold text-slate-700 dark:text-slate-300">{inst.operationNumber}</span>
-                        </div>
-                      )}
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 pl-7 pt-0.5 border-t border-slate-100 dark:border-slate-800">
+                        <span>Vence: <strong className="text-slate-600 dark:text-slate-300">{formatDueDate(inst.dueDate)}</strong></span>
+                        {inst.operationNumber && (
+                          <span className="font-mono">Op: {inst.operationNumber}</span>
+                        )}
+                      </div>
 
                       {inst.notes && (
                         <div className="pt-0.5 text-[10px] text-slate-500 italic pl-7 line-clamp-2">

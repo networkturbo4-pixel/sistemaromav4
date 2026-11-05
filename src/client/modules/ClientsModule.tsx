@@ -95,6 +95,7 @@ export interface ClientBrandDraft {
   serviceDescription?: string;
   servicePrice?: number;
   serviceMonths?: number;
+  servicePaymentDate?: string;
   includedServices?: string[];
 }
 
@@ -104,6 +105,7 @@ export interface BrandServiceContractSectionProps {
   servicePrice?: number;
   serviceDescription?: string;
   serviceMonths?: number;
+  servicePaymentDate?: string;
   includedServices?: string[];
   services: Service[];
   currencySymbol: string;
@@ -113,6 +115,7 @@ export interface BrandServiceContractSectionProps {
     servicePrice?: number;
     serviceDescription?: string;
     serviceMonths?: number;
+    servicePaymentDate?: string;
     includedServices?: string[];
   }) => void;
   toast: (msg: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
@@ -124,6 +127,7 @@ export const BrandServiceContractSection: React.FC<BrandServiceContractSectionPr
   servicePrice,
   serviceDescription = '',
   serviceMonths = 1,
+  servicePaymentDate = '',
   includedServices = [],
   services,
   currencySymbol,
@@ -476,6 +480,32 @@ export const BrandServiceContractSection: React.FC<BrandServiceContractSectionPr
                 />
               </div>
             </div>
+
+            {/* Fecha de Pago Recurrente */}
+            <div className="sm:col-span-12">
+              <label className="block text-[11px] font-bold mb-1 text-slate-600 dark:text-slate-300">
+                Fecha de Pago Acordada / Vencimiento Recurrente
+              </label>
+              <div
+                className="flex items-center rounded-xl border px-3 py-1.5 transition focus-within:ring-2 focus-within:ring-purple-500/20"
+                style={{
+                  backgroundColor: 'var(--app-surface)',
+                  borderColor: 'var(--app-border)',
+                }}
+              >
+                <Calendar className="w-3.5 h-3.5 text-purple-500 mr-2 shrink-0" />
+                <input
+                  type="date"
+                  value={servicePaymentDate || ''}
+                  onChange={(e) => onChange({ servicePaymentDate: e.target.value })}
+                  className="w-full bg-transparent text-xs font-semibold outline-none"
+                  style={{ color: 'var(--app-text)' }}
+                />
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">
+                Define el día de pago pactado (ej. día 15 de cada mes). El sistema aplicará las reglas de estado: No Activo (a futuro), En Proceso (a 5-7 días de vencer), Retrasado (vencido +5 días) o Pagado.
+              </p>
+            </div>
           </div>
 
           {/* Descripción / Condiciones del Paquete */}
@@ -763,6 +793,7 @@ export const ClientsModule: React.FC = () => {
     serviceDescription: '',
     servicePrice: 0,
     serviceMonths: 1,
+    servicePaymentDate: '',
     includedServices: [],
   });
 
@@ -824,6 +855,7 @@ export const ClientsModule: React.FC = () => {
     serviceDescription: '',
     servicePrice: 0,
     serviceMonths: 1,
+    servicePaymentDate: '',
     includedServices: [] as string[],
   });
   const [savingBrand, setSavingBrand] = useState<boolean>(false);
@@ -1034,6 +1066,7 @@ export const ClientsModule: React.FC = () => {
       serviceDescription: '',
       servicePrice: 0,
       serviceMonths: 1,
+      servicePaymentDate: '',
       includedServices: [],
     });
     brandDialogRef.current?.showModal();
@@ -1055,6 +1088,7 @@ export const ClientsModule: React.FC = () => {
       serviceDescription: brand.serviceDescription || '',
       servicePrice: brand.servicePrice || 0,
       serviceMonths: brand.serviceMonths || 1,
+      servicePaymentDate: brand.servicePaymentDate || '',
       includedServices: brand.includedServices || [],
     });
     brandDialogRef.current?.showModal();
@@ -2271,6 +2305,7 @@ export const ClientsModule: React.FC = () => {
                       servicePrice={brand.servicePrice}
                       serviceDescription={brand.serviceDescription}
                       serviceMonths={brand.serviceMonths}
+                      servicePaymentDate={brand.servicePaymentDate}
                       includedServices={brand.includedServices}
                       services={services}
                       currencySymbol={tenant.customization?.currencySymbol || 'S/'}
@@ -2655,6 +2690,7 @@ export const ClientsModule: React.FC = () => {
                 servicePrice={brandForm.servicePrice}
                 serviceDescription={brandForm.serviceDescription}
                 serviceMonths={brandForm.serviceMonths}
+                servicePaymentDate={brandForm.servicePaymentDate}
                 includedServices={brandForm.includedServices}
                 services={services}
                 currencySymbol={tenant.customization?.currencySymbol || 'S/'}
