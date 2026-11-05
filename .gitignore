@@ -3,9 +3,6 @@ node_modules/
 .pnp
 .pnp.js
 
-# Production build outputs
-dist/
-
 # Environment variables & secrets (PUBLIC REPO SECURITY)
 .env
 .env.local

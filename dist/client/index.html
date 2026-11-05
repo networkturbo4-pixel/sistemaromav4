@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      try {
+        const saved = localStorage.getItem('color-scheme');
+        const sysDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const isDark = saved === 'dark' || (!saved && sysDark);
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+          document.documentElement.classList.remove('light');
+        } else {
+          document.documentElement.classList.remove('dark');
+          document.documentElement.classList.add('light');
+        }
+        document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+        const meta = document.querySelector('meta[name="color-scheme"]');
+        if (meta) meta.content = saved ?? (sysDark ? 'dark' : 'light');
+      } catch (e) {}
+    </script>
+    <title>ROMA SaaS — Sistema de Agencia de Publicidad y Diseño</title>
+    <link id="dynamic-favicon" rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link id="dynamic-manifest" rel="manifest" href="/api/public/manifest.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <script type="module" crossorigin src="/assets/index-y-e748fk.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BWZy7nuU.css">
+  </head>
+  <body class="antialiased selection:bg-purple-500/20">
+    <div id="root"></div>
+  </body>
+</html>

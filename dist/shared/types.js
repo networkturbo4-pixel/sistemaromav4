@@ -1,0 +1,72 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DEFAULT_COMPANY_INFO = exports.DEFAULT_CUSTOMIZATION = void 0;
+exports.DEFAULT_CUSTOMIZATION = {
+    clientGlobalNamePlural: 'Clientes',
+    clientGlobalNameSingular: 'Cliente',
+    currencyCode: 'PEN',
+    currencySymbol: 'S/',
+    faviconUrl: '',
+    logoLightUrl: '',
+    logoDarkUrl: '',
+    logoPwaUrl: '',
+    lightPalette: {
+        primary: '#7c3aed',
+        secondary: '#ec4899',
+        background: '#f8fafc',
+        surface: '#ffffff',
+        textPrimary: '#0f172a',
+        textMuted: '#64748b',
+    },
+    darkPalette: {
+        primary: '#a78bfa',
+        secondary: '#f472b6',
+        background: '#090d16',
+        surface: '#111827',
+        textPrimary: '#f8fafc',
+        textMuted: '#94a3b8',
+    },
+    typographyScale: 'normal',
+    fontFamily: 'Inter',
+    toastStyle: 'glass',
+    toastPosition: 'bottom-right',
+    confirmModalStyle: 'modern-center',
+};
+exports.DEFAULT_COMPANY_INFO = {
+    commercialName: 'ROMA Agencia Creativa & Diseño',
+    legalName: 'ROMA STUDIO PUBLICIDAD Y DISEÑO S.A.C.',
+    ruc: '20609845123',
+    email: 'hola@romaagencia.pe',
+    whatsapp: '+51 987 654 321',
+    address: 'Av. Primavera 1450, Of. 602, Santiago de Surco, Lima',
+    socials: {
+        instagram: '@roma.agenciacreativa',
+        facebook: 'facebook.com/romaagenciacreativa',
+        tiktok: '@roma.studio',
+        linkedin: 'linkedin.com/company/roma-agencia',
+        behance: 'behance.net/romastudio',
+        website: 'https://romaagencia.pe',
+    },
+    bankAccounts: [
+        {
+            id: 'pm-bcp-default',
+            name: 'Banco de Crédito del Perú (BCP Soles)',
+            beneficiary: 'ROMA STUDIO PUBLICIDAD Y DISEÑO S.A.C.',
+            accountNumber: '194-98765432-0-11',
+            notes: 'CCI: 002-1940098765432011-92 (RUC: 20609845123)',
+            imageUrl: '',
+            currency: 'PEN',
+            isActive: true,
+        },
+        {
+            id: 'pm-yape-default',
+            name: 'Yape / Plin Corporativo',
+            beneficiary: 'César Augusto (Director General)',
+            accountNumber: '+51 987 654 321',
+            notes: 'Adjuntar constancia o captura al WhatsApp oficial.',
+            imageUrl: '',
+            currency: 'PEN',
+            isActive: true,
+        },
+    ],
+};
