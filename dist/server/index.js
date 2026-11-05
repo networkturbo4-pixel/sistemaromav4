@@ -1265,6 +1265,22 @@ app.delete('/api/tenants/:id', auth_1.requireAuth, (0, auth_1.requirePermission)
 // =============================================================================
 // ACTUALIZACIONES DEL SISTEMA EN 1 CLIC (GIT PULL + MIGRACIÓN DB + COMPILACIÓN)
 // =============================================================================
+function getGitExecutable() {
+    if (process.platform === 'win32') {
+        return 'git';
+    }
+    const candidates = [
+        '/usr/bin/git',
+        '/usr/local/bin/git',
+        '/usr/local/cpanel/3rdparty/bin/git',
+        '/opt/cpanel/ea-git/bin/git',
+    ];
+    for (const cmd of candidates) {
+        if (fs_1.default.existsSync(cmd))
+            return `"${cmd}" -c safe.directory=*`;
+    }
+    return 'git -c safe.directory=*';
+}
 app.get('/api/system/update-status', auth_1.requireAuth, (0, auth_1.requireAnyPermission)(['settings.system.update', 'settings.customization.manage', 'settings.tenants.manage']), async (req, res) => {
     try {
         let isGitRepo = false;
@@ -1274,42 +1290,73 @@ app.get('/api/system/update-status', auth_1.requireAuth, (0, auth_1.requireAnyPe
         let remoteUrl = '';
         let isDirty = false;
         let gitAvailable = false;
+        // 1. Detección directa por sistema de archivos (.git) como base infalible
+        const gitDir = path_1.default.resolve(process.cwd(), '.git');
+        if (fs_1.default.existsSync(gitDir)) {
+            isGitRepo = true;
+            try {
+                const headContent = fs_1.default.readFileSync(path_1.default.join(gitDir, 'HEAD'), 'utf8').trim();
+                if (headContent.startsWith('ref: refs/heads/')) {
+                    branch = headContent.replace('ref: refs/heads/', '').trim();
+                    const refPath = path_1.default.join(gitDir, 'refs', 'heads', branch);
+                    if (fs_1.default.existsSync(refPath)) {
+                        currentCommit = fs_1.default.readFileSync(refPath, 'utf8').trim().slice(0, 7);
+                    }
+                }
+                else if (headContent.length >= 7) {
+                    currentCommit = headContent.slice(0, 7);
+                }
+            }
+            catch { }
+            try {
+                const configContent = fs_1.default.readFileSync(path_1.default.join(gitDir, 'config'), 'utf8');
+                const match = configContent.match(/url\s*=\s*(.+)/);
+                if (match && match[1]) {
+                    remoteUrl = match[1].trim();
+                }
+            }
+            catch { }
+        }
+        // 2. Enriquecer con binario Git si está disponible en el servidor (con bypass de safe.directory)
+        const gitCmd = getGitExecutable();
         try {
-            const { stdout: gitVer } = await execAsync('git --version');
+            const { stdout: gitVer } = await execAsync(`${gitCmd} --version`);
             gitAvailable = Boolean(gitVer);
-            const { stdout: insideWorkTree } = await execAsync('git rev-parse --is-inside-work-tree');
+            const { stdout: insideWorkTree } = await execAsync(`${gitCmd} rev-parse --is-inside-work-tree`);
             if (insideWorkTree.trim() === 'true') {
                 isGitRepo = true;
                 try {
-                    const { stdout: b } = await execAsync('git rev-parse --abbrev-ref HEAD');
-                    branch = b.trim();
+                    const { stdout: b } = await execAsync(`${gitCmd} rev-parse --abbrev-ref HEAD`);
+                    if (b.trim())
+                        branch = b.trim();
                 }
                 catch { }
                 try {
-                    const { stdout: hash } = await execAsync('git rev-parse --short HEAD');
-                    currentCommit = hash.trim();
+                    const { stdout: hash } = await execAsync(`${gitCmd} rev-parse --short HEAD`);
+                    if (hash.trim())
+                        currentCommit = hash.trim();
                 }
                 catch { }
                 try {
-                    const { stdout: msg } = await execAsync('git log -1 --format="%s (%cr)"');
-                    lastCommitMessage = msg.trim();
+                    const { stdout: msg } = await execAsync(`${gitCmd} log -1 --format="%s (%cr)"`);
+                    if (msg.trim())
+                        lastCommitMessage = msg.trim();
                 }
                 catch { }
                 try {
-                    const { stdout: rem } = await execAsync('git config --get remote.origin.url');
-                    remoteUrl = rem.trim();
+                    const { stdout: rem } = await execAsync(`${gitCmd} config --get remote.origin.url`);
+                    if (rem.trim())
+                        remoteUrl = rem.trim();
                 }
                 catch { }
                 try {
-                    const { stdout: st } = await execAsync('git status --porcelain');
+                    const { stdout: st } = await execAsync(`${gitCmd} status --porcelain`);
                     isDirty = st.trim().length > 0;
                 }
                 catch { }
             }
         }
-        catch {
-            isGitRepo = false;
-        }
+        catch { }
         let lastBuildDate = null;
         const distIndexHtml = path_1.default.resolve(process.cwd(), 'dist', 'client', 'index.html');
         const hasPrecompiledDist = fs_1.default.existsSync(distIndexHtml);
@@ -1360,13 +1407,14 @@ app.post('/api/system/update', auth_1.requireAuth, (0, auth_1.requireAnyPermissi
         const { runGitPull = true, runDbMigration = true, runBuild = true, branch = 'main' } = req.body || {};
         // 1. PASO 1: DESCARGA DE CAMBIOS DESDE EL REPOSITORIO GIT
         if (runGitPull) {
+            const gitCmd = getGitExecutable();
             try {
-                const { stdout: insideWorkTree } = await execAsync('git rev-parse --is-inside-work-tree');
-                if (insideWorkTree.trim() === 'true') {
+                const { stdout: insideWorkTree } = await execAsync(`${gitCmd} rev-parse --is-inside-work-tree`);
+                if (insideWorkTree.trim() === 'true' || fs_1.default.existsSync(path_1.default.resolve(process.cwd(), '.git'))) {
                     addLog('git', 'pending', `Conectando con repositorio remoto y trayendo cambios (rama: ${branch})...`);
                     try {
-                        await execAsync('git fetch origin');
-                        const { stdout: pullOut, stderr: pullErr } = await execAsync(`git pull origin ${branch}`);
+                        await execAsync(`${gitCmd} fetch origin`);
+                        const { stdout: pullOut, stderr: pullErr } = await execAsync(`${gitCmd} pull origin ${branch}`);
                         addLog('git', 'success', `Git pull exitoso: ${pullOut.trim() || pullErr.trim() || 'Actualizado al día'}`);
                     }
                     catch (pullEx) {
