@@ -67,6 +67,8 @@ import {
   HardDrive,
   CreditCard,
   QrCode,
+  Save,
+  Link as LinkIcon,
   Link,
   ZoomIn,
   Copy,
@@ -907,9 +909,21 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   // ===========================================================================
   // GESTIÓN MULTITENANT & WORKSPACES
   // ===========================================================================
+  interface AvailableTenantUser {
+    id: string;
+    name: string;
+    email: string;
+    pin: string;
+    jobTitle: string;
+    avatarUrl: string;
+    tenantIds: string[];
+  }
+
   const [editingTenant, setEditingTenant] = useState<TenantSummary | null>(null);
   const [savingTenant, setSavingTenant] = useState<boolean>(false);
   const tenantDialogRef = useRef<HTMLDialogElement | null>(null);
+  const [availableUsers, setAvailableUsers] = useState<AvailableTenantUser[]>([]);
+  const [tenantLogoInputMode, setTenantLogoInputMode] = useState<'upload' | 'url'>('upload');
 
   const [tenantForm, setTenantForm] = useState({
     name: '',
@@ -926,10 +940,44 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     adminEmail: '',
     adminPin: '11223344',
     adminJobTitle: 'Director General & Fundador',
+    logoUrl: '',
+    assignedUserIds: [] as string[],
   });
 
-  const openCreateTenantModal = () => {
+  const loadAvailableUsers = async (): Promise<AvailableTenantUser[]> => {
+    try {
+      const res = await apiFetch<{ users: AvailableTenantUser[] }>('/api/tenants-available-users');
+      if (res?.users) {
+        setAvailableUsers(res.users);
+        return res.users;
+      }
+    } catch {
+      // Fallback
+    }
+    return [];
+  };
+
+  const handleTenantLogoFileUpload = (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast('La imagen no debe superar los 5MB.', 'warning');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setTenantForm((prev) => ({ ...prev, logoUrl: result }));
+      toast('Logo de la agencia cargado.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const openCreateTenantModal = async () => {
     setEditingTenant(null);
+    setTenantLogoInputMode('upload');
+    const users = await loadAvailableUsers();
+    // Asignar por defecto al usuario actual si existe
+    const defaultIds = user?.id ? [user.id] : (users.length > 0 ? [users[0].id] : []);
     setTenantForm({
       name: '',
       slug: '',
@@ -941,10 +989,12 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       whatsapp: '+51 ',
       address: '',
       status: 'active',
-      adminName: 'Director General',
-      adminEmail: '',
-      adminPin: '11223344',
-      adminJobTitle: 'Director General & Fundador',
+      adminName: user?.name || 'Director General',
+      adminEmail: user?.email || '',
+      adminPin: user?.pin || '11223344',
+      adminJobTitle: user?.jobTitle || 'Director General & Fundador',
+      logoUrl: '',
+      assignedUserIds: defaultIds,
     });
     tenantDialogRef.current?.showModal();
   };
@@ -957,8 +1007,14 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     return () => window.removeEventListener('roma-open-new-tenant-modal', handleOpenModal);
   }, []);
 
-  const openEditTenantModal = (t: TenantSummary) => {
+  const openEditTenantModal = async (t: TenantSummary) => {
     setEditingTenant(t);
+    setTenantLogoInputMode('upload');
+    const loadedUsers = await loadAvailableUsers();
+    const existingAssigned = (loadedUsers.length > 0 ? loadedUsers : availableUsers)
+      .filter((u) => u.tenantIds && u.tenantIds.includes(t.id))
+      .map((u) => u.id);
+
     setTenantForm({
       name: t.name,
       slug: t.slug,
@@ -974,6 +1030,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       adminEmail: '',
       adminPin: '',
       adminJobTitle: '',
+      logoUrl: t.customization?.logoLightUrl || t.customization?.logoDarkUrl || '',
+      assignedUserIds: existingAssigned.length > 0 ? existingAssigned : (user?.id ? [user.id] : []),
     });
     tenantDialogRef.current?.showModal();
   };
@@ -1009,6 +1067,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
             whatsapp: tenantForm.whatsapp,
             address: tenantForm.address,
             currencyCode: tenantForm.currencyCode,
+            logoUrl: tenantForm.logoUrl,
+            assignedUserIds: tenantForm.assignedUserIds,
           }),
         });
         toast(`Agencia "${tenantForm.name}" actualizada con éxito.`);
@@ -1021,11 +1081,33 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       }
       tenantDialogRef.current?.close();
       await loadTenantsList();
+      await loadAvailableUsers();
       await refreshSession({ silent: true });
     } catch (err) {
       toast((err as Error).message, 'error');
     } finally {
       setSavingTenant(false);
+    }
+  };
+
+  // Botón flotante para guardar todos los cambios de configuración
+  const handleSaveFloatingSettings = async () => {
+    try {
+      if (activeTab === 'company') {
+        await handleSaveCompany();
+      } else if (activeTab === 'identity' || activeTab === 'dialogs') {
+        await handleSaveCustomization();
+      } else if (activeTab === 'appearance') {
+        if (colorScope === 'user') {
+          await handleSavePersonalTheme();
+        } else {
+          await handleSaveCustomization();
+        }
+      } else {
+        await Promise.all([handleSaveCustomization(), handleSaveCompany()]);
+      }
+    } catch (err) {
+      toast((err as Error).message, 'error');
     }
   };
 
@@ -2801,6 +2883,20 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Botón Guardar Identidad & Logos */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
+                <button
+                  type="button"
+                  disabled={savingCust}
+                  onClick={handleSaveCustomization}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md transition flex items-center gap-2 cursor-pointer hover:opacity-90 active:scale-95 disabled:opacity-50"
+                  style={{ backgroundColor: 'var(--app-primary)' }}
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{savingCust ? 'Guardando Logos...' : 'Guardar Identidad & Logos'}</span>
+                </button>
               </div>
             </div>
           )}
@@ -4874,6 +4970,254 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
               </div>
             </div>
 
+            {/* Sección 2: Logo de la Agencia */}
+            <div
+              className="p-4 rounded-2xl border space-y-3.5"
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--app-surface) 60%, var(--app-bg) 40%)',
+                borderColor: 'var(--app-border)',
+              }}
+            >
+              <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: 'var(--app-border)' }}>
+                <div className="flex items-center gap-2">
+                  <Palette className="w-3.5 h-3.5" style={{ color: 'var(--app-primary)' }} />
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Logo de la Agencia
+                  </span>
+                </div>
+                {/* Switch de modo: Subir Imagen / URL */}
+                <div
+                  className="flex items-center p-0.5 rounded-lg border text-[11px]"
+                  style={{
+                    backgroundColor: 'var(--app-surface)',
+                    borderColor: 'var(--app-border)',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setTenantLogoInputMode('upload')}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1.5 font-bold ${
+                      tenantLogoInputMode === 'upload'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <Upload className="w-3 h-3" />
+                    <span>Subir Imagen</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTenantLogoInputMode('url')}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1.5 font-bold ${
+                      tenantLogoInputMode === 'url'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <LinkIcon className="w-3 h-3" />
+                    <span>Enlace / URL</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Subida o URL */}
+              {tenantLogoInputMode === 'upload' ? (
+                <label
+                  className="border-2 border-dashed rounded-xl p-3 sm:p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition hover:border-indigo-500 hover:bg-slate-500/5 group"
+                  style={{ borderColor: 'var(--app-border)' }}
+                >
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    onChange={(e) => handleTenantLogoFileUpload(e.target.files?.[0])}
+                    className="hidden"
+                  />
+                  <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center group-hover:scale-105 transition">
+                    <Upload className="w-4 h-4" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      Haz clic aquí para seleccionar el logo del workspace
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      PNG, JPG, SVG o WebP (Hasta 5MB)
+                    </p>
+                  </div>
+                </label>
+              ) : (
+                <div
+                  className="flex items-center rounded-xl border px-3 py-2.5 transition focus-within:ring-2 focus-within:ring-indigo-500/20"
+                  style={{
+                    backgroundColor: 'var(--app-surface)',
+                    borderColor: 'var(--app-border)',
+                  }}
+                >
+                  <Globe className="w-4 h-4 text-slate-400 mr-2.5 shrink-0" />
+                  <input
+                    type="url"
+                    value={tenantForm.logoUrl}
+                    onChange={(e) => setTenantForm({ ...tenantForm, logoUrl: e.target.value })}
+                    placeholder="https://ejemplo.com/logos/mi-agencia.png"
+                    className="w-full bg-transparent text-xs font-semibold outline-none"
+                    style={{ color: 'var(--app-text)' }}
+                  />
+                </div>
+              )}
+
+              {/* Previsualización del Logo cargado */}
+              {tenantForm.logoUrl && (
+                <div
+                  className="p-3 rounded-xl border flex items-center justify-between gap-3 animate-in fade-in duration-150"
+                  style={{
+                    backgroundColor: 'var(--app-surface)',
+                    borderColor: 'var(--app-border)',
+                  }}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-12 h-12 rounded-xl border p-1 bg-white dark:bg-slate-900 flex items-center justify-center shrink-0 shadow-xs overflow-hidden">
+                      <img
+                        src={tenantForm.logoUrl}
+                        alt="Logo preview"
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          Logo de agencia cargado
+                        </span>
+                      </div>
+                      <p className="text-[10px] font-mono text-slate-400 truncate max-w-xs mt-0.5">
+                        {tenantForm.logoUrl.startsWith('data:') ? 'Imagen en Base64 procesada' : tenantForm.logoUrl}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setTenantForm({ ...tenantForm, logoUrl: '' })}
+                    className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition flex items-center gap-1 cursor-pointer shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Quitar</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Sección 3: Asignar Usuarios al Workspace */}
+            <div
+              className="p-4 rounded-2xl border space-y-3.5"
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--app-surface) 60%, var(--app-bg) 40%)',
+                borderColor: 'var(--app-border)',
+              }}
+            >
+              <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: 'var(--app-border)' }}>
+                <div className="flex items-center gap-2">
+                  <Users className="w-3.5 h-3.5" style={{ color: 'var(--app-primary)' }} />
+                  <div>
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      Usuarios con Acceso al Workspace
+                    </span>
+                    <span className="block text-[10px] text-slate-400 font-normal">
+                      Podrán acceder y alternar a esta agencia con su PIN personal.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTenantForm({
+                        ...tenantForm,
+                        assignedUserIds: availableUsers.map((u) => u.id),
+                      });
+                    }}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-800 hover:bg-slate-500/10 cursor-pointer"
+                  >
+                    Todos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTenantForm({
+                        ...tenantForm,
+                        assignedUserIds: user?.id ? [user.id] : [],
+                      });
+                    }}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-800 hover:bg-slate-500/10 cursor-pointer text-slate-500"
+                  >
+                    Solo Yo
+                  </button>
+                </div>
+              </div>
+
+              {availableUsers.length === 0 ? (
+                <div className="p-4 text-center text-xs text-slate-400 italic">
+                  Cargando usuarios disponibles del sistema...
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                  {availableUsers.map((u) => {
+                    const isSelected = tenantForm.assignedUserIds.includes(u.id);
+                    return (
+                      <div
+                        key={u.id}
+                        onClick={() => {
+                          const nextIds = isSelected
+                            ? tenantForm.assignedUserIds.filter((id) => id !== u.id)
+                            : [...tenantForm.assignedUserIds, u.id];
+                          setTenantForm({ ...tenantForm, assignedUserIds: nextIds });
+                        }}
+                        className={`p-2.5 rounded-xl border flex items-center justify-between gap-2.5 transition cursor-pointer select-none ${
+                          isSelected
+                            ? 'border-indigo-500/60 bg-indigo-50/50 dark:bg-indigo-950/20 shadow-2xs'
+                            : 'border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 hover:bg-slate-500/5'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="w-4 h-4 rounded text-indigo-600 cursor-pointer shrink-0 accent-indigo-600"
+                          />
+                          {u.avatarUrl ? (
+                            <img
+                              src={u.avatarUrl}
+                              alt={u.name}
+                              className="w-7 h-7 rounded-full object-cover shrink-0"
+                            />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-[11px] font-black shrink-0">
+                              {u.name.slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
+                              {u.name}
+                            </p>
+                            <p className="text-[10px] text-slate-400 truncate">
+                              {u.jobTitle || u.email || 'Miembro de Equipo'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {isSelected && (
+                          <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 shrink-0">
+                            Asignado
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* Administrador Inicial si es Nuevo */}
             {!editingTenant && (
               <div
@@ -5109,6 +5453,44 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
               <span className="font-bold text-emerald-600 dark:text-emerald-400">● Configuración Activa</span>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ===================================================================
+          BOTÓN FLOTANTE DE GUARDAR CAMBIOS DE CONFIGURACIÓN (1 CLIC SEGURO)
+         =================================================================== */}
+      {['identity', 'appearance', 'dialogs', 'company'].includes(activeTab) && (
+        <div className="fixed bottom-6 right-6 z-40 sm:bottom-8 sm:right-8 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <button
+            type="button"
+            disabled={savingCust || savingCompany || savingUserTheme}
+            onClick={handleSaveFloatingSettings}
+            className="group relative flex items-center gap-2.5 px-5 py-3 sm:py-3.5 rounded-2xl text-xs sm:text-sm font-extrabold text-white shadow-2xl transition-all duration-200 cursor-pointer hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none hover:shadow-indigo-500/25"
+            style={{
+              backgroundColor: 'var(--app-primary)',
+              boxShadow: '0 12px 30px -4px color-mix(in srgb, var(--app-primary) 55%, transparent)',
+            }}
+          >
+            {savingCust || savingCompany || savingUserTheme ? (
+              <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+            ) : (
+              <Save className="w-4 h-4 transition-transform group-hover:scale-110 shrink-0" />
+            )}
+            <span>
+              {savingCust || savingCompany || savingUserTheme
+                ? 'Guardando...'
+                : 'Guardar Configuración'}
+            </span>
+            <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-white/20 text-white uppercase tracking-wider backdrop-blur-xs">
+              {activeTab === 'identity'
+                ? 'Logos'
+                : activeTab === 'company'
+                ? 'Empresa'
+                : activeTab === 'appearance'
+                ? 'Tema'
+                : 'Diálogos'}
+            </span>
+          </button>
         </div>
       )}
     </div>

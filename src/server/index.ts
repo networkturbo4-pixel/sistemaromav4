@@ -1674,6 +1674,20 @@ app.get(
   }
 );
 
+app.get(
+  '/api/tenants-available-users',
+  requireAuth,
+  requireAnyPermission(['settings.tenants.view', 'settings.tenants.manage']),
+  async (_req: AuthenticatedRequest, res: Response) => {
+    try {
+      const users = await db.getAvailableUsersForTenants();
+      res.json({ users });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
 app.post(
   '/api/tenants',
   requireAuth,
@@ -1694,6 +1708,8 @@ app.post(
         adminEmail,
         adminPin,
         adminJobTitle,
+        logoUrl,
+        assignedUserIds,
       } = req.body;
 
       if (!name || !name.trim()) {
@@ -1719,6 +1735,8 @@ app.post(
         adminEmail: adminEmail?.trim(),
         adminPin: adminPin?.trim(),
         adminJobTitle: adminJobTitle?.trim(),
+        logoUrl: logoUrl?.trim() || undefined,
+        assignedUserIds: Array.isArray(assignedUserIds) ? assignedUserIds : undefined,
       });
 
       res.status(201).json({ tenant: result.tenant, adminUser: result.adminUser });

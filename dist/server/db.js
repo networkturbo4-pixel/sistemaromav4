@@ -175,6 +175,14 @@ class DatabaseManager {
                     currencySymbol: data.currencyCode === 'USD' ? '$' : 'S/',
                 }
                 : {}),
+            ...(data.logoUrl
+                ? {
+                    logoLightUrl: data.logoUrl,
+                    logoDarkUrl: data.logoUrl,
+                    logoPwaUrl: data.logoUrl,
+                    faviconUrl: data.logoUrl,
+                }
+                : {}),
         };
         const companyInfo = {
             ...types_1.DEFAULT_COMPANY_INFO,
@@ -227,6 +235,10 @@ class DatabaseManager {
             updatedAt: now,
         };
         this.localState.users.push(adminUser);
+        // Si se enviaron usuarios adicionales a asignar
+        if (Array.isArray(data.assignedUserIds) && data.assignedUserIds.length > 0) {
+            await this.assignUsersToTenant(tenantId, data.assignedUserIds);
+        }
         this.saveLocalState();
         return { tenant: newTenant, adminUser };
     }
@@ -234,13 +246,128 @@ class DatabaseManager {
         const idx = this.localState.tenants.findIndex((t) => t.id === id);
         if (idx === -1)
             return null;
+        const current = this.localState.tenants[idx];
+        const updatedCustomization = {
+            ...current.customization,
+            ...(data.customization || {}),
+            ...(data.currencyCode
+                ? {
+                    currencyCode: data.currencyCode,
+                    currencySymbol: data.currencyCode === 'USD' ? '$' : 'S/',
+                }
+                : {}),
+            ...(data.logoUrl
+                ? {
+                    logoLightUrl: data.logoUrl,
+                    logoDarkUrl: data.logoUrl,
+                    logoPwaUrl: data.logoUrl,
+                    faviconUrl: data.logoUrl,
+                }
+                : {}),
+        };
+        const updatedCompanyInfo = {
+            ...current.companyInfo,
+            ...(data.companyInfo || {}),
+            ...(data.commercialName !== undefined ? { commercialName: data.commercialName } : {}),
+            ...(data.legalName !== undefined ? { legalName: data.legalName } : {}),
+            ...(data.ruc !== undefined ? { ruc: data.ruc } : {}),
+            ...(data.email !== undefined ? { email: data.email } : {}),
+            ...(data.whatsapp !== undefined ? { whatsapp: data.whatsapp } : {}),
+            ...(data.address !== undefined ? { address: data.address } : {}),
+        };
         this.localState.tenants[idx] = {
-            ...this.localState.tenants[idx],
-            ...data,
+            ...current,
+            name: data.name !== undefined ? data.name : current.name,
+            slug: data.slug !== undefined ? data.slug : current.slug,
+            status: data.status !== undefined ? data.status : current.status,
+            customization: updatedCustomization,
+            companyInfo: updatedCompanyInfo,
             updatedAt: new Date().toISOString(),
         };
+        // Sincronizar usuarios asignados si se enviaron
+        if (Array.isArray(data.assignedUserIds)) {
+            await this.assignUsersToTenant(id, data.assignedUserIds);
+        }
         this.saveLocalState();
         return this.localState.tenants[idx];
+    }
+    async assignUsersToTenant(tenantId, userIds) {
+        const now = new Date().toISOString();
+        let targetRole = this.localState.roles.find((r) => r.tenantId === tenantId && r.isSystem);
+        if (!targetRole) {
+            targetRole = this.localState.roles.find((r) => r.tenantId === tenantId);
+        }
+        if (!targetRole) {
+            targetRole = {
+                id: `role-${Date.now()}-admin`,
+                tenantId,
+                name: 'Super Administrador',
+                description: 'Acceso total y configuración del espacio',
+                badgeColor: '#4f46e5',
+                isSystem: true,
+                permissions: [...permissions_1.ALL_PERMISSION_KEYS],
+                createdAt: now,
+                updatedAt: now,
+            };
+            this.localState.roles.push(targetRole);
+        }
+        for (const uId of userIds) {
+            const sourceUser = this.localState.users.find((u) => u.id === uId);
+            if (!sourceUser)
+                continue;
+            const existingInTenant = this.localState.users.find((u) => u.tenantId === tenantId &&
+                (u.pin === sourceUser.pin ||
+                    (u.email && sourceUser.email && u.email.toLowerCase() === sourceUser.email.toLowerCase())));
+            if (existingInTenant) {
+                existingInTenant.isActive = true;
+                existingInTenant.name = sourceUser.name;
+                existingInTenant.jobTitle = sourceUser.jobTitle || existingInTenant.jobTitle;
+                existingInTenant.avatarUrl = sourceUser.avatarUrl || existingInTenant.avatarUrl;
+                existingInTenant.updatedAt = now;
+            }
+            else {
+                const newUser = {
+                    id: `user-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                    tenantId,
+                    roleId: targetRole.id,
+                    name: sourceUser.name,
+                    email: sourceUser.email || '',
+                    whatsapp: sourceUser.whatsapp || '',
+                    pin: sourceUser.pin,
+                    jobTitle: sourceUser.jobTitle || 'Miembro del Equipo',
+                    avatarUrl: sourceUser.avatarUrl || '',
+                    isActive: true,
+                    lastLoginAt: null,
+                    createdAt: now,
+                    updatedAt: now,
+                };
+                this.localState.users.push(newUser);
+            }
+        }
+    }
+    async getAvailableUsersForTenants() {
+        const userMap = new Map();
+        for (const u of this.localState.users) {
+            const key = u.pin || u.email || u.id;
+            if (!userMap.has(key)) {
+                userMap.set(key, {
+                    id: u.id,
+                    name: u.name,
+                    email: u.email,
+                    pin: u.pin,
+                    jobTitle: u.jobTitle,
+                    avatarUrl: u.avatarUrl,
+                    tenantIds: [u.tenantId],
+                });
+            }
+            else {
+                const item = userMap.get(key);
+                if (!item.tenantIds.includes(u.tenantId)) {
+                    item.tenantIds.push(u.tenantId);
+                }
+            }
+        }
+        return Array.from(userMap.values());
     }
     async updateTenantCustomization(tenantId, customization) {
         const tenant = await this.getTenantById(tenantId);

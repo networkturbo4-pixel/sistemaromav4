@@ -1190,9 +1190,18 @@ app.get('/api/tenants', auth_1.requireAuth, (0, auth_1.requireAnyPermission)(['s
         res.status(500).json({ error: err.message });
     }
 });
+app.get('/api/tenants-available-users', auth_1.requireAuth, (0, auth_1.requireAnyPermission)(['settings.tenants.view', 'settings.tenants.manage']), async (_req, res) => {
+    try {
+        const users = await db_1.db.getAvailableUsersForTenants();
+        res.json({ users });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 app.post('/api/tenants', auth_1.requireAuth, (0, auth_1.requirePermission)('settings.tenants.manage'), async (req, res) => {
     try {
-        const { name, slug, currencyCode, commercialName, legalName, ruc, email, whatsapp, address, adminName, adminEmail, adminPin, adminJobTitle, } = req.body;
+        const { name, slug, currencyCode, commercialName, legalName, ruc, email, whatsapp, address, adminName, adminEmail, adminPin, adminJobTitle, logoUrl, assignedUserIds, } = req.body;
         if (!name || !name.trim()) {
             res.status(400).json({ error: 'El nombre de la agencia o tenant es obligatorio.' });
             return;
@@ -1215,6 +1224,8 @@ app.post('/api/tenants', auth_1.requireAuth, (0, auth_1.requirePermission)('sett
             adminEmail: adminEmail?.trim(),
             adminPin: adminPin?.trim(),
             adminJobTitle: adminJobTitle?.trim(),
+            logoUrl: logoUrl?.trim() || undefined,
+            assignedUserIds: Array.isArray(assignedUserIds) ? assignedUserIds : undefined,
         });
         res.status(201).json({ tenant: result.tenant, adminUser: result.adminUser });
     }
