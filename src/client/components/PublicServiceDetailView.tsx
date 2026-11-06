@@ -273,8 +273,22 @@ export const PublicServiceDetailView: React.FC<PublicServiceDetailViewProps> = (
 
   const parsedVideo = parseVideoUrl(service.video?.url);
 
+  const fontKey = tenant.customization?.fontFamily || 'Inter';
+  const fontFamilies: Record<string, string> = {
+    'Inter': "'Inter', system-ui, -apple-system, sans-serif",
+    'Space Grotesk': "'Space Grotesk', system-ui, -apple-system, sans-serif",
+    'Montserrat': "'Montserrat', system-ui, -apple-system, sans-serif",
+    'Plus Jakarta Sans': "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+    'Outfit': "'Outfit', system-ui, -apple-system, sans-serif",
+    'Poppins': "'Poppins', system-ui, -apple-system, sans-serif",
+  };
+  const activeFontFamily = fontFamilies[fontKey] || fontFamilies['Inter'];
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col selection:bg-indigo-600 selection:text-white font-sans pb-28 sm:pb-16 antialiased">
+    <div
+      className="min-h-screen bg-slate-50 text-slate-900 flex flex-col selection:bg-indigo-600 selection:text-white font-sans pb-28 sm:pb-16 antialiased"
+      style={{ fontFamily: activeFontFamily }}
+    >
       {/* Top Bar Navegación Modo Claro */}
       <nav className="sticky top-0 z-40 backdrop-blur-xl bg-white/90 border-b border-slate-200/80 px-4 sm:px-8 py-3 flex items-center justify-between transition-all shadow-2xs">
         <div className="flex items-center gap-3">
@@ -384,11 +398,11 @@ export const PublicServiceDetailView: React.FC<PublicServiceDetailViewProps> = (
               )}
             </div>
 
-            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight">
+            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-tight">
               {service.title}
             </h1>
 
-            <p className="text-sm sm:text-lg text-slate-300 leading-relaxed max-w-3xl">
+            <p className="text-sm sm:text-lg text-slate-600 leading-relaxed max-w-3xl">
               {service.briefDescription}
             </p>
           </div>

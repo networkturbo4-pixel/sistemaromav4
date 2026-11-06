@@ -357,16 +357,20 @@ export const AppShell: React.FC<AppShellProps> = ({
 
   const renderWorkspaceMenu = (onClose: () => void) => (
     <>
-      <div className="px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center justify-between">
-        <span>Espacios de Trabajo</span>
-        <span className="text-[10px] text-indigo-500 font-bold">
+      <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <Layers className="w-3.5 h-3.5 text-indigo-500" />
+          <span>Espacios de Trabajo</span>
+        </div>
+        <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10">
           {tenantsList.length} disponibles
         </span>
       </div>
 
-      <div className="max-h-56 overflow-y-auto space-y-0.5 pr-0.5">
+      <div className="max-h-60 overflow-y-auto space-y-1 p-0.5 pr-1">
         {tenantsList.map((t) => {
           const isCurrent = t.id === tenant.id;
+          const tFavicon = t.customization?.faviconUrl;
           return (
             <button
               key={t.id}
@@ -378,24 +382,32 @@ export const AppShell: React.FC<AppShellProps> = ({
                   await switchTenant(t.id);
                 }
               }}
-              className={`w-full p-2 rounded-xl flex items-center justify-between gap-2 text-left text-xs transition cursor-pointer ${
+              className={`w-full p-2.5 rounded-xl flex items-center justify-between gap-2.5 text-left text-xs transition cursor-pointer border ${
                 isCurrent
-                  ? 'bg-indigo-50 dark:bg-indigo-500/10 font-bold text-indigo-600 dark:text-indigo-400'
-                  : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                  ? 'bg-indigo-50/80 dark:bg-indigo-500/15 border-indigo-200 dark:border-indigo-500/30 font-bold text-indigo-600 dark:text-indigo-400 shadow-2xs'
+                  : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
               }`}
             >
-              <div className="flex items-center gap-2 min-w-0">
-                <div
-                  className={`w-6 h-6 rounded-lg text-[11px] font-black flex items-center justify-center shrink-0 ${
-                    isCurrent
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  {t.name.charAt(0)}
-                </div>
+              <div className="flex items-center gap-2.5 min-w-0">
+                {tFavicon ? (
+                  <img
+                    src={tFavicon}
+                    alt={t.name}
+                    className="w-7 h-7 rounded-lg object-contain p-0.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs shrink-0"
+                  />
+                ) : (
+                  <div
+                    className={`w-7 h-7 rounded-lg text-[11px] font-black flex items-center justify-center shrink-0 ${
+                      isCurrent
+                        ? 'bg-indigo-600 text-white shadow-2xs'
+                        : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    {t.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div className="min-w-0">
-                  <p className="truncate text-xs">{t.name}</p>
+                  <p className="truncate text-xs font-bold leading-tight">{t.name}</p>
                   <p className="text-[10px] opacity-70 font-mono truncate">/{t.slug}</p>
                 </div>
               </div>
@@ -411,7 +423,7 @@ export const AppShell: React.FC<AppShellProps> = ({
         })}
       </div>
 
-      <div className="pt-1.5 mt-1 border-t border-slate-100 dark:border-slate-800 space-y-0.5">
+      <div className="pt-2 mt-1 border-t border-slate-100 dark:border-slate-800 space-y-1">
         {can('settings.tenants.manage') && (
           <button
             type="button"
@@ -423,7 +435,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                 window.dispatchEvent(new CustomEvent('roma-open-new-tenant-modal'));
               }, 100);
             }}
-            className="w-full px-2.5 py-1.5 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition flex items-center gap-2 cursor-pointer"
+            className="w-full px-3 py-2 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition flex items-center gap-2 cursor-pointer border border-dashed border-indigo-200 dark:border-indigo-500/30"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Nueva Agencia / Tenant</span>
@@ -437,9 +449,9 @@ export const AppShell: React.FC<AppShellProps> = ({
             onSelectModule('settings');
             onSelectSettingsTab?.('tenants');
           }}
-          className="w-full px-2.5 py-1.5 rounded-xl text-[11px] font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-2 cursor-pointer"
+          className="w-full px-3 py-1.5 rounded-xl text-[11px] font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-2 cursor-pointer"
         >
-          <Layers className="w-3.5 h-3.5" />
+          <Building2 className="w-3.5 h-3.5" />
           <span>Gestionar todos los workspaces</span>
         </button>
       </div>
@@ -453,122 +465,69 @@ export const AppShell: React.FC<AppShellProps> = ({
         backgroundColor: 'var(--app-surface)',
       }}
     >
-      {/* 1. SECCIÓN SUPERIOR: LOGO & STATUS */}
+      {/* 1. SECCIÓN SUPERIOR: WORKSPACE / TENANT SWITCHER PROFESIONAL */}
       <div className="space-y-4">
-        {/* Identidad de la Agencia */}
-        <div className="flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => {
-              onSelectModule('dashboard');
-              setMobileMenuOpen(false);
-            }}
-            className="flex items-center gap-3 text-left focus:outline-none group min-w-0 cursor-pointer"
-          >
-            {activeLogo ? (
-              <img
-                src={activeLogo}
-                alt={tenant.name}
-                className="h-7 w-auto max-w-[130px] object-contain transition-transform group-hover:scale-[1.02]"
-              />
-            ) : (
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-7 h-7 rounded-xl flex items-center justify-center font-extrabold text-white text-xs shadow-sm shrink-0"
-                  style={{ backgroundColor: 'var(--app-primary)' }}
-                >
-                  {tenant.name.charAt(0)}
-                </div>
-                <div className="min-w-0">
-                  <span className="font-extrabold text-xs block leading-tight truncate text-slate-900 dark:text-slate-100">
+        {/* Cabecera Principal con Switcher de Tenant */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 min-w-0" ref={sidebarWorkspaceRef}>
+            <button
+              type="button"
+              onClick={() => setSidebarWorkspaceOpen((prev) => !prev)}
+              className="w-full p-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-slate-50/70 dark:bg-slate-900/60 hover:bg-white dark:hover:bg-slate-800/80 hover:border-indigo-500/40 transition-all duration-200 text-left cursor-pointer group flex items-center justify-between gap-2.5 shadow-2xs hover:shadow-xs"
+              title="Cambiar de Agencia / Tenant"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                {tenant.customization?.faviconUrl ? (
+                  <img
+                    src={tenant.customization.faviconUrl}
+                    alt={tenant.name}
+                    className="w-9 h-9 rounded-xl object-contain p-1 border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs shrink-0"
+                  />
+                ) : (
+                  <div
+                    className="w-9 h-9 rounded-xl font-black text-sm flex items-center justify-center shrink-0 shadow-2xs text-white bg-gradient-to-br from-indigo-500 to-violet-600"
+                  >
+                    {tenant.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <span className="font-extrabold text-xs block truncate text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">
                     {tenant.companyInfo.commercialName || tenant.name}
                   </span>
-                  <span className="text-[10px] text-slate-400 font-bold tracking-wider uppercase">
-                    Creative SaaS
-                  </span>
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                    <span className="font-mono font-bold truncate">/{tenant.slug}</span>
+                    <span>•</span>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                      {tenant.customization.currencySymbol}
+                    </span>
+                  </div>
                 </div>
+              </div>
+
+              <div className="p-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition shrink-0">
+                <ChevronsUpDown className="w-3.5 h-3.5" />
+              </div>
+            </button>
+
+            {/* Menú Flotante de Espacios de Trabajo */}
+            {sidebarWorkspaceOpen && (
+              <div
+                className="absolute left-0 right-0 top-full mt-1.5 z-50 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-2 space-y-1 backdrop-blur-xl bg-white/95 dark:bg-slate-900/95"
+              >
+                {renderWorkspaceMenu(() => setSidebarWorkspaceOpen(false))}
               </div>
             )}
-          </button>
-
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setNotificationModalOpen(true)}
-              className="relative p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 hover:bg-slate-50 dark:hover:bg-slate-800/80 transition cursor-pointer shadow-2xs group flex items-center justify-center shrink-0"
-              title="Centro de Notificaciones & Alertas"
-              aria-label="Abrir centro de notificaciones"
-            >
-              <Bell className="w-4 h-4 text-slate-500 group-hover:text-indigo-500 transition" />
-              {unreadNotificationsCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center ring-2 ring-white dark:ring-slate-900 animate-pulse">
-                  {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
-                </span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(false)}
-              className="md:hidden p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
-              aria-label="Cerrar menú"
-            >
-              <X className="w-5 h-5 text-slate-500" />
-            </button>
           </div>
-        </div>
 
-        {/* Modern Workspace / Tenant Switcher */}
-        <div className="relative" ref={sidebarWorkspaceRef}>
+          {/* Botón de Cierre en Móvil */}
           <button
             type="button"
-            onClick={() => setSidebarWorkspaceOpen((prev) => !prev)}
-            className="w-full p-2.5 rounded-2xl border hover:border-indigo-500/50 transition text-left cursor-pointer group flex items-center justify-between gap-2 shadow-xs"
-            style={{
-              backgroundColor: 'var(--app-bg)',
-              borderColor: 'var(--app-border)',
-            }}
-            title="Cambiar de Agencia / Tenant"
+            onClick={() => setMobileMenuOpen(false)}
+            className="md:hidden p-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 cursor-pointer shrink-0"
+            aria-label="Cerrar menú móvil"
           >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div
-                className="w-8 h-8 rounded-xl border font-black text-xs flex items-center justify-center shrink-0"
-                style={{
-                  backgroundColor: 'color-mix(in srgb, var(--app-primary) 12%, transparent)',
-                  borderColor: 'color-mix(in srgb, var(--app-primary) 25%, transparent)',
-                  color: 'var(--app-primary)',
-                }}
-              >
-                {tenant.name.charAt(0)}
-              </div>
-              <div className="min-w-0">
-                <span className="font-extrabold text-xs block truncate text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">
-                  {tenant.companyInfo.commercialName || tenant.name}
-                </span>
-                <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                  <span className="font-mono-pin font-bold truncate">/{tenant.slug}</span>
-                  <span>•</span>
-                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                    {tenant.customization.currencySymbol}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <ChevronsUpDown className="w-4 h-4 text-slate-400 group-hover:text-indigo-500 shrink-0 transition" />
+            <X className="w-5 h-5" />
           </button>
-
-          {/* Menú Flotante de Espacios de Trabajo */}
-          {sidebarWorkspaceOpen && (
-            <div
-              className="absolute left-0 right-0 top-full mt-1.5 z-50 border rounded-2xl shadow-xl p-2 space-y-1"
-              style={{
-                backgroundColor: 'var(--app-surface)',
-                borderColor: 'var(--app-border)',
-              }}
-            >
-              {renderWorkspaceMenu(() => setSidebarWorkspaceOpen(false))}
-            </div>
-          )}
         </div>
 
         {/* 2. MENÚ DE NAVEGACIÓN */}
@@ -683,30 +642,48 @@ export const AppShell: React.FC<AppShellProps> = ({
           </button>
         </div>
 
-        {/* Tarjeta de Usuario */}
+        {/* Tarjeta de Usuario con Centro de Notificaciones Integrado */}
         {user && role && (
-          <div className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-2xl bg-indigo-600 flex items-center justify-center font-extrabold text-xs text-white shadow-sm shrink-0">
-                {user.name
-                  .split(' ')
-                  .slice(0, 2)
-                  .map((n) => n[0])
-                  .join('')
-                  .toUpperCase()}
+          <div className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <div className="w-9 h-9 rounded-2xl bg-indigo-600 flex items-center justify-center font-extrabold text-xs text-white shadow-sm shrink-0">
+                  {user.name
+                    .split(' ')
+                    .slice(0, 2)
+                    .map((n) => n[0])
+                    .join('')
+                    .toUpperCase()}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <p className="font-extrabold text-xs truncate leading-tight text-slate-900 dark:text-slate-100">
+                    {user.name}
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                    {user.jobTitle}
+                  </p>
+                </div>
               </div>
 
-              <div className="min-w-0 flex-1">
-                <p className="font-extrabold text-xs truncate leading-tight text-slate-900 dark:text-slate-100">
-                  {user.name}
-                </p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                  {user.jobTitle}
-                </p>
-              </div>
+              {/* Centro de Notificaciones en el Sidebar */}
+              <button
+                type="button"
+                onClick={() => setNotificationModalOpen(true)}
+                className="relative p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 hover:bg-white dark:hover:bg-slate-800 transition cursor-pointer shadow-2xs group flex items-center justify-center shrink-0"
+                title="Centro de Notificaciones & Alertas"
+                aria-label="Abrir centro de notificaciones"
+              >
+                <Bell className="w-4 h-4 text-slate-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition" />
+                {unreadNotificationsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center ring-2 ring-white dark:ring-slate-900 animate-pulse">
+                    {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
+                  </span>
+                )}
+              </button>
             </div>
 
-            <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center justify-between pt-1 border-t border-slate-200/50 dark:border-slate-800/50">
               <span
                 className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
                 style={{
@@ -723,18 +700,6 @@ export const AppShell: React.FC<AppShellProps> = ({
               </span>
             </div>
           </div>
-        )}
-
-        {/* Botón Instalar App PWA */}
-        {!isAppInstalled && (
-          <button
-            type="button"
-            onClick={handleInstallClick}
-            className="w-full mb-2 py-2 px-3 rounded-2xl bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-blue-500/10 border border-purple-200 dark:border-purple-800/40 text-xs font-bold text-purple-700 dark:text-purple-300 hover:bg-purple-100/50 dark:hover:bg-purple-900/30 transition flex items-center justify-center gap-2 cursor-pointer shadow-xs"
-          >
-            <Smartphone className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-            <span>Instalar App PWA</span>
-          </button>
         )}
 
         {/* Botón Salir */}

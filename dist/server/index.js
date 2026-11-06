@@ -1017,6 +1017,21 @@ app.get('/api/workspace/posts', auth_1.requireAuth, (0, auth_1.requirePermission
         res.status(500).json({ error: err.message });
     }
 });
+// Obtener una publicación individual (para sincronización de comentarios en tiempo real)
+app.get('/api/workspace/posts/:id', auth_1.requireAuth, (0, auth_1.requirePermission)('workspace.view'), async (req, res) => {
+    try {
+        const postId = req.params.id;
+        const posts = await db_1.db.getWorkspacePosts(req.auth.tenant.id);
+        const post = posts.find((p) => p.id === postId);
+        if (!post) {
+            return res.status(404).json({ error: 'Publicación no encontrada' });
+        }
+        res.json({ post });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 // Crear publicación
 app.post('/api/workspace/posts', auth_1.requireAuth, (0, auth_1.requirePermission)('workspace.social.manage'), async (req, res) => {
     try {

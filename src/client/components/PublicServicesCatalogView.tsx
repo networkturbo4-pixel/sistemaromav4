@@ -129,8 +129,22 @@ export const PublicServicesCatalogView: React.FC = () => {
     tenant.customization?.logoDarkUrl ||
     '';
 
+  const fontKey = tenant.customization?.fontFamily || 'Inter';
+  const fontFamilies: Record<string, string> = {
+    'Inter': "'Inter', system-ui, -apple-system, sans-serif",
+    'Space Grotesk': "'Space Grotesk', system-ui, -apple-system, sans-serif",
+    'Montserrat': "'Montserrat', system-ui, -apple-system, sans-serif",
+    'Plus Jakarta Sans': "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+    'Outfit': "'Outfit', system-ui, -apple-system, sans-serif",
+    'Poppins': "'Poppins', system-ui, -apple-system, sans-serif",
+  };
+  const activeFontFamily = fontFamilies[fontKey] || fontFamilies['Inter'];
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans antialiased selection:bg-indigo-600 selection:text-white">
+    <div
+      className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans antialiased selection:bg-indigo-600 selection:text-white"
+      style={{ fontFamily: activeFontFamily }}
+    >
       {/* Top Header Sticky SaaS Modo Claro */}
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-white/90 border-b border-slate-200/80 px-4 sm:px-8 py-3.5 flex items-center justify-between transition-all shadow-2xs">
         {/* Logo / Nombre de Agencia */}
@@ -287,7 +301,7 @@ export const PublicServicesCatalogView: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5 sm:gap-6">
               {filteredServices.map((service) => {
                 const category = categories.find((c) => c.id === service.categoryId);
                 const badgeColor = category?.badgeColor || '#6366f1';
@@ -307,22 +321,14 @@ export const PublicServicesCatalogView: React.FC = () => {
                   priceLabel = `${service.currencySymbol} ${service.basePrice.toLocaleString('es-PE')}`;
                 }
 
-                // WhatsApp Link con mensaje pre-armado
-                const waText = `¡Hola! Vengo desde el catálogo web de ${tenant.name} y me gustaría cotizar el servicio: *${service.title}* (${priceLabel}).`;
-                const waLink = company.whatsapp
-                  ? `https://wa.me/${company.whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                      waText
-                    )}`
-                  : '';
-
                 return (
                   <div
                     key={service.id}
-                    className="group rounded-2xl border border-slate-200/90 bg-white hover:border-slate-300 hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col justify-between shadow-2xs relative"
+                    className="group rounded-2xl border border-slate-200/90 bg-white hover:border-slate-300 hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col justify-between shadow-2xs relative hover:-translate-y-0.5"
                   >
                     <div>
-                      {/* Portada */}
-                      <a href={detailUrl} className="block relative h-48 sm:h-52 w-full overflow-hidden bg-slate-100">
+                      {/* Portada con Badges */}
+                      <a href={detailUrl} className="block relative h-44 sm:h-48 w-full overflow-hidden bg-slate-100">
                         {service.coverImage ? (
                           <img
                             src={service.coverImage}
@@ -331,22 +337,12 @@ export const PublicServicesCatalogView: React.FC = () => {
                             loading="lazy"
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400">
-                            <Sparkles className="w-12 h-12" />
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 text-slate-400 p-4">
+                            <Sparkles className="w-10 h-10 mb-1 opacity-50" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Catálogo</span>
                           </div>
                         )}
                         <div className="absolute inset-0 bg-black/10" />
-
-                        {/* Tag de Categoría */}
-                        <div className="absolute top-3 left-3">
-                          <span
-                            className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white shadow-sm flex items-center gap-1.5"
-                            style={{ backgroundColor: `${badgeColor}` }}
-                          >
-                            <Tag className="w-3 h-3" />
-                            {service.categoryName || 'General'}
-                          </span>
-                        </div>
 
                         {/* Badge de Urgencia si aplica */}
                         {service.urgency?.enabled && (
@@ -361,20 +357,23 @@ export const PublicServicesCatalogView: React.FC = () => {
                         )}
                       </a>
 
-                      {/* Info del servicio */}
-                      <div className="p-5 sm:p-6 space-y-3">
-                        <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold">
-                          <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 font-mono text-slate-700">
-                            {service.pricingType === 'packages'
-                              ? `${service.packages?.length || 0} Paquetes`
-                              : service.pricingType === 'monthly'
-                              ? 'Mensual'
-                              : service.pricingType === 'starting_at'
-                              ? 'A medida'
-                              : 'Tarifa Fija'}
+                      {/* Info del servicio estilo Imagen 2 */}
+                      <div className="p-4 sm:p-5 space-y-2.5">
+                        {/* Tag de Categoría */}
+                        <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                          <span
+                            className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider shadow-2xs flex items-center gap-1"
+                            style={{
+                              backgroundColor: `${badgeColor}15`,
+                              color: badgeColor,
+                            }}
+                          >
+                            <Tag className="w-2.5 h-2.5" />
+                            {service.categoryName || 'General'}
                           </span>
+
                           {service.deliveryTime && (
-                            <span className="flex items-center gap-1 text-[11px] text-slate-500">
+                            <span className="flex items-center gap-1 text-[10px] text-slate-500 font-semibold">
                               <Clock className="w-3 h-3 text-indigo-600" />
                               {service.deliveryTime}
                             </span>
@@ -383,65 +382,44 @@ export const PublicServicesCatalogView: React.FC = () => {
 
                         {/* Título */}
                         <a href={detailUrl} className="block group-hover:text-indigo-600 transition-colors">
-                          <h3 className="font-bold text-base sm:text-lg text-slate-900 leading-snug line-clamp-2">
+                          <h3 className="font-extrabold text-sm sm:text-base text-slate-900 leading-snug line-clamp-2">
                             {service.title}
                           </h3>
                         </a>
 
                         {/* Breve descripción mostrando sólo 3 líneas */}
-                        <p className="text-xs leading-relaxed text-slate-600 line-clamp-3 min-h-[3.75rem]">
+                        <p className="text-xs leading-relaxed text-slate-600 line-clamp-3 min-h-[3.25rem]">
                           {service.briefDescription ||
                             'Servicio profesional con enfoque estratégico para potenciar tu marca.'}
                         </p>
 
-                        {/* Inversión & Descuento */}
-                        <div className="pt-3 border-t border-slate-100 flex items-baseline justify-between">
+                        {/* Inversión & Descuento con botón circular de flecha */}
+                        <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
                           <div>
-                            <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                              Inversión
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                              PRECIO
                             </span>
-                            <span className="text-lg font-bold text-slate-900 tracking-tight">
+                            <span className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
                               {priceLabel}
                             </span>
                           </div>
 
-                          {service.annualDiscount > 0 && (
-                            <span className="px-2 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold">
-                              -{service.annualDiscount}% Anual
-                            </span>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {service.annualDiscount > 0 && (
+                              <span className="px-2 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold">
+                                -{service.annualDiscount}%
+                              </span>
+                            )}
+                            <a
+                              href={detailUrl}
+                              className="w-8 h-8 rounded-full bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white transition-all flex items-center justify-center shadow-2xs group/btn shrink-0"
+                              title="Ver detalle del servicio"
+                            >
+                              <ArrowRight className="w-4 h-4 transition-transform group-hover/btn:translate-x-0.5" />
+                            </a>
+                          </div>
                         </div>
                       </div>
-                    </div>
-
-                    {/* Botones de Acción */}
-                    <div className="p-4 sm:p-5 pt-0 grid grid-cols-2 gap-2">
-                      <a
-                        href={detailUrl}
-                        className="py-2.5 px-3 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200/80 text-slate-700 border border-slate-200 transition flex items-center justify-center gap-1.5 shadow-2xs"
-                      >
-                        Ver Detalle
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </a>
-
-                      {waLink ? (
-                        <a
-                          href={waLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="py-2.5 px-3 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center justify-center gap-1.5 shadow-xs"
-                        >
-                          <MessageCircle className="w-3.5 h-3.5" />
-                          Cotizar
-                        </a>
-                      ) : (
-                        <a
-                          href={detailUrl}
-                          className="py-2.5 px-3 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center justify-center gap-1.5 shadow-xs"
-                        >
-                          Cotizar
-                        </a>
-                      )}
                     </div>
                   </div>
                 );

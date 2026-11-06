@@ -729,11 +729,11 @@ export const ServicesModule: React.FC = () => {
 
       {/* Grid de Cards de Servicios */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5">
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
             <div
               key={i}
-              className="h-80 rounded-3xl border tenant-border bg-slate-500/5 animate-pulse"
+              className="h-80 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-500/5 animate-pulse"
             />
           ))}
         </div>
@@ -762,10 +762,10 @@ export const ServicesModule: React.FC = () => {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5">
           {filteredServices.map((service) => {
             const category = categories.find((c) => c.id === service.categoryId);
-            const badgeColor = category?.badgeColor || '#7c3aed';
+            const badgeColor = category?.badgeColor || '#6366f1';
             const isCopied = copiedServiceId === service.id;
 
             // Formato de precio según tipo
@@ -784,11 +784,11 @@ export const ServicesModule: React.FC = () => {
             return (
               <div
                 key={service.id}
-                className="group rounded-3xl border tenant-border tenant-surface overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between hover:border-violet-500/40 relative"
+                className="group rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-2xs hover:shadow-lg transition-all duration-300 flex flex-col justify-between hover:border-indigo-500/40 relative hover:-translate-y-0.5"
               >
                 <div>
                   {/* Portada con Badges */}
-                  <div className="relative h-40 sm:h-44 w-full bg-slate-900 overflow-hidden">
+                  <div className="relative h-44 sm:h-48 w-full bg-slate-950 overflow-hidden">
                     {service.coverImage ? (
                       <img
                         src={service.coverImage}
@@ -797,27 +797,26 @@ export const ServicesModule: React.FC = () => {
                         loading="lazy"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-slate-800 text-slate-400">
-                        <Sparkles className="w-10 h-10 opacity-50" />
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-slate-400 p-4 text-center">
+                        <Sparkles className="w-9 h-9 opacity-40 text-indigo-400 mb-1" />
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                          Sin Portada
+                        </span>
                       </div>
                     )}
-                    <div className="absolute inset-0 bg-black/25" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/20" />
 
-                    {/* Badge de Categoría */}
+                    {/* Código en la portada */}
                     <div className="absolute top-2.5 left-2.5">
-                      <span
-                        className="px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider backdrop-blur-md shadow-md text-white flex items-center gap-1"
-                        style={{ backgroundColor: `${badgeColor}` }}
-                      >
-                        <Tag className="w-2.5 h-2.5" />
-                        <span className="truncate max-w-[120px]">{service.categoryName || 'General'}</span>
+                      <span className="px-2 py-0.5 rounded-md font-mono text-[9px] font-bold bg-black/60 text-white border border-white/10 backdrop-blur-md shadow-xs">
+                        {service.code}
                       </span>
                     </div>
 
                     {/* Badge de Estado & Visibilidad */}
                     <div className="absolute top-2.5 right-2.5 flex items-center gap-1">
                       <span
-                        className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold shadow-md ${
+                        className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shadow-sm backdrop-blur-md ${
                           service.status === 'active'
                             ? 'bg-emerald-600 text-white'
                             : service.status === 'draft'
@@ -832,7 +831,7 @@ export const ServicesModule: React.FC = () => {
                           : 'Pausado'}
                       </span>
                       {service.visibility === 'private' && (
-                        <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-slate-900/90 text-white border border-slate-700">
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-black/70 text-slate-200 border border-white/20 backdrop-blur-md">
                           Privado
                         </span>
                       )}
@@ -841,7 +840,7 @@ export const ServicesModule: React.FC = () => {
                     {/* Banner de Urgencia si aplica */}
                     {service.urgency?.enabled && (
                       <div className="absolute bottom-2 left-2 right-2">
-                        <div className="px-2 py-0.5 rounded-lg bg-amber-600 text-white text-[9px] font-bold flex items-center gap-1 shadow-md">
+                        <div className="px-2 py-0.5 rounded-lg bg-amber-500/90 text-white text-[9px] font-bold flex items-center gap-1 shadow-md backdrop-blur-xs">
                           <Flame className="w-3 h-3 shrink-0" />
                           <span className="truncate">{service.urgency.badgeText || '¡Oferta Especial!'}</span>
                         </div>
@@ -849,12 +848,22 @@ export const ServicesModule: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Cuerpo de la Card */}
-                  <div className="p-4 space-y-2.5">
-                    {/* Código y Paquete / Modelo */}
-                    <div className="flex items-center justify-between text-[10px] tenant-muted font-bold">
-                      <span className="font-mono text-violet-500">{service.code}</span>
-                      <span className="px-1.5 py-0.5 rounded-md bg-slate-500/10 text-[9px]">
+                  {/* Cuerpo de la Card (Estilo Imagen 2) */}
+                  <div className="p-4 sm:p-5 space-y-2.5">
+                    {/* Badge de Categoría & Tipo de Cobro */}
+                    <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                      <span
+                        className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider shadow-2xs flex items-center gap-1"
+                        style={{
+                          backgroundColor: `${badgeColor}15`,
+                          color: badgeColor,
+                        }}
+                      >
+                        <Tag className="w-2.5 h-2.5" />
+                        <span className="truncate max-w-[130px]">{service.categoryName || 'General'}</span>
+                      </span>
+
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono">
                         {service.pricingType === 'packages'
                           ? `${service.packages?.length || 0} Paquetes`
                           : service.pricingType === 'monthly'
@@ -866,43 +875,46 @@ export const ServicesModule: React.FC = () => {
                     </div>
 
                     {/* Título del Servicio */}
-                    <h3 className="font-black text-sm sm:text-base tenant-text leading-snug line-clamp-2" title={service.title}>
+                    <h3
+                      className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-slate-100 leading-snug line-clamp-2 min-h-[2.5rem]"
+                      title={service.title}
+                    >
                       {service.title}
                     </h3>
 
-                    {/* Breve descripción mostrando solamente las tres primeras líneas (REQUERIMIENTO EXACTO) */}
-                    <p className="text-xs leading-relaxed tenant-muted line-clamp-3 min-h-[3.75rem]">
+                    {/* Breve descripción mostrando sólo 3 líneas */}
+                    <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400 line-clamp-3 min-h-[3.25rem]">
                       {service.briefDescription ||
                         'Servicio profesional diseñado a medida para elevar los resultados de tu empresa.'}
                     </p>
 
-                    {/* Precio y Descuento Anual */}
-                    <div className="pt-2 border-t tenant-border flex items-baseline justify-between">
+                    {/* Inversión & Descuento estilo Imagen 2 */}
+                    <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-baseline justify-between">
                       <div>
-                        <span className="text-[9px] uppercase font-bold tenant-muted block">
-                          Inversión
+                        <span className="text-[9px] uppercase font-extrabold tracking-wider text-slate-400 dark:text-slate-500 block">
+                          PRECIO
                         </span>
-                        <span className="text-base sm:text-lg font-black text-emerald-500 tracking-tight">
+                        <span className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 tracking-tight">
                           {priceLabel}
                         </span>
                       </div>
 
                       {service.annualDiscount > 0 && (
-                        <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 text-[9px] font-extrabold">
-                          -{service.annualDiscount}%
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 text-[10px] font-black">
+                          -{service.annualDiscount}% Anual
                         </span>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* Footer de Botones de Acción (REQUERIMIENTO EXACTO: copiar enlace, eliminar, editar o compartir) */}
-                <div className="p-2.5 pt-2 border-t tenant-border bg-slate-500/5 grid grid-cols-4 gap-1">
+                {/* Footer de Botones de Acción Administrativos */}
+                <div className="p-2 sm:p-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 grid grid-cols-4 gap-1.5">
                   {/* Copiar enlace */}
                   <button
                     type="button"
                     onClick={() => handleCopyLink(service)}
-                    className="p-2 rounded-xl text-xs font-bold border tenant-border hover:bg-slate-500/10 tenant-text flex flex-col items-center justify-center gap-1 transition cursor-pointer"
+                    className="p-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 flex flex-col items-center justify-center gap-1 transition cursor-pointer shadow-2xs"
                     title="Copiar enlace público"
                   >
                     {isCopied ? (
@@ -917,7 +929,7 @@ export const ServicesModule: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setServiceToShare(service)}
-                    className="p-2 rounded-xl text-xs font-bold border tenant-border hover:bg-slate-500/10 tenant-text flex flex-col items-center justify-center gap-1 transition cursor-pointer"
+                    className="p-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 flex flex-col items-center justify-center gap-1 transition cursor-pointer shadow-2xs"
                     title="Compartir por WhatsApp o redes"
                   >
                     <Share2 className="w-3.5 h-3.5" />
@@ -929,7 +941,7 @@ export const ServicesModule: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleOpenEditService(service)}
-                      className="p-2 rounded-xl text-xs font-bold bg-violet-600 hover:bg-violet-700 text-white flex flex-col items-center justify-center gap-1 transition cursor-pointer shadow-sm"
+                      className="p-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex flex-col items-center justify-center gap-1 transition cursor-pointer shadow-xs"
                       title="Editar servicio completo"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
@@ -942,7 +954,7 @@ export const ServicesModule: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleDeleteService(service)}
-                      className="p-2 rounded-xl text-xs font-bold border border-rose-500/20 text-rose-500 hover:bg-rose-500/10 flex flex-col items-center justify-center gap-1 transition cursor-pointer"
+                      className="p-2 rounded-xl text-xs font-bold border border-rose-200 dark:border-rose-900/40 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 flex flex-col items-center justify-center gap-1 transition cursor-pointer shadow-2xs"
                       title="Eliminar servicio"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

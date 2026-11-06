@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Calendar,
   Check,
@@ -18,6 +18,8 @@ import {
   LayoutGrid,
   AlignLeft,
   Search,
+  Bell,
+  BellRing,
 } from 'lucide-react';
 import { UniversalMediaEmbed } from './UniversalMediaEmbed';
 
@@ -71,17 +73,82 @@ interface PublicMonthData {
   };
 }
 
+// Helper: Formatear estados al español
+export const formatStatusSpanish = (status?: string): string => {
+  if (!status) return 'Borrador';
+  const s = status.toLowerCase().trim();
+  switch (s) {
+    case 'idea':
+    case 'draft':
+      return 'Borrador';
+    case 'design':
+      return 'En Diseño';
+    case 'in_progress':
+    case 'progress':
+      return 'En Progreso';
+    case 'review':
+      return 'En Revisión';
+    case 'client_approved':
+    case 'approved':
+      return 'Aprobado';
+    case 'published':
+      return 'Publicado';
+    case 'archived':
+      return 'Archivado';
+    default:
+      return status.replace(/_/g, ' ');
+  }
+};
+
+// Helper: Estilos visuales del badge de estado
+export const getStatusBadgeStyle = (status?: string) => {
+  const s = (status || '').toLowerCase().trim();
+  if (s === 'published') {
+    return 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800';
+  }
+  if (s === 'review') {
+    return 'bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-800';
+  }
+  if (s === 'client_approved' || s === 'approved') {
+    return 'bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 border-teal-300 dark:border-teal-800';
+  }
+  if (s === 'design' || s === 'in_progress') {
+    return 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-800';
+  }
+  return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700';
+};
+
+// Chime de sonido nativo mediante Web Audio API (sin dependencias de archivos externos)
+const playChimeSound = () => {
+  try {
+    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // Re5
+    osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.15); // La5
+    gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.28);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.28);
+  } catch {
+    // Audio bloqueado antes de interacción del usuario
+  }
+};
+
 export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> = ({ token }) => {
   const [data, setData] = useState<PublicMonthData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // PIN security
+  // Seguridad por PIN
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [enteredPin, setEnteredPin] = useState('');
   const [pinError, setPinError] = useState(false);
 
-  // View state
+  // Navegación de post
   const [currentPostIndex, setCurrentPostIndex] = useState(0);
   const [activeMediaTab, setActiveMediaTab] = useState<'ref' | 'final'>('final');
   const [copiedCopy, setCopiedCopy] = useState(false);
@@ -89,21 +156,44 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
   const [isZoomOpen, setIsZoomOpen] = useState(false);
   const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
 
-  // Mobile navigation tabs: 'media' | 'copy' | 'comments'
+  // Pestañas móviles: 'media' | 'copy' | 'comments'
   const [mobileTab, setMobileTab] = useState<'media' | 'copy' | 'comments'>('media');
 
-  // Quick Post Selector Drawer / Modal
-  const [isPostSelectorOpen, setIsPostSelectorOpen] = useState(false);
+  // Off-Canvas Drawer para Buscador Rápido de Posts
+  const [isOffCanvasOpen, setIsOffCanvasOpen] = useState(false);
   const [postSearchQuery, setPostSearchQuery] = useState('');
 
-  // Comment state
+  // Comentarios
   const [commentText, setCommentText] = useState('');
-  const [authorName, setAuthorName] = useState(() => localStorage.getItem('roma_public_comment_author') || 'Cliente');
   const [isSendingComment, setIsSendingComment] = useState(false);
   const [commentAttachedImg, setCommentAttachedImg] = useState<string | null>(null);
   const [commentSuccessMsg, setCommentSuccessMsg] = useState(false);
   const commentFileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Notificaciones en tiempo real
+  const [liveToast, setLiveToast] = useState<{ title: string; message: string } | null>(null);
+  const [notificationsGranted, setNotificationsGranted] = useState(() => {
+    return typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
+  });
+  const knownCommentIdsRef = useRef<Set<string>>(new Set());
+  const initialLoadDoneRef = useRef(false);
+
+  // Solicitar permiso de notificación del navegador
+  const requestNotificationPermission = useCallback(async () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      try {
+        const perm = await Notification.requestPermission();
+        if (perm === 'granted') {
+          setNotificationsGranted(true);
+          playChimeSound();
+        }
+      } catch {
+        // Ignorar si el usuario rechaza
+      }
+    }
+  }, []);
+
+  // Cargar datos iniciales
   useEffect(() => {
     const fetchMonth = async () => {
       try {
@@ -115,7 +205,15 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
         const json: PublicMonthData = await res.json();
         setData(json);
 
-        // Check if PIN is required
+        // Inicializar IDs de comentarios conocidos
+        const idSet = new Set<string>();
+        json.posts?.forEach((p) => {
+          p.comments?.forEach((c) => idSet.add(c.id));
+        });
+        knownCommentIdsRef.current = idSet;
+        initialLoadDoneRef.current = true;
+
+        // Comprobar PIN si es necesario
         if (!json.month.requirePin || !json.month.publicPin) {
           setIsUnlocked(true);
         } else {
@@ -134,7 +232,70 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
     fetchMonth();
   }, [token]);
 
-  // Initial post index from URL hash or query param (e.g. #post-4 or ?post=4)
+  // Sincronización de comentarios en TIEMPO REAL (Polling cada 3.5 segundos)
+  useEffect(() => {
+    if (!isUnlocked || !data) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/public/workspace/months/${encodeURIComponent(token)}`);
+        if (!res.ok) return;
+        const fresh: PublicMonthData = await res.json();
+
+        // Detectar nuevos comentarios que no hayamos visto
+        let hasNewComments = false;
+        let latestNewComment: { author: string; text: string; postTitle?: string } | null = null;
+
+        fresh.posts?.forEach((freshPost) => {
+          freshPost.comments?.forEach((c) => {
+            if (!knownCommentIdsRef.current.has(c.id)) {
+              knownCommentIdsRef.current.add(c.id);
+              hasNewComments = true;
+              latestNewComment = {
+                author: c.author,
+                text: c.text,
+                postTitle: freshPost.title || freshPost.code,
+              };
+            }
+          });
+        });
+
+        if (hasNewComments && initialLoadDoneRef.current) {
+          setData(fresh);
+          playChimeSound();
+
+          if (latestNewComment) {
+            const commentObj = latestNewComment as { author: string; text: string; postTitle?: string };
+            const cleanPreview = commentObj.text.replace(/\n?\[Imagen Adjunta\]:\s*\S+/, '').trim() || 'Adjuntó una imagen';
+            const toastTitle = `💬 Nuevo comentario de ${commentObj.author}`;
+            const toastBody = `En ${commentObj.postTitle || 'la publicación'}: "${cleanPreview.slice(0, 70)}${cleanPreview.length > 70 ? '...' : ''}"`;
+
+            // Mostrar toast visual en pantalla
+            setLiveToast({ title: toastTitle, message: toastBody });
+            setTimeout(() => setLiveToast(null), 5000);
+
+            // Mostrar notificación nativa del navegador
+            if ('Notification' in window && Notification.permission === 'granted') {
+              try {
+                new Notification(toastTitle, {
+                  body: toastBody,
+                  icon: data.tenant?.logoUrl || '/favicon.ico',
+                });
+              } catch {
+                // Notificación bloqueada
+              }
+            }
+          }
+        }
+      } catch {
+        // Error silencioso en background polling
+      }
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [token, isUnlocked, data]);
+
+  // Selección de post inicial mediante hash (#post-4) o query param (?post=4)
   useEffect(() => {
     if (!data?.posts?.length) return;
     const hash = window.location.hash;
@@ -159,7 +320,7 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
   const posts = data?.posts || [];
   const currentPost = posts[currentPostIndex] || null;
 
-  // Auto-select media tab on post switch: if post has final art, show 'final', else 'ref'
+  // Auto-seleccionar 'Post Terminado' si existe, sino 'Referencia gráfica'
   useEffect(() => {
     if (!currentPost) return;
     if (currentPost.finalArtMediaUrl) {
@@ -183,7 +344,7 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
     try {
       window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#post-${clamped + 1}`);
     } catch {
-      // Ignore in iframe / strict environments
+      // Ignorar en iframes
     }
   };
 
@@ -208,13 +369,13 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
     setTimeout(() => setCopiedCopy(false), 2000);
   };
 
+  // Enviar comentario (sin campo de autor visible: se envía 'Cliente' directamente)
   const handleSendComment = async () => {
     if (!commentText.trim() && !commentAttachedImg) return;
     if (!currentPost) return;
 
     try {
       setIsSendingComment(true);
-      localStorage.setItem('roma_public_comment_author', authorName);
 
       let fullComment = commentText.trim();
       if (commentAttachedImg) {
@@ -227,7 +388,7 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            author: authorName,
+            author: 'Cliente',
             text: fullComment,
           }),
         }
@@ -235,7 +396,8 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
 
       if (res.ok) {
         const result = await res.json();
-        // Update local state
+        knownCommentIdsRef.current.add(result.comment.id);
+
         const updatedPosts = [...(data?.posts || [])];
         const targetPost = { ...updatedPosts[currentPostIndex] };
         targetPost.comments = [...(targetPost.comments || []), result.comment];
@@ -246,6 +408,11 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
         setCommentAttachedImg(null);
         setCommentSuccessMsg(true);
         setTimeout(() => setCommentSuccessMsg(false), 3000);
+
+        // Pedir permiso para notificaciones si aún no está configurado
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+          requestNotificationPermission();
+        }
       } else {
         alert('No se pudo guardar el comentario. Por favor, reintenta.');
       }
@@ -257,7 +424,7 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
     }
   };
 
-  // Paste image handler for comments (Ctrl + V)
+  // Pegar imagen directamente desde el portapapeles (Ctrl + V)
   const handleCommentPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -276,7 +443,7 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
     }
   };
 
-  // Helper to parse comments that may include an attached image
+  // Helper para renderizar comentarios con imágenes adjuntas
   const parseCommentText = (raw: string) => {
     const match = raw.match(/\n?\[Imagen Adjunta\]:\s*(\S+)/);
     if (match) {
@@ -286,7 +453,7 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
     return { text: raw, attachedImg: null };
   };
 
-  // Filter posts for quick search modal
+  // Filtrado de publicaciones para el Buscador Off-Canvas
   const filteredPosts = useMemo(() => {
     if (!postSearchQuery.trim()) {
       return posts.map((post, idx) => ({ post, originalIndex: idx }));
@@ -299,7 +466,14 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
         const title = (post.title || '').toLowerCase();
         const copy = (post.copy || post.caption || '').toLowerCase();
         const concept = (post.concept || '').toLowerCase();
-        return code.includes(q) || title.includes(q) || copy.includes(q) || concept.includes(q);
+        const statusSpan = formatStatusSpanish(post.status).toLowerCase();
+        return (
+          code.includes(q) ||
+          title.includes(q) ||
+          copy.includes(q) ||
+          concept.includes(q) ||
+          statusSpan.includes(q)
+        );
       });
   }, [posts, postSearchQuery]);
 
@@ -330,7 +504,7 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
     );
   }
 
-  // PIN Lock Screen
+  // Pantalla de bloqueo por PIN
   if (!isUnlocked) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
@@ -387,7 +561,8 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
     );
   }
 
-  const isPublished = currentPost?.status === 'published';
+  const statusLabel = formatStatusSpanish(currentPost?.status);
+  const statusBadgeClass = getStatusBadgeStyle(currentPost?.status);
 
   return (
     <div
@@ -395,38 +570,75 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
         isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-[#eef2f6] text-slate-800'
       } transition-colors flex flex-col font-sans`}
     >
+      {/* Toast flotante de notificación en tiempo real */}
+      {liveToast && (
+        <div className="fixed top-4 right-4 z-50 max-w-sm bg-slate-900/95 text-white p-4 rounded-2xl shadow-2xl border border-indigo-500/40 backdrop-blur-md animate-bounce">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-indigo-600/30 border border-indigo-400 text-indigo-400 flex items-center justify-center shrink-0">
+              <BellRing className="w-4 h-4 animate-pulse" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-black text-indigo-300">{liveToast.title}</h4>
+              <p className="text-xs text-slate-300 mt-0.5 leading-snug">{liveToast.message}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLiveToast(null)}
+              className="text-slate-400 hover:text-white text-sm"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ========================================================================= */}
-      {/* VISTA ESCRITORIO / PC (Image 4): Contenedor amplio, elegante y adaptativo */}
+      {/* VISTA ESCRITORIO / PC: Contenedor amplio, elegante y adaptativo */}
       {/* ========================================================================= */}
       <div className="hidden lg:flex flex-1 flex-col w-full max-w-[1720px] 2xl:max-w-[1850px] mx-auto p-4 sm:p-6 lg:p-7">
         <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 sm:p-7 shadow-xs flex-1 flex flex-col justify-between">
-          {/* Header Superior: POST 04 | Fecha | PUBLICADO + Botones Sol/Luna y Grid */}
+          {/* Header Superior: POST 04 | Fecha de publicación: X | ESTADO EN ESPAÑOL */}
           <div className="flex items-center justify-between pb-5 border-b border-slate-100 dark:border-slate-800/80 mb-6">
             <div className="flex items-center gap-3.5 flex-wrap">
               <span className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white uppercase">
                 {currentPost?.code || `POST ${String(currentPostIndex + 1).padStart(2, '0')}`}
               </span>
 
+              {/* Badge de Fecha: "Fecha de publicación: [FECHA]" */}
               {currentPost?.scheduledDate && (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/60">
-                  <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                  <span>{currentPost.scheduledDate}</span>
+                <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+                  <Calendar className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
+                  <span>
+                    Fecha de publicación:{' '}
+                    <strong className="font-extrabold text-slate-900 dark:text-white">
+                      {currentPost.scheduledDate}
+                    </strong>
+                  </span>
                 </div>
               )}
 
+              {/* Badge de Estado en ESPAÑOL */}
               <span
-                className={`px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase border ${
-                  isPublished
-                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800'
-                    : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800'
-                }`}
+                className={`px-3.5 py-1 rounded-full text-xs font-black tracking-wider uppercase border ${statusBadgeClass}`}
               >
-                {isPublished ? 'PUBLICADO' : currentPost?.status?.toUpperCase() || 'BORRADOR'}
+                {statusLabel.toUpperCase()}
               </span>
             </div>
 
-            {/* Acciones Header: Tema Claro/Oscuro y Buscador Rápido de Todos los Posts */}
+            {/* Acciones Header: Notificaciones, Modo Claro/Oscuro y Buscador Rápido Off-Canvas */}
             <div className="flex items-center gap-2">
+              {!notificationsGranted && (
+                <button
+                  type="button"
+                  onClick={requestNotificationPermission}
+                  className="p-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 transition flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+                  title="Activar notificaciones en el navegador para nuevos comentarios"
+                >
+                  <Bell className="w-4 h-4" />
+                  <span className="hidden xl:inline">Activar avisos</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => setIsDarkMode(!isDarkMode)}
@@ -436,14 +648,15 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
                 {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
               </button>
 
+              {/* Botón para abrir el Buscador Off-Canvas */}
               <button
                 type="button"
-                onClick={() => setIsPostSelectorOpen(true)}
-                className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-1.5 text-xs font-bold cursor-pointer"
-                title="Ver y buscar todos los posts"
+                onClick={() => setIsOffCanvasOpen(true)}
+                className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-1.5 text-xs font-bold cursor-pointer shadow-2xs"
+                title="Abrir buscador y panel de posts"
               >
                 <LayoutGrid className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                <span className="hidden xl:inline">Todos los posts</span>
+                <span>Todos los posts</span>
               </button>
             </div>
           </div>
@@ -564,7 +777,7 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
                 </div>
               </div>
 
-              {/* COLUMNA 3: COMENTARIOS (Columna 3 de 12) */}
+              {/* COLUMNA 3: COMENTARIOS EN TIEMPO REAL (Columna 3 de 12) */}
               <div className="col-span-3 bg-slate-50/60 dark:bg-slate-950/40 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between pb-3 border-b border-slate-200/70 dark:border-slate-800 mb-3">
@@ -579,8 +792,8 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
                     </span>
                   </div>
 
-                  {/* Feed de Comentarios */}
-                  <div className="space-y-2.5 overflow-y-auto max-h-[340px] pr-1">
+                  {/* Feed de Comentarios (Sincronizado en tiempo real) */}
+                  <div className="space-y-2.5 overflow-y-auto max-h-[380px] pr-1">
                     {comments.length === 0 ? (
                       <div className="py-14 flex flex-col items-center justify-center text-center text-slate-400">
                         <MessageSquare className="w-9 h-9 stroke-1 mb-2 opacity-40" />
@@ -628,23 +841,15 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
                   </div>
                 </div>
 
-                {/* Input de Comentarios */}
+                {/* Input de Comentarios SIN el campo de nombre (Eliminado según Imagen 4) */}
                 <div className="pt-3 border-t border-slate-200/70 dark:border-slate-800 mt-3 space-y-2">
-                  <input
-                    type="text"
-                    value={authorName}
-                    onChange={(e) => setAuthorName(e.target.value)}
-                    placeholder="Tu Nombre / Empresa"
-                    className="w-full text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:border-indigo-500"
-                  />
-
                   <textarea
                     rows={2}
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
                     onPaste={handleCommentPaste}
                     placeholder="Escribe tu feedback o pega una imagen (Ctrl + V)..."
-                    className="w-full text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none resize-none focus:ring-1 focus:ring-emerald-500"
+                    className="w-full text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none resize-none focus:ring-1 focus:ring-emerald-500 shadow-inner"
                   />
 
                   {commentAttachedImg && (
@@ -708,7 +913,7 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
             <div className="text-center py-20 text-slate-400">No hay publicaciones en este mes.</div>
           )}
 
-          {/* Footer Desktop (Image 4): < Anterior | Post X de Y | Siguiente > */}
+          {/* Footer Desktop: < Anterior | Post X de Y | Siguiente > */}
           <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs sm:text-sm font-bold">
             <button
               type="button"
@@ -739,7 +944,7 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
       </div>
 
       {/* ========================================================================= */}
-      {/* VISTA RESPONSIVE / MÓVIL (Image 2): Pestañas, botones fijos y contenido */}
+      {/* VISTA RESPONSIVE / MÓVIL: Pestañas, botones fijos y contenido */}
       {/* ========================================================================= */}
       <div className="lg:hidden flex flex-col min-h-screen">
         {/* Header Superior Móvil */}
@@ -750,26 +955,37 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
                 {currentPost?.code || `POST ${String(currentPostIndex + 1).padStart(2, '0')}`}
               </span>
 
+              {/* Badge de Fecha Móvil */}
               {currentPost?.scheduledDate && (
-                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                  <Calendar className="w-3 h-3 text-slate-500" />
-                  <span>{currentPost.scheduledDate}</span>
+                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                  <Calendar className="w-3 h-3 text-indigo-500" />
+                  <span>
+                    Fecha de publicación: <strong>{currentPost.scheduledDate}</strong>
+                  </span>
                 </div>
               )}
 
+              {/* Badge de Estado Móvil en ESPAÑOL */}
               <span
-                className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                  isPublished
-                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800'
-                    : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800'
-                }`}
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${statusBadgeClass}`}
               >
-                {isPublished ? 'PUBLICADO' : currentPost?.status?.toUpperCase() || 'BORRADOR'}
+                {statusLabel.toUpperCase()}
               </span>
             </div>
 
-            {/* Acciones Móvil: Modo Oscuro + Grid Modal */}
+            {/* Acciones Móvil: Notificaciones, Modo Oscuro + Botón Off-Canvas */}
             <div className="flex items-center gap-1.5 shrink-0">
+              {!notificationsGranted && (
+                <button
+                  type="button"
+                  onClick={requestNotificationPermission}
+                  className="p-2 rounded-xl text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40"
+                  title="Activar notificaciones"
+                >
+                  <Bell className="w-4 h-4" />
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => setIsDarkMode(!isDarkMode)}
@@ -780,16 +996,16 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
 
               <button
                 type="button"
-                onClick={() => setIsPostSelectorOpen(true)}
-                className="p-2 rounded-xl text-indigo-600 dark:text-indigo-400 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                title="Ver todos los posts"
+                onClick={() => setIsOffCanvasOpen(true)}
+                className="p-2 rounded-xl text-indigo-600 dark:text-indigo-400 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                title="Abrir buscador de posts"
               >
                 <LayoutGrid className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* Segmented 3-Way Tabs Móvil (Exact Image 2) */}
+          {/* Segmented 3-Way Tabs Móvil */}
           <div className="grid grid-cols-3 gap-1.5 p-1 mt-3 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
             <button
               type="button"
@@ -841,7 +1057,7 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
         <div className="flex-1 p-4 pb-20">
           {currentPost ? (
             <>
-              {/* PESTAÑA MULTIMEDIA (Exact Image 2) */}
+              {/* PESTAÑA MULTIMEDIA */}
               {mobileTab === 'media' && (
                 <div className="space-y-4">
                   <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs">
@@ -912,12 +1128,12 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
                     </div>
                   </div>
 
-                  {/* Banner inferior de estado verde grande (Image 2) */}
-                  <div className="w-full py-2.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 font-black text-center text-xs tracking-wider uppercase flex items-center justify-center gap-2 shadow-2xs">
+                  {/* Banner inferior de estado en español */}
+                  <div
+                    className={`w-full py-2.5 rounded-full font-black text-center text-xs tracking-wider uppercase flex items-center justify-center gap-2 border shadow-2xs ${statusBadgeClass}`}
+                  >
                     <Check className="w-4 h-4" />
-                    <span>
-                      {isPublished ? 'PUBLICADO' : currentPost.status?.toUpperCase() || 'BORRADOR'}
-                    </span>
+                    <span>{statusLabel.toUpperCase()}</span>
                   </div>
                 </div>
               )}
@@ -967,7 +1183,7 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
                 </div>
               )}
 
-              {/* PESTAÑA COMENTARIOS */}
+              {/* PESTAÑA COMENTARIOS EN TIEMPO REAL */}
               {mobileTab === 'comments' && (
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs space-y-4">
                   <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
@@ -1029,16 +1245,8 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
                     )}
                   </div>
 
-                  {/* Formulario para agregar comentario */}
+                  {/* Formulario para agregar comentario (SIN campo de nombre según Imagen 4) */}
                   <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
-                    <input
-                      type="text"
-                      value={authorName}
-                      onChange={(e) => setAuthorName(e.target.value)}
-                      placeholder="Tu Nombre / Empresa"
-                      className="w-full text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white outline-none"
-                    />
-
                     <textarea
                       rows={2}
                       value={commentText}
@@ -1097,7 +1305,7 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
           )}
         </div>
 
-        {/* Footer Móvil FIJO abajo (Exact Image 2) */}
+        {/* Footer Móvil FIJO abajo */}
         <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 p-3 px-4 flex items-center justify-between shadow-lg">
           <button
             type="button"
@@ -1127,125 +1335,141 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
       </div>
 
       {/* ========================================================================= */}
-      {/* MODAL DE BÚSQUEDA RÁPIDA Y VISOR DE TODOS LOS POSTS (Exact Image 3) */}
+      {/* OFF-CANVAS SIDEBAR: BUSCADOR RÁPIDO DE POSTS (Panel Deslizante Lateral) */}
       {/* ========================================================================= */}
-      {isPostSelectorOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-2xl max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
-            {/* Header Modal (Image 3) */}
-            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                  <LayoutGrid className="w-5 h-5" />
+      {isOffCanvasOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden animate-fadeIn">
+          {/* Fondo oscuro traslúcido con clic para cerrar */}
+          <div
+            onClick={() => setIsOffCanvasOpen(false)}
+            className="absolute inset-0 bg-black/60 backdrop-blur-xs transition-opacity cursor-pointer"
+          />
+
+          {/* Panel deslizante lateral desde la derecha (Off-Canvas auténtico) */}
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 sm:pl-10">
+            <div className="w-screen max-w-md sm:max-w-lg lg:max-w-xl bg-white dark:bg-slate-900 shadow-2xl flex flex-col border-l border-slate-200 dark:border-slate-800 animate-in slide-in-from-right duration-300">
+              {/* Header del Off-Canvas */}
+              <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/40">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0 shadow-2xs">
+                    <LayoutGrid className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white leading-tight">
+                      {data.project?.name || data.tenant?.name || 'Redes Sociales'} - {data.month.name}
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5 font-medium">
+                      <span>{posts.length} publicaciones</span>
+                      <span>•</span>
+                      <span className="text-emerald-500 font-bold capitalize">
+                        {formatStatusSpanish(data.month.status)}
+                      </span>
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
-                    {data.project?.name || data.tenant?.name || 'Redes Sociales'} - {data.month.name}
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
-                    <span>{posts.length} publicaciones</span>
-                    <span>•</span>
-                    <span className="text-emerald-500 font-semibold">{data.month.status || 'Activo'}</span>
-                  </p>
+
+                <button
+                  type="button"
+                  onClick={() => setIsOffCanvasOpen(false)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                  title="Cerrar panel"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Barra de Búsqueda Rápida fija */}
+              <div className="p-3 sm:p-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 z-10">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={postSearchQuery}
+                    onChange={(e) => setPostSearchQuery(e.target.value)}
+                    placeholder="Buscar post por número, título, copy o estado..."
+                    className="w-full pl-9 pr-8 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition font-medium"
+                    autoFocus
+                  />
+                  {postSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setPostSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setIsPostSelectorOpen(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+              {/* Grilla Scrollable de Publicaciones */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 bg-slate-50/40 dark:bg-slate-950/20">
+                {filteredPosts.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 text-xs font-semibold">
+                    No se encontraron publicaciones que coincidan con "{postSearchQuery}".
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 sm:gap-3.5">
+                    {filteredPosts.map(({ post, originalIndex }) => {
+                      const isSelected = originalIndex === currentPostIndex;
+                      const thumbUrl = post.finalArtMediaUrl || post.referenceMediaUrl;
+                      const pStatusLabel = formatStatusSpanish(post.status);
+                      const pBadgeStyle = getStatusBadgeStyle(post.status);
 
-            {/* Barra de Búsqueda Rápida (Image 3) */}
-            <div className="p-3 sm:p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40">
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={postSearchQuery}
-                  onChange={(e) => setPostSearchQuery(e.target.value)}
-                  placeholder="Buscar post por número, título o copy..."
-                  className="w-full pl-9 pr-8 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
-                  autoFocus
-                />
-                {postSearchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setPostSearchQuery('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            </div>
+                      return (
+                        <button
+                          key={post.id}
+                          type="button"
+                          onClick={() => {
+                            handleSelectPost(originalIndex);
+                            setIsOffCanvasOpen(false);
+                          }}
+                          className={`group text-left rounded-2xl p-2.5 transition-all flex flex-col justify-between border cursor-pointer ${
+                            isSelected
+                              ? 'border-indigo-500 ring-2 ring-indigo-500/30 bg-indigo-50/40 dark:bg-indigo-950/40 shadow-xs'
+                              : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
+                          }`}
+                        >
+                          {/* Miniatura */}
+                          <div className="w-full aspect-square rounded-xl bg-slate-100 dark:bg-slate-900 overflow-hidden mb-2 relative border border-slate-100 dark:border-slate-800">
+                            {thumbUrl ? (
+                              <img
+                                src={thumbUrl}
+                                alt={post.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 p-2 text-center">
+                                <ImageIcon className="w-6 h-6 mb-1 opacity-50" />
+                                <span className="text-[10px]">Sin imagen</span>
+                              </div>
+                            )}
+                            {isSelected && (
+                              <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black shadow-sm">
+                                ✓
+                              </div>
+                            )}
+                          </div>
 
-            {/* Grilla de Publicaciones Filtradas (Image 3) */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5">
-              {filteredPosts.length === 0 ? (
-                <div className="py-12 text-center text-slate-400 text-xs font-semibold">
-                  No se encontraron publicaciones con "{postSearchQuery}".
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-                  {filteredPosts.map(({ post, originalIndex }) => {
-                    const isSelected = originalIndex === currentPostIndex;
-                    const thumbUrl = post.finalArtMediaUrl || post.referenceMediaUrl;
-
-                    return (
-                      <button
-                        key={post.id}
-                        type="button"
-                        onClick={() => {
-                          handleSelectPost(originalIndex);
-                          setIsPostSelectorOpen(false);
-                        }}
-                        className={`group text-left rounded-2xl p-2.5 transition-all flex flex-col justify-between border cursor-pointer ${
-                          isSelected
-                            ? 'border-emerald-500 ring-2 ring-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/20'
-                            : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/70 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
-                        }`}
-                      >
-                        {/* Miniatura */}
-                        <div className="w-full aspect-square rounded-xl bg-slate-100 dark:bg-slate-900 overflow-hidden mb-2.5 relative border border-slate-100 dark:border-slate-800">
-                          {thumbUrl ? (
-                            <img
-                              src={thumbUrl}
-                              alt={post.title}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 p-2 text-center">
-                              <ImageIcon className="w-6 h-6 mb-1 opacity-50" />
-                              <span className="text-[10px]">Sin imagen</span>
+                          {/* Título & Badge de Estado en Español */}
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-black text-slate-900 dark:text-white uppercase truncate">
+                                {post.code || `POST ${String(originalIndex + 1).padStart(2, '0')}`}
+                              </span>
                             </div>
-                          )}
-                          {isSelected && (
-                            <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-black shadow-sm">
-                              ✓
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Título & Badge de Estado */}
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-black text-slate-900 dark:text-white uppercase">
-                              {post.code || `POST ${String(originalIndex + 1).padStart(2, '0')}`}
+                            <span
+                              className={`inline-block text-[9.5px] font-black tracking-wider uppercase px-2 py-0.5 rounded-full border ${pBadgeStyle}`}
+                            >
+                              {pStatusLabel.toUpperCase()}
                             </span>
                           </div>
-                          <span className="inline-block text-[9.5px] font-black tracking-wider uppercase px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                            {post.status === 'published' ? 'PUBLICADO' : post.status?.toUpperCase() || 'BORRADOR'}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

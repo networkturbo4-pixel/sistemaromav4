@@ -1321,6 +1321,26 @@ app.get(
   }
 );
 
+// Obtener una publicación individual (para sincronización de comentarios en tiempo real)
+app.get(
+  '/api/workspace/posts/:id',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const postId = req.params.id as string;
+      const posts = await db.getWorkspacePosts(req.auth!.tenant.id);
+      const post = posts.find((p) => p.id === postId);
+      if (!post) {
+        return res.status(404).json({ error: 'Publicación no encontrada' });
+      }
+      res.json({ post });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
 // Crear publicación
 app.post(
   '/api/workspace/posts',

@@ -131,6 +131,76 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
     }
   }, [isOpen, editingPost?.id]);
 
+  // Sincronización en tiempo real de comentarios en la modal del editor
+  const knownEditorCommentIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!isOpen || !editingPost?.id) return;
+
+    // Inicializar IDs conocidos
+    const idSet = new Set<string>();
+    editingPost.comments?.forEach((c) => idSet.add(c.id));
+    knownEditorCommentIdsRef.current = idSet;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/workspace/posts/${editingPost.id}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        const freshPost = json.post;
+        if (!freshPost || !Array.isArray(freshPost.comments)) return;
+
+        let hasNewComments = false;
+        let latestComment: any = null;
+
+        freshPost.comments.forEach((c: any) => {
+          if (!knownEditorCommentIdsRef.current.has(c.id)) {
+            knownEditorCommentIdsRef.current.add(c.id);
+            hasNewComments = true;
+            latestComment = c;
+          }
+        });
+
+        if (hasNewComments) {
+          setEditingPost((prev) => (prev ? { ...prev, comments: freshPost.comments } : null));
+
+          // Chime de audio
+          try {
+            const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.15);
+            gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.28);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.28);
+          } catch {}
+
+          if (latestComment) {
+            toast(`💬 Nuevo comentario de ${latestComment.author}`, 'info');
+
+            if ('Notification' in window && Notification.permission === 'granted') {
+              try {
+                new Notification(`💬 Nuevo comentario de ${latestComment.author}`, {
+                  body: latestComment.text.replace(/\n?\[Imagen Adjunta\]:\s*\S+/, '').slice(0, 80),
+                  icon: '/favicon.ico',
+                });
+              } catch {}
+            }
+          }
+        }
+      } catch {
+        // Polling silencioso
+      }
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [isOpen, editingPost?.id]);
+
   const STATUS_LIST: {
     id: SocialPostStatus;
     label: string;
@@ -2333,24 +2403,50 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
 
                         return (
                           <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-                            {filteredComments.map((c) => (
-                              <div
-                                key={c.id}
-                                className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1"
-                              >
-                                <div className="flex items-center justify-between">
-                                  <span className="font-extrabold text-xs text-slate-800 dark:text-white">
-                                    {c.author}
-                                  </span>
-                                  <span className="text-[10px] text-slate-400">
-                                    {c.createdAt}
-                                  </span>
+                            {filteredComments.map((c) => {
+                              const match = c.text?.match(/\n?\[Imagen Adjunta\]:\s*(\S+)/);
+                              const cleanText = match ? c.text.replace(/\n?\[Imagen Adjunta\]:\s*\S+/, '').trim() : c.text;
+                              const attachedImg = match ? match[1] : null;
+
+                              let formattedDate = c.createdAt;
+                              if (c.createdAt && c.createdAt.includes('T')) {
+                                try {
+                                  const d = new Date(c.createdAt);
+                                  formattedDate = `${d.toLocaleDateString([], { day: '2-digit', month: 'short' })} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                                } catch {}
+                              }
+
+                              return (
+                                <div
+                                  key={c.id}
+                                  className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1.5"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-extrabold text-xs text-slate-800 dark:text-white">
+                                      {c.author}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400">
+                                      {formattedDate}
+                                    </span>
+                                  </div>
+                                  {cleanText && (
+                                    <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">
+                                      {cleanText}
+                                    </p>
+                                  )}
+                                  {attachedImg && (
+                                    <div className="mt-2">
+                                      <img
+                                        src={attachedImg}
+                                        alt="Adjunto"
+                                        onClick={() => onOpenLightbox?.(attachedImg)}
+                                        className="max-h-28 rounded-lg border border-slate-200 dark:border-slate-700 cursor-zoom-in hover:opacity-90 transition object-cover"
+                                      />
+                                    </div>
+                                  )}
                                 </div>
-                                <p className="text-xs text-slate-600 dark:text-slate-300">
-                                  {c.text}
-                                </p>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         );
                       })()}
