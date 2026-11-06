@@ -194,6 +194,39 @@ export const AppShell: React.FC<AppShellProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Soporte de instalación PWA (Móvil y Escritorio)
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isAppInstalled, setIsAppInstalled] = useState(false);
+
+  useEffect(() => {
+    if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone) {
+      setIsAppInstalled(true);
+    }
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    window.addEventListener('appinstalled', () => {
+      setIsAppInstalled(true);
+      setDeferredPrompt(null);
+    });
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) {
+      alert('Para instalar ROMA SaaS:\n\n• En PC (Chrome / Edge): Haz clic en el icono "Instalar" en la parte derecha de la barra de direcciones.\n• En Android: Toca el menú de 3 puntos del navegador > "Instalar aplicación".\n• En iPhone / iPad (Safari): Toca el botón Compartir > "Agregar a pantalla de inicio".');
+      return;
+    }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+      setIsAppInstalled(true);
+    }
+  };
+
   const clientPluralLabel =
     tenant.customization.clientGlobalNamePlural || 'Clientes';
 
@@ -670,6 +703,18 @@ export const AppShell: React.FC<AppShellProps> = ({
           </div>
         )}
 
+        {/* Botón Instalar App PWA */}
+        {!isAppInstalled && (
+          <button
+            type="button"
+            onClick={handleInstallClick}
+            className="w-full mb-2 py-2 px-3 rounded-2xl bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-blue-500/10 border border-purple-200 dark:border-purple-800/40 text-xs font-bold text-purple-700 dark:text-purple-300 hover:bg-purple-100/50 dark:hover:bg-purple-900/30 transition flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+          >
+            <Smartphone className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            <span>Instalar App PWA</span>
+          </button>
+        )}
+
         {/* Botón Salir */}
         <button
           type="button"
@@ -908,8 +953,21 @@ export const AppShell: React.FC<AppShellProps> = ({
                       </button>
                     </div>
 
-                    {/* Botón Salir */}
-                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                    {/* Botón Salir y PWA Móvil */}
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+                      {!isAppInstalled && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHeaderUserOpen(false);
+                            handleInstallClick();
+                          }}
+                          className="w-full py-2 px-3 rounded-xl text-xs font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/20 border border-purple-200/50 dark:border-purple-900/30 transition flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <Smartphone className="w-4 h-4" />
+                          <span>Instalar App PWA</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => {

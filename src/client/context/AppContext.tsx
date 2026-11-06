@@ -17,7 +17,10 @@ import {
   ConfirmModalStyleVariant,
   TypographyScale,
   UserThemePreference,
+  AppNotification,
+  NotificationType,
 } from '../../shared/types';
+import { playNotificationChime } from '../utils/notificationSound';
 import {
   PermissionKey,
   hasPermission,
@@ -90,6 +93,29 @@ interface AppContextValue {
   ) => void;
   confirmAction: (options: ConfirmDialogOptions) => Promise<boolean>;
   apiFetch: <T = any>(url: string, options?: RequestInit) => Promise<T>;
+  notifications: AppNotification[];
+  unreadNotificationsCount: number;
+  isPushSupported: boolean;
+  isPushSubscribed: boolean;
+  pushPermission: NotificationPermission;
+  loadNotifications: () => Promise<void>;
+  markNotificationAsRead: (id: string) => Promise<void>;
+  markAllNotificationsAsRead: () => Promise<void>;
+  deleteNotification: (id: string) => Promise<void>;
+  clearAllNotifications: () => Promise<void>;
+  enablePushNotifications: () => Promise<boolean>;
+  disablePushNotifications: () => Promise<boolean>;
+  sendTestPushNotification: () => Promise<void>;
+  notifyModuleAction: (payload: {
+    module: string;
+    title: string;
+    message: string;
+    type?: NotificationType;
+    entityId?: string;
+    action?: string;
+    link?: string;
+    metadata?: Record<string, any>;
+  }) => Promise<void>;
 }
 
 const FALLBACK_TENANT: Tenant = {
@@ -664,6 +690,294 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [role]
   );
 
+  // ===========================================================================
+  // SISTEMA DE NOTIFICACIONES MULTITENANT & PWA PUSH
+  // ===========================================================================
+
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [isPushSubscribed, setIsPushSubscribed] = useState<boolean>(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission;
+    }
+    return 'default';
+  });
+
+  const isPushSupported =
+    typeof window !== 'undefined' &&
+    'serviceWorker' in navigator &&
+    'PushManager' in window &&
+    'Notification' in window;
+
+  // Convertir clave VAPID de base64 a Uint8Array
+  const urlBase64ToUint8Array = (base64String: string) => {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  };
+
+  // Cargar estado de suscripción Push al inicio
+  useEffect(() => {
+    if (!isPushSupported) return;
+    navigator.serviceWorker.ready
+      .then((reg) => reg.pushManager.getSubscription())
+      .then((sub) => {
+        setIsPushSubscribed(!!sub);
+      })
+      .catch(() => {});
+  }, [isPushSupported]);
+
+  // Cargar notificaciones desde el backend
+  const loadNotifications = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await apiFetch<{ notifications: AppNotification[] }>(
+        '/api/notifications?limit=50'
+      );
+      if (res && Array.isArray(res.notifications)) {
+        setNotifications(res.notifications);
+      }
+    } catch (err) {
+      console.warn('[Notifications] Error cargando notificaciones:', err);
+    }
+  }, [token, apiFetch]);
+
+  // Marcar una notificación como leída
+  const markNotificationAsRead = useCallback(
+    async (id: string) => {
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
+      );
+      try {
+        await apiFetch(`/api/notifications/${id}/read`, { method: 'PUT' });
+      } catch (err) {
+        console.warn('[Notifications] Error al marcar leída:', err);
+      }
+    },
+    [apiFetch]
+  );
+
+  // Marcar todas las notificaciones como leídas
+  const markAllNotificationsAsRead = useCallback(async () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    try {
+      await apiFetch('/api/notifications/read-all', { method: 'PUT' });
+      toast('Todas las notificaciones marcadas como leídas', 'success');
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    }
+  }, [apiFetch, toast]);
+
+  // Eliminar una notificación
+  const deleteNotification = useCallback(
+    async (id: string) => {
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      try {
+        await apiFetch(`/api/notifications/${id}`, { method: 'DELETE' });
+      } catch (err) {
+        console.warn('[Notifications] Error eliminando notificación:', err);
+      }
+    },
+    [apiFetch]
+  );
+
+  // Limpiar todo el historial de notificaciones
+  const clearAllNotifications = useCallback(async () => {
+    const confirmed = await confirmAction({
+      title: '¿Limpiar todas las notificaciones?',
+      message: 'Se eliminará el historial de alertas registradas en este espacio.',
+      confirmText: 'Sí, limpiar todo',
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    setNotifications([]);
+    try {
+      await apiFetch('/api/notifications', { method: 'DELETE' });
+      toast('Historial de notificaciones limpiado', 'info');
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    }
+  }, [apiFetch, confirmAction, toast]);
+
+  // Activar notificaciones push para el celular / PWA
+  const enablePushNotifications = useCallback(async (): Promise<boolean> => {
+    if (!isPushSupported) {
+      toast(
+        'Tu dispositivo o navegador no soporta notificaciones push. En iPhone, añade la web a la Pantalla de Inicio (PWA) primero.',
+        'warning'
+      );
+      return false;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      setPushPermission(permission);
+
+      if (permission !== 'granted') {
+        toast(
+          'Permiso no concedido. Ve a los ajustes del navegador y autoriza las notificaciones.',
+          'warning'
+        );
+        return false;
+      }
+
+      const reg = await navigator.serviceWorker.ready;
+      const { publicKey } = await apiFetch<{ publicKey: string }>(
+        '/api/notifications/vapid-key'
+      );
+      if (!publicKey) {
+        throw new Error('No se pudo obtener la clave VAPID pública del servidor');
+      }
+
+      const convertedKey = urlBase64ToUint8Array(publicKey);
+      const subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedKey,
+      });
+
+      await apiFetch('/api/notifications/push-subscribe', {
+        method: 'POST',
+        body: JSON.stringify({
+          subscription,
+          userAgent: navigator.userAgent,
+        }),
+      });
+
+      setIsPushSubscribed(true);
+      toast('🔔 ¡Notificaciones móviles activadas exitosamente en este celular!', 'success');
+
+      // Enviar una prueba inmediata para verificar que suene/vibre en el celular
+      setTimeout(() => {
+        apiFetch('/api/notifications/test-push', { method: 'POST' }).catch(() => {});
+      }, 500);
+
+      return true;
+    } catch (err: any) {
+      toast('Error al activar notificaciones móviles: ' + err.message, 'error');
+      return false;
+    }
+  }, [isPushSupported, apiFetch, toast]);
+
+  // Desactivar notificaciones push
+  const disablePushNotifications = useCallback(async (): Promise<boolean> => {
+    if (!isPushSupported) return false;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await sub.unsubscribe();
+        await apiFetch('/api/notifications/push-unsubscribe', {
+          method: 'POST',
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        }).catch(() => {});
+      }
+      setIsPushSubscribed(false);
+      toast('Notificaciones push desactivadas en este dispositivo.', 'info');
+      return true;
+    } catch (err: any) {
+      toast('Error al desactivar notificaciones: ' + err.message, 'error');
+      return false;
+    }
+  }, [isPushSupported, apiFetch, toast]);
+
+  // Enviar notificación de prueba al celular
+  const sendTestPushNotification = useCallback(async () => {
+    try {
+      await apiFetch('/api/notifications/test-push', { method: 'POST' });
+      toast('🚀 Notificación de prueba enviada a tu celular.', 'success');
+    } catch (err: any) {
+      toast('Error al enviar prueba: ' + err.message, 'error');
+    }
+  }, [apiFetch, toast]);
+
+  // Conexión universal para que CUALQUIER módulo nuevo o presente dispare notificaciones
+  const notifyModuleAction = useCallback(
+    async (payload: {
+      module: string;
+      title: string;
+      message: string;
+      type?: NotificationType;
+      entityId?: string;
+      action?: string;
+      link?: string;
+      metadata?: Record<string, any>;
+    }) => {
+      try {
+        const res = await apiFetch<{ notification: AppNotification }>(
+          '/api/notifications/notify',
+          {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          }
+        );
+        if (res?.notification) {
+          setNotifications((prev) => [res.notification, ...prev]);
+          playNotificationChime();
+        }
+      } catch (err) {
+        console.warn('[Notifications] Error notificando acción:', err);
+      }
+    },
+    [apiFetch]
+  );
+
+  // Escucha en tiempo real (Server-Sent Events) con reconexión automática y polling de respaldo
+  useEffect(() => {
+    if (!token || !user) return;
+
+    loadNotifications();
+
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource(
+        `/api/notifications/stream?token=${encodeURIComponent(token)}`
+      );
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'notification' && data.notification) {
+            const newNotif = data.notification as AppNotification;
+            setNotifications((prev) => {
+              if (prev.some((n) => n.id === newNotif.id)) return prev;
+              return [newNotif, ...prev];
+            });
+
+            // Reproducir sonido chime
+            playNotificationChime();
+
+            // Si fue otra persona o el sistema, mostrar Toast
+            if (newNotif.actorUserId !== user.id) {
+              toast(`${newNotif.title}: ${newNotif.message}`, newNotif.type);
+            }
+          }
+        } catch (e) {}
+      };
+    } catch (e) {
+      console.warn('[SSE] EventSource no disponible:', e);
+    }
+
+    // Polling de respaldo cada 30 segundos
+    const pollInterval = setInterval(() => {
+      loadNotifications();
+    }, 30000);
+
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+      clearInterval(pollInterval);
+    };
+  }, [token, user?.id, loadNotifications, toast]);
+
+  const unreadNotificationsCount = notifications.filter((n) => !n.isRead).length;
+
   // Posición dinámica del contenedor de Toasts según configuración del Tenant
   const toastPosClass =
     tenant.customization.toastPosition === 'top-right'
@@ -705,6 +1019,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         showToast: toast,
         confirmAction,
         apiFetch,
+        notifications,
+        unreadNotificationsCount,
+        isPushSupported,
+        isPushSubscribed,
+        pushPermission,
+        loadNotifications,
+        markNotificationAsRead,
+        markAllNotificationsAsRead,
+        deleteNotification,
+        clearAllNotifications,
+        enablePushNotifications,
+        disablePushNotifications,
+        sendTestPushNotification,
+        notifyModuleAction,
       }}
     >
       {children}

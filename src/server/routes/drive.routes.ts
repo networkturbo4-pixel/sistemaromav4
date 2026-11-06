@@ -10,6 +10,7 @@ import {
 import { db } from '../db';
 import { googleDriveService } from '../services/googleDriveService';
 import { TenantDriveConfig, DriveConnectionStatus } from '../../shared/types';
+import { notifyEvent } from '../services/notificationService';
 
 const router = Router();
 const upload = multer({
@@ -711,6 +712,18 @@ router.post(
         createdBy: req.auth!.user.name,
       });
 
+      notifyEvent({
+        tenantId,
+        module: 'drive',
+        type: 'info',
+        title: 'Nuevo archivo en Drive',
+        message: `Se subió el archivo "${created.name}"`,
+        entityId: created.id,
+        link: '/?module=drive',
+        actorUserId: req.auth!.user.id,
+        actorUserName: req.auth!.user.name,
+      }).catch(() => {});
+
       res.status(201).json({ file: created });
     } catch (err: any) {
       const isQuotaOrClient =
@@ -811,6 +824,18 @@ router.post(
         durationMillis: resolvedDur ? Number(resolvedDur) : undefined,
         createdBy: req.auth!.user.name,
       });
+
+      notifyEvent({
+        tenantId,
+        module: 'drive',
+        type: 'info',
+        title: 'Nuevo archivo en Drive',
+        message: `Se subió el archivo "${created.name}"`,
+        entityId: created.id,
+        link: '/?module=drive',
+        actorUserId: req.auth!.user.id,
+        actorUserName: req.auth!.user.name,
+      }).catch(() => {});
 
       res.status(201).json({ file: created });
     } catch (err: any) {

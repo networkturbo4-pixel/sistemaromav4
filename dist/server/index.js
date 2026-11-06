@@ -17,6 +17,7 @@ const auth_1 = require("./middleware/auth");
 const permissions_1 = require("../shared/permissions");
 const drive_routes_1 = __importDefault(require("./routes/drive.routes"));
 const googleDriveService_1 = require("./services/googleDriveService");
+const notificationService_1 = require("./services/notificationService");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const PORT = Number(process.env.PORT || 3001);
@@ -245,6 +246,167 @@ app.get('/api/dashboard/summary', auth_1.requireAuth, (0, auth_1.requirePermissi
     }
 });
 // =============================================================================
+// SISTEMA DE NOTIFICACIONES MULTITENANT & PWA PUSH (MÓDULOS CONECTADOS & CELULAR)
+// =============================================================================
+// Listar notificaciones del tenant
+app.get('/api/notifications', auth_1.requireAuth, async (req, res) => {
+    try {
+        const limit = Number(req.query.limit) || 50;
+        const unreadOnly = req.query.unreadOnly === 'true';
+        const moduleFilter = req.query.module;
+        const notifications = await db_1.db.getNotifications(req.auth.tenant.id, {
+            limit,
+            unreadOnly,
+            module: moduleFilter,
+        });
+        res.json({ notifications });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Canal SSE (Server-Sent Events) para recibir notificaciones en tiempo real
+app.get('/api/notifications/stream', auth_1.requireAuth, (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+    const unregister = notificationService_1.notificationService.registerSseClient(req.auth.tenant.id, res);
+    req.on('close', () => {
+        unregister();
+    });
+});
+// Marcar notificación individual como leída
+app.put('/api/notifications/:id/read', auth_1.requireAuth, async (req, res) => {
+    try {
+        const success = await db_1.db.markNotificationAsRead(req.auth.tenant.id, req.params.id);
+        res.json({ success });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Marcar todas las notificaciones como leídas
+app.put('/api/notifications/read-all', auth_1.requireAuth, async (req, res) => {
+    try {
+        const updatedCount = await db_1.db.markAllNotificationsAsRead(req.auth.tenant.id);
+        res.json({ success: true, count: updatedCount });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Eliminar notificación individual
+app.delete('/api/notifications/:id', auth_1.requireAuth, async (req, res) => {
+    try {
+        const deleted = await db_1.db.deleteNotification(req.auth.tenant.id, req.params.id);
+        res.json({ success: deleted });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Limpiar todas las notificaciones del tenant
+app.delete('/api/notifications', auth_1.requireAuth, async (req, res) => {
+    try {
+        const deletedCount = await db_1.db.clearAllNotifications(req.auth.tenant.id);
+        res.json({ success: true, count: deletedCount });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Obtener clave pública VAPID para suscripción push del celular / PWA
+app.get('/api/notifications/vapid-key', auth_1.requireAuth, (req, res) => {
+    const publicKey = notificationService_1.notificationService.getVapidPublicKey();
+    res.json({ publicKey });
+});
+// Registrar o actualizar suscripción push de un celular / navegador PWA
+app.post('/api/notifications/push-subscribe', auth_1.requireAuth, async (req, res) => {
+    try {
+        const { subscription, userAgent } = req.body;
+        if (!subscription || !subscription.endpoint || !subscription.keys) {
+            res.status(400).json({ error: 'Suscripción inválida' });
+            return;
+        }
+        await db_1.db.savePushSubscription({
+            tenantId: req.auth.tenant.id,
+            userId: req.auth.user.id,
+            endpoint: subscription.endpoint,
+            keys: {
+                p256dh: subscription.keys.p256dh,
+                auth: subscription.keys.auth,
+            },
+            userAgent: userAgent || req.headers['user-agent'] || '',
+        });
+        res.json({ success: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Desuscribir dispositivo de notificaciones push
+app.post('/api/notifications/push-unsubscribe', auth_1.requireAuth, async (req, res) => {
+    try {
+        const { endpoint } = req.body;
+        if (endpoint) {
+            await db_1.db.deletePushSubscription(endpoint);
+        }
+        res.json({ success: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Enviar notificación de prueba al celular del usuario
+app.post('/api/notifications/test-push', auth_1.requireAuth, async (req, res) => {
+    try {
+        const notif = await notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            title: '🔔 ¡Notificaciones PWA activas!',
+            message: `Hola ${req.auth.user.name}, las notificaciones en tu celular y PWA están funcionando correctamente.`,
+            type: 'success',
+            module: 'system',
+            action: 'test',
+            link: '/',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        });
+        res.json({ success: true, notification: notif });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Endpoint genérico para que cualquier módulo presente o futuro se conecte automáticamente
+app.post('/api/notifications/notify', auth_1.requireAuth, async (req, res) => {
+    try {
+        const { title, message, type, module: notifModule, entityId, action, link, metadata } = req.body;
+        if (!title || !message) {
+            res.status(400).json({ error: 'Título y mensaje son obligatorios.' });
+            return;
+        }
+        const notif = await notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            title,
+            message,
+            type: type || 'info',
+            module: notifModule || 'general',
+            entityId,
+            action,
+            link,
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+            metadata,
+        });
+        res.status(201).json({ notification: notif });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// =============================================================================
 // 3. PRIMER MÓDULO: CLIENTES Y MARCAS ASIGNADAS (MULTITENANT + PERMISOS)
 // =============================================================================
 app.get('/api/clients', auth_1.requireAuth, (0, auth_1.requirePermission)('clients.view'), async (req, res) => {
@@ -280,6 +442,18 @@ app.post('/api/clients', auth_1.requireAuth, (0, auth_1.requirePermission)('clie
             notes: notes || '',
             brands: Array.isArray(brands) ? brands : [],
         });
+        notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            module: 'clients',
+            type: 'success',
+            title: 'Nuevo cliente registrado',
+            message: `Se registró el cliente "${created.name}" (${created.documentType}: ${created.documentNumber})`,
+            entityId: created.id,
+            action: 'create',
+            link: '/?module=clients',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.status(201).json({ client: created });
     }
     catch (err) {
@@ -293,6 +467,18 @@ app.put('/api/clients/:id', auth_1.requireAuth, (0, auth_1.requirePermission)('c
             res.status(404).json({ error: 'Cliente no encontrado en este tenant.' });
             return;
         }
+        notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            module: 'clients',
+            type: 'info',
+            title: 'Cliente actualizado',
+            message: `Se actualizaron los datos del cliente "${updated.name}"`,
+            entityId: updated.id,
+            action: 'update',
+            link: '/?module=clients',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.json({ client: updated });
     }
     catch (err) {
@@ -306,6 +492,17 @@ app.delete('/api/clients/:id', auth_1.requireAuth, (0, auth_1.requirePermission)
             res.status(404).json({ error: 'Cliente no encontrado.' });
             return;
         }
+        notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            module: 'clients',
+            type: 'warning',
+            title: 'Cliente eliminado',
+            message: 'Se eliminó un cliente y sus marcas asociadas.',
+            action: 'delete',
+            link: '/?module=clients',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.json({ success: true });
     }
     catch (err) {
@@ -398,6 +595,18 @@ app.get('/api/quotes/:id', auth_1.requireAuth, (0, auth_1.requirePermission)('qu
 app.post('/api/quotes', auth_1.requireAuth, (0, auth_1.requirePermission)('quotes.create'), async (req, res) => {
     try {
         const created = await db_1.db.createQuote(req.auth.tenant.id, req.body);
+        notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            module: 'quotes',
+            type: 'success',
+            title: 'Nueva cotización creada',
+            message: `Se creó la cotización ${created.code} para "${created.clientName}" (${created.items.length} ítems)`,
+            entityId: created.id,
+            action: 'create',
+            link: '/?module=quotes',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.status(201).json({ quote: created });
     }
     catch (err) {
@@ -411,6 +620,19 @@ app.put('/api/quotes/:id', auth_1.requireAuth, (0, auth_1.requirePermission)('qu
             res.status(404).json({ error: 'Cotización no encontrada.' });
             return;
         }
+        const isApproved = updated.status === 'approved';
+        notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            module: 'quotes',
+            type: isApproved ? 'success' : 'info',
+            title: isApproved ? '🎉 ¡Cotización aprobada!' : 'Cotización actualizada',
+            message: `Cotización ${updated.code} para "${updated.clientName}" actualizada (Estado: ${updated.status})`,
+            entityId: updated.id,
+            action: 'update',
+            link: '/?module=quotes',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.json({ quote: updated });
     }
     catch (err) {
@@ -424,6 +646,17 @@ app.delete('/api/quotes/:id', auth_1.requireAuth, (0, auth_1.requirePermission)(
             res.status(404).json({ error: 'Cotización no encontrada.' });
             return;
         }
+        notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            module: 'quotes',
+            type: 'warning',
+            title: 'Cotización eliminada',
+            message: 'Se eliminó una cotización del sistema.',
+            action: 'delete',
+            link: '/?module=quotes',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.json({ success: true });
     }
     catch (err) {
@@ -463,6 +696,18 @@ app.post('/api/payment-notes', auth_1.requireAuth, (0, auth_1.requirePermission)
             ...req.body,
             createdBy: req.auth.user.name,
         });
+        notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            module: 'payments',
+            type: 'info',
+            title: 'Nueva Nota de Cobro emitida',
+            message: `Se emitió la nota #${created.code} para "${created.clientName}" por ${created.currency} ${Number(created.total || 0).toFixed(2)}`,
+            entityId: created.id,
+            action: 'create',
+            link: '/?module=payments',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.status(201).json({ paymentNote: created });
     }
     catch (err) {
@@ -476,6 +721,19 @@ app.put('/api/payment-notes/:id', auth_1.requireAuth, (0, auth_1.requirePermissi
         if (!updated) {
             return res.status(404).json({ error: 'Nota de pago no encontrada' });
         }
+        const isPaid = updated.status === 'paid';
+        notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            module: 'payments',
+            type: isPaid ? 'success' : 'info',
+            title: isPaid ? '💰 ¡Nota de cobro pagada!' : 'Nota de cobro actualizada',
+            message: `Nota #${updated.code} de "${updated.clientName}" actualizada (Estado: ${updated.status})`,
+            entityId: updated.id,
+            action: 'update',
+            link: '/?module=payments',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.json({ paymentNote: updated });
     }
     catch (err) {
@@ -489,6 +747,17 @@ app.delete('/api/payment-notes/:id', auth_1.requireAuth, (0, auth_1.requirePermi
         if (!deleted) {
             return res.status(404).json({ error: 'Nota de pago no encontrada' });
         }
+        notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            module: 'payments',
+            type: 'warning',
+            title: 'Nota de cobro eliminada',
+            message: 'Se eliminó un comprobante de cobro del sistema.',
+            action: 'delete',
+            link: '/?module=payments',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.json({ ok: true });
     }
     catch (err) {
@@ -548,6 +817,17 @@ app.post('/api/public/workspace/months/:token/posts/:postId/comments', async (re
         };
         const updatedComments = [...(post.comments || []), newComment];
         await db_1.db.updateWorkspacePost(post.id, post.tenantId, { comments: updatedComments });
+        notificationService_1.notificationService.notify({
+            tenantId: post.tenantId,
+            module: 'workspace',
+            type: 'info',
+            title: '💬 Nuevo comentario en Workspace',
+            message: `${newComment.author} comentó en "${post.title || 'Publicación'}": "${newComment.text.slice(0, 60)}${newComment.text.length > 60 ? '...' : ''}"`,
+            entityId: post.id,
+            action: 'comment',
+            link: '/?module=workspace',
+            actorUserName: newComment.author,
+        }).catch(() => { });
         res.json({ success: true, comment: newComment });
     }
     catch (err) {
@@ -733,6 +1013,18 @@ app.get('/api/workspace/posts', auth_1.requireAuth, (0, auth_1.requirePermission
 app.post('/api/workspace/posts', auth_1.requireAuth, (0, auth_1.requirePermission)('workspace.social.manage'), async (req, res) => {
     try {
         const created = await db_1.db.createWorkspacePost(req.auth.tenant.id, req.body);
+        notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            module: 'workspace',
+            type: 'info',
+            title: 'Nuevo contenido programado',
+            message: `Se programó la publicación "${created.title || 'Sin título'}" en Workspace`,
+            entityId: created.id,
+            action: 'create',
+            link: '/?module=workspace',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.status(201).json({ post: created });
     }
     catch (err) {
@@ -783,6 +1075,18 @@ app.get('/api/workspace/tasks', auth_1.requireAuth, (0, auth_1.requirePermission
 app.post('/api/workspace/tasks', auth_1.requireAuth, (0, auth_1.requirePermission)('workspace.tasks.manage'), async (req, res) => {
     try {
         const created = await db_1.db.createWorkspaceTask(req.auth.tenant.id, req.body);
+        notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            module: 'workspace',
+            type: 'info',
+            title: 'Nueva tarea asignada',
+            message: `Se creó la tarea "${created.title}"${created.assignedUserId ? ` asignada a usuario` : ''}`,
+            entityId: created.id,
+            action: 'create',
+            link: '/?module=workspace',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.status(201).json({ task: created });
     }
     catch (err) {
@@ -849,6 +1153,18 @@ app.post('/api/service-orders', auth_1.requireAuth, (0, auth_1.requirePermission
             ...req.body,
             createdBy: req.auth.user.name,
         });
+        notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            module: 'service_orders',
+            type: 'success',
+            title: 'Nueva Orden de Servicio',
+            message: `Se inició la OS #${created.code}: "${created.title}" para "${created.clientName}"`,
+            entityId: created.id,
+            action: 'create',
+            link: '/?module=service_orders',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.status(201).json({ order: created });
     }
     catch (err) {
@@ -862,6 +1178,19 @@ app.put('/api/service-orders/:id', auth_1.requireAuth, (0, auth_1.requirePermiss
         if (!updated) {
             return res.status(404).json({ error: 'Orden de servicio no encontrada' });
         }
+        const isCompleted = updated.status === 'completed';
+        notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            module: 'service_orders',
+            type: isCompleted ? 'success' : 'info',
+            title: isCompleted ? '🎯 ¡Orden de Servicio completada!' : 'Orden de Servicio actualizada',
+            message: `OS #${updated.code}: "${updated.title}" actualizada a estado: ${updated.status}`,
+            entityId: updated.id,
+            action: 'update',
+            link: '/?module=service_orders',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.json({ order: updated });
     }
     catch (err) {
@@ -875,6 +1204,17 @@ app.delete('/api/service-orders/:id', auth_1.requireAuth, (0, auth_1.requirePerm
         if (!deleted) {
             return res.status(404).json({ error: 'Orden de servicio no encontrada' });
         }
+        notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            module: 'service_orders',
+            type: 'warning',
+            title: 'Orden de Servicio eliminada',
+            message: 'Se eliminó una orden de servicio del sistema.',
+            action: 'delete',
+            link: '/?module=service_orders',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.json({ ok: true });
     }
     catch (err) {
@@ -974,6 +1314,18 @@ app.get('/api/services/:id', auth_1.requireAuth, (0, auth_1.requirePermission)('
 app.post('/api/services', auth_1.requireAuth, (0, auth_1.requirePermission)('services.create'), async (req, res) => {
     try {
         const service = await db_1.db.createService(req.auth.tenant.id, req.body);
+        notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            module: 'services',
+            type: 'info',
+            title: 'Nuevo servicio registrado',
+            message: `Se añadió el servicio "${service.title}" al catálogo`,
+            entityId: service.id,
+            action: 'create',
+            link: '/?module=services',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.status(201).json({ service });
     }
     catch (err) {
@@ -987,6 +1339,18 @@ app.put('/api/services/:id', auth_1.requireAuth, (0, auth_1.requirePermission)('
             res.status(404).json({ error: 'Servicio no encontrado.' });
             return;
         }
+        notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            module: 'services',
+            type: 'info',
+            title: 'Servicio actualizado',
+            message: `Se actualizaron los datos del servicio "${updated.title}"`,
+            entityId: updated.id,
+            action: 'update',
+            link: '/?module=services',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.json({ service: updated });
     }
     catch (err) {
@@ -1068,6 +1432,18 @@ app.get('/api/settings/users', auth_1.requireAuth, (0, auth_1.requireAnyPermissi
 app.post('/api/settings/users', auth_1.requireAuth, (0, auth_1.requirePermission)('settings.users.manage'), async (req, res) => {
     try {
         const user = await db_1.db.createUser(req.auth.tenant.id, req.body);
+        notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            module: 'users',
+            type: 'success',
+            title: 'Nuevo miembro del equipo',
+            message: `Se dio de alta al usuario ${user.name} (${user.jobTitle})`,
+            entityId: user.id,
+            action: 'create',
+            link: '/?module=settings',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.status(201).json({ user });
     }
     catch (err) {
@@ -1150,6 +1526,18 @@ app.post('/api/settings/roles', auth_1.requireAuth, (0, auth_1.requirePermission
             badgeColor: badgeColor || '#7c3aed',
             permissions: Array.isArray(permissions) ? permissions : [],
         });
+        notificationService_1.notificationService.notify({
+            tenantId: req.auth.tenant.id,
+            module: 'roles',
+            type: 'info',
+            title: 'Nuevo rol de permisos',
+            message: `Se configuró el rol "${role.name}" con ${role.permissions.length} permisos`,
+            entityId: role.id,
+            action: 'create',
+            link: '/?module=settings',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.status(201).json({ role });
     }
     catch (err) {
@@ -1657,6 +2045,8 @@ app.get('/api/public/tenants', async (_req, res) => {
 app.get('/api/public/tenant-icon', async (req, res) => {
     try {
         const slug = req.query.tenant;
+        const size = req.query.size;
+        const format = req.query.format;
         const tenant = await db_1.db.getPublicTenantBranding(slug);
         const iconUrl = tenant?.customization?.faviconUrl ||
             tenant?.customization?.logoPwaUrl ||
@@ -1677,6 +2067,25 @@ app.get('/api/public/tenant-icon', async (req, res) => {
             res.redirect(iconUrl);
             return;
         }
+        else if (iconUrl && iconUrl.startsWith('/uploads/')) {
+            const filePath = path_1.default.resolve(process.cwd(), iconUrl.replace(/^\/+/, ''));
+            if (fs_1.default.existsSync(filePath)) {
+                res.setHeader('Cache-Control', 'public, max-age=86400');
+                res.sendFile(filePath);
+                return;
+            }
+        }
+        // Servir PNG para PWA icons o solicitudes explícitas de PNG
+        if (size || format === 'png') {
+            const pngFile = size === '512' ? 'icon-512.png' : size === '180' ? 'apple-touch-icon.png' : 'icon-192.png';
+            const pngPath = path_1.default.resolve(process.cwd(), 'public', pngFile);
+            if (fs_1.default.existsSync(pngPath)) {
+                res.setHeader('Content-Type', 'image/png');
+                res.setHeader('Cache-Control', 'public, max-age=86400');
+                res.sendFile(pngPath);
+                return;
+            }
+        }
         const favPath = path_1.default.resolve(process.cwd(), 'public', 'favicon.svg');
         if (fs_1.default.existsSync(favPath)) {
             res.setHeader('Content-Type', 'image/svg+xml');
@@ -1691,60 +2100,75 @@ app.get('/api/public/tenant-icon', async (req, res) => {
         res.status(500).send('Error');
     }
 });
-// Manifiesto PWA Dinámico por Tenant
-app.get('/api/public/manifest.webmanifest', async (req, res) => {
+// Manifiesto PWA Dinámico por Tenant (compatible con /manifest.json y /api/public/manifest.webmanifest)
+app.get(['/manifest.json', '/api/public/manifest.webmanifest'], async (req, res) => {
     try {
         const slug = req.query.tenant;
         const tenant = await db_1.db.getPublicTenantBranding(slug);
-        const name = tenant?.companyInfo?.commercialName || tenant?.name || 'ROMA Agencia';
-        const shortName = name.slice(0, 15);
-        const desc = `Sistema SaaS de Gestión para Agencia de Publicidad y Diseño - ${name}`;
+        const name = tenant?.companyInfo?.commercialName || tenant?.name || 'ROMA SaaS — Sistema de Agencia';
+        const shortName = (tenant?.companyInfo?.commercialName || tenant?.name || 'ROMA SaaS').slice(0, 15);
+        const desc = `Sistema SaaS de Gestión para Agencia de Publicidad y Diseño — ${name}`;
         const tenantSlug = tenant?.slug || slug || 'roma-agencia';
-        const iconUrl = `/api/public/tenant-icon?tenant=${encodeURIComponent(tenantSlug)}`;
-        res.setHeader('Content-Type', 'application/manifest+json');
-        res.setHeader('Cache-Control', 'public, max-age=60');
+        res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+        res.setHeader('Cache-Control', 'public, max-age=300');
         return res.json({
             name,
             short_name: shortName,
             description: desc,
+            id: `/?tenant=${encodeURIComponent(tenantSlug)}`,
             start_url: `/?tenant=${encodeURIComponent(tenantSlug)}`,
             scope: '/',
             display: 'standalone',
+            orientation: 'portrait',
             background_color: tenant?.customization?.darkPalette?.background || '#090d16',
             theme_color: tenant?.customization?.lightPalette?.primary || '#0055ff',
             icons: [
                 {
-                    src: `${iconUrl}&size=192`,
+                    src: '/icon-192.png',
                     sizes: '192x192',
                     type: 'image/png',
-                    purpose: 'any maskable',
+                    purpose: 'any maskable'
                 },
                 {
-                    src: `${iconUrl}&size=512`,
+                    src: '/icon-512.png',
                     sizes: '512x512',
                     type: 'image/png',
-                    purpose: 'any maskable',
+                    purpose: 'any maskable'
                 },
+                {
+                    src: '/apple-touch-icon.png',
+                    sizes: '180x180',
+                    type: 'image/png'
+                }
             ],
         });
     }
     catch (err) {
         console.error('Error al generar manifest.webmanifest:', err);
-        res.setHeader('Content-Type', 'application/manifest+json');
+        res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
         return res.json({
-            name: 'ROMA Agencia',
-            short_name: 'ROMA',
+            name: 'ROMA SaaS — Sistema de Agencia',
+            short_name: 'ROMA SaaS',
             start_url: '/',
+            id: '/',
+            scope: '/',
             display: 'standalone',
+            orientation: 'portrait',
             background_color: '#090d16',
             theme_color: '#0055ff',
             icons: [
                 {
-                    src: '/favicon.svg',
+                    src: '/icon-192.png',
                     sizes: '192x192',
-                    type: 'image/svg+xml',
-                    purpose: 'any maskable',
+                    type: 'image/png',
+                    purpose: 'any maskable'
                 },
+                {
+                    src: '/icon-512.png',
+                    sizes: '512x512',
+                    type: 'image/png',
+                    purpose: 'any maskable'
+                }
             ],
         });
     }
@@ -1768,92 +2192,165 @@ async function serveHtmlWithMetadata(req, res) {
         let pageTitle = 'ROMA SaaS — Sistema de Agencia de Publicidad y Diseño';
         let ogTitle = 'ROMA SaaS — Sistema de Agencia';
         let ogDescription = 'Plataforma integral de gestión de proyectos, clientes, cotizaciones y notas de pago.';
-        let ogImage = `${origin}/favicon.svg`;
+        let ogImage = `${origin}/og-preview.png`;
         let faviconUrl = '/favicon.svg';
         let themeColor = '#0055ff';
         let tenantSlug = req.query.tenant || '';
         const pathname = req.path;
-        // 1. Cotizaciones públicas (/c/:token, /q/:token, /p/:token, /cotizacion/:token)
-        if (pathname.startsWith('/c/') ||
-            pathname.startsWith('/q/') ||
-            pathname.startsWith('/p/') ||
-            pathname.startsWith('/cotizacion/')) {
-            const parts = pathname.split('/');
-            const token = parts[2] || parts[1];
-            if (token) {
-                const quoteData = await db_1.db.getQuoteByPublicToken(token);
+        // 1. Notas de Pago / Comprobantes públicos (/p/pago/:token, /p/nota/:token, /np/:token, /pago/:token, /nota/:token)
+        const noteMatch = pathname.match(/^\/(?:np|pago|nota|nota-pago|p\/pago|p\/nota)\/([^/?#]+)/i);
+        if (noteMatch && noteMatch[1]) {
+            const token = decodeURIComponent(noteMatch[1]);
+            const noteData = await db_1.db.getPaymentNoteByPublicToken(token);
+            if (noteData) {
+                const n = noteData.paymentNote;
+                const t = noteData.tenant;
+                tenantSlug = t.slug;
+                const agencyName = t.companyInfo?.commercialName || t.name;
+                const currSymbol = t.customization?.currencySymbol || 'S/';
+                const totalNum = Number(n.total || 0);
+                const paidNum = Number(n.paidAmount || 0);
+                const totalFormatted = `${currSymbol} ${totalNum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
+                // Determinar estado de la nota de pago
+                let statusLabel = 'Pendiente de Pago';
+                if (n.status === 'paid' || (totalNum > 0 && paidNum >= totalNum)) {
+                    statusLabel = 'Pagado';
+                }
+                else if (n.status === 'partial' || paidNum > 0) {
+                    statusLabel = `Abono Parcial (${currSymbol} ${paidNum.toLocaleString('es-PE', { minimumFractionDigits: 2 })})`;
+                }
+                else if (n.status === 'cancelled') {
+                    statusLabel = 'Anulado';
+                }
+                const clientStr = n.clientName ? `${n.clientName}` : 'Cliente';
+                pageTitle = `Comprobante ${n.code || ''} — ${clientStr} | ${agencyName}`;
+                ogTitle = `Comprobante de Pago ${n.code || ''} — ${agencyName}`;
+                ogDescription = `Cliente: ${clientStr} • Total a pagar: ${totalFormatted} • Estado: ${statusLabel}. Haz clic para revisar el desglose y cuentas oficiales.`;
+                ogImage = `${origin}/og-preview.png`;
+                faviconUrl = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
+                themeColor = t.customization?.lightPalette?.primary || '#0055ff';
+            }
+        }
+        // 2. Órdenes de Servicio públicas (/p/os/:token, /os/:token, etc.)
+        else if (pathname.match(/^\/(?:os|orden|p\/os|p\/orden)\/([^/?#]+)/i)) {
+            const osMatch = pathname.match(/^\/(?:os|orden|p\/os|p\/orden)\/([^/?#]+)/i);
+            const token = decodeURIComponent(osMatch[1]);
+            const osData = await db_1.db.getServiceOrderByPublicToken(token);
+            if (osData) {
+                const os = osData.order;
+                const t = osData.tenant;
+                tenantSlug = t.slug;
+                const agencyName = t.companyInfo?.commercialName || t.name;
+                pageTitle = `Orden de Servicio ${os.code || ''} — ${agencyName}`;
+                ogTitle = `Orden de Servicio ${os.code || ''} — ${agencyName}`;
+                ogDescription = `Hoja de ruta y entregables: ${os.title || 'Servicio'}. Estado: ${os.status || 'Activo'}.`;
+                ogImage = `${origin}/og-preview.png`;
+                faviconUrl = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
+                themeColor = t.customization?.lightPalette?.primary || '#0055ff';
+            }
+        }
+        // 3. Workspace / Grilla de Contenidos pública (/p/w/:token, /p/workspace/:token, etc.)
+        else if (pathname.match(/^\/(?:w|grilla|p\/w|p\/workspace)\/([^/?#]+)/i)) {
+            const wsMatch = pathname.match(/^\/(?:w|grilla|p\/w|p\/workspace)\/([^/?#]+)/i);
+            const token = decodeURIComponent(wsMatch[1]);
+            const wsData = await db_1.db.getWorkspaceMonthByPublicToken(token);
+            if (wsData) {
+                const m = wsData.month;
+                const p = wsData.project;
+                const t = wsData.tenant;
+                const postsCount = Array.isArray(wsData.posts) ? wsData.posts.length : 0;
+                if (t) {
+                    tenantSlug = t.slug;
+                    faviconUrl = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
+                }
+                const agencyName = t?.companyInfo?.commercialName || t?.name || 'ROMA Agencia';
+                const projectName = p?.name || 'Redes Sociales';
+                pageTitle = `Grilla de Contenidos ${m.name || ''} — ${projectName} | ${agencyName}`;
+                ogTitle = `Grilla ${m.name || ''} — ${projectName}`;
+                ogDescription = `Calendario editorial y piezas de contenido de ${agencyName}. Total piezas: ${postsCount}. Haz clic para revisar y aprobar.`;
+                ogImage = `${origin}/og-preview.png`;
+            }
+        }
+        // 4. Catálogo o Servicio público (/s/:slug, /servicio/:slug, /p/servicio/:slug)
+        else if (pathname.match(/^\/(?:s|servicio|p\/servicio)\/([^/?#]+)/i)) {
+            const srvMatch = pathname.match(/^\/(?:s|servicio|p\/servicio)\/([^/?#]+)/i);
+            const slug = decodeURIComponent(srvMatch[1]);
+            const tenantParam = req.query.tenant || '';
+            const srvData = await db_1.db.getPublicServiceBySlugOrId(tenantParam || 'roma-agencia', slug);
+            if (srvData && srvData.service) {
+                const s = srvData.service;
+                const t = srvData.tenant;
+                tenantSlug = t.slug;
+                const agencyName = t.companyInfo?.commercialName || t.name;
+                pageTitle = `${s.title} | ${agencyName}`;
+                ogTitle = `${s.title} — ${agencyName}`;
+                ogDescription = s.briefDescription || s.fullDescription || 'Consulta los paquetes, entregables e inversión de este servicio profesional.';
+                ogImage = s.coverImage && (s.coverImage.startsWith('http') || s.coverImage.startsWith('/uploads')) ? (s.coverImage.startsWith('http') ? s.coverImage : `${origin}${s.coverImage}`) : `${origin}/og-preview.png`;
+                faviconUrl = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
+            }
+        }
+        // 5. Catálogo general de servicios (/servicios, /p/servicios)
+        else if (pathname === '/servicios' || pathname === '/p/servicios') {
+            const defaultTenant = await db_1.db.getPublicTenantBranding(tenantSlug);
+            const agencyName = defaultTenant?.companyInfo?.commercialName || defaultTenant?.name || 'ROMA Agencia';
+            pageTitle = `Catálogo de Servicios y Paquetes — ${agencyName}`;
+            ogTitle = `Catálogo de Servicios — ${agencyName}`;
+            ogDescription = `Descubre nuestros servicios profesionales de diseño, publicidad, branding y marketing digital.`;
+            ogImage = `${origin}/og-preview.png`;
+        }
+        // 6. Cotizaciones públicas (/c/:token, /q/:token, /cotizacion/:token, /p/cotizacion/:token, /p/:token)
+        else {
+            let quoteToken = null;
+            const qMatch = pathname.match(/^\/(?:c|q|cotizacion|p\/cotizacion)\/([^/?#]+)/i);
+            if (qMatch && qMatch[1]) {
+                quoteToken = decodeURIComponent(qMatch[1]);
+            }
+            else {
+                const pMatch = pathname.match(/^\/p\/([^/?#]+)/i);
+                if (pMatch && pMatch[1]) {
+                    const candidate = decodeURIComponent(pMatch[1]).toLowerCase();
+                    if (candidate !== 'pago' &&
+                        candidate !== 'nota' &&
+                        candidate !== 'os' &&
+                        candidate !== 'orden' &&
+                        candidate !== 'w' &&
+                        candidate !== 'workspace' &&
+                        candidate !== 'servicio' &&
+                        candidate !== 'servicios') {
+                        quoteToken = decodeURIComponent(pMatch[1]);
+                    }
+                }
+            }
+            if (quoteToken) {
+                const quoteData = await db_1.db.getQuoteByPublicToken(quoteToken);
                 if (quoteData) {
                     const q = quoteData.quote;
                     const t = quoteData.tenant;
                     tenantSlug = t.slug;
                     const agencyName = t.companyInfo?.commercialName || t.name;
                     const currSymbol = t.customization?.currencySymbol || 'S/';
-                    pageTitle = `Propuesta ${q.code || ''} — ${q.clientName || 'Cliente'} | ${agencyName}`;
-                    ogTitle = `Propuesta Comercial ${q.code || ''} — ${q.clientName || 'Cliente'}`;
+                    const clientStr = q.clientName ? `${q.clientName}` : 'Cliente';
+                    pageTitle = `Propuesta ${q.code || ''} — ${clientStr} | ${agencyName}`;
+                    ogTitle = `Propuesta Comercial ${q.code || ''} — ${clientStr}`;
                     ogDescription = `Propuesta de servicios profesionales emitida por ${agencyName}. Inversión: ${currSymbol} ${Number(q.total || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
-                    ogImage = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
+                    ogImage = `${origin}/og-preview.png`;
                     faviconUrl = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
                     themeColor = t.customization?.lightPalette?.primary || '#0055ff';
                 }
             }
-        }
-        // 2. Notas de Pago / Comprobantes públicos (/np/:id, /pago/:id, /nota-pago/:id)
-        else if (pathname.startsWith('/np/') ||
-            pathname.startsWith('/pago/') ||
-            pathname.startsWith('/nota-pago/')) {
-            const parts = pathname.split('/');
-            const token = parts[2] || parts[1];
-            if (token) {
-                const noteData = await db_1.db.getPaymentNoteByPublicToken(token);
-                if (noteData) {
-                    const n = noteData.paymentNote;
-                    const t = noteData.tenant;
-                    tenantSlug = t.slug;
-                    const agencyName = t.companyInfo?.commercialName || t.name;
-                    const currSymbol = t.customization?.currencySymbol || 'S/';
-                    pageTitle = `Comprobante de Pago ${n.code || ''} — ${n.clientName || 'Cliente'} | ${agencyName}`;
-                    ogTitle = `Comprobante Oficial de Pago ${n.code || ''}`;
-                    ogDescription = `Comprobante emitido para ${n.clientName || 'Cliente'} por ${agencyName}. Total: ${currSymbol} ${Number(n.total || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
-                    ogImage = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
-                    faviconUrl = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
-                    themeColor = t.customization?.lightPalette?.primary || '#0055ff';
+            else {
+                // Branding general del tenant
+                const defaultTenant = await db_1.db.getPublicTenantBranding(tenantSlug);
+                if (defaultTenant) {
+                    tenantSlug = defaultTenant.slug;
+                    const name = defaultTenant.companyInfo?.commercialName || defaultTenant.name;
+                    pageTitle = `${name} — Sistema SaaS`;
+                    ogTitle = name;
+                    ogDescription = `Sistema de gestión para agencias de diseño y publicidad — ${name}`;
+                    ogImage = `${origin}/og-preview.png`;
+                    faviconUrl = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(tenantSlug)}`;
+                    themeColor = defaultTenant.customization?.lightPalette?.primary || '#0055ff';
                 }
-            }
-        }
-        // 3. Catálogo o Servicio público (/s/:slug, /servicio/:slug)
-        else if (pathname.startsWith('/s/') ||
-            pathname.startsWith('/servicio/') ||
-            pathname.startsWith('/p/servicio/')) {
-            const parts = pathname.split('/');
-            const slug = parts[2] || parts[1];
-            const tenantParam = req.query.tenant || '';
-            if (slug) {
-                const srvData = await db_1.db.getPublicServiceBySlugOrId(tenantParam || 'roma-agencia', slug);
-                if (srvData && srvData.service) {
-                    const s = srvData.service;
-                    const t = srvData.tenant;
-                    tenantSlug = t.slug;
-                    const agencyName = t.companyInfo?.commercialName || t.name;
-                    pageTitle = `${s.title} | ${agencyName}`;
-                    ogTitle = `${s.title} — ${agencyName}`;
-                    ogDescription = s.briefDescription || s.fullDescription || 'Consulta los paquetes, entregables e inversión de este servicio profesional.';
-                    ogImage = s.coverImage || `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
-                    faviconUrl = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
-                }
-            }
-        }
-        else {
-            // Branding general del tenant
-            const defaultTenant = await db_1.db.getPublicTenantBranding(tenantSlug);
-            if (defaultTenant) {
-                tenantSlug = defaultTenant.slug;
-                const name = defaultTenant.companyInfo?.commercialName || defaultTenant.name;
-                pageTitle = `${name} — Sistema SaaS`;
-                ogTitle = name;
-                ogDescription = `Sistema de gestión para agencias de diseño y publicidad — ${name}`;
-                ogImage = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(tenantSlug)}`;
-                faviconUrl = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(tenantSlug)}`;
-                themeColor = defaultTenant.customization?.lightPalette?.primary || '#0055ff';
             }
         }
         const escapeHtml = (str) => str
@@ -1862,12 +2359,16 @@ async function serveHtmlWithMetadata(req, res) {
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
         const ogTags = `
-    <!-- Open Graph & Meta Tags Dinámicos (WhatsApp, Facebook, Twitter, Telegram) -->
+    <!-- Open Graph & Meta Tags Dinámicos (WhatsApp, Facebook, Twitter, Telegram, LinkedIn) -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="${escapeHtml(ogTitle)}" />
     <meta property="og:title" content="${escapeHtml(ogTitle)}" />
     <meta property="og:description" content="${escapeHtml(ogDescription)}" />
     <meta property="og:image" content="${ogImage}" />
+    <meta property="og:image:secure_url" content="${ogImage}" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:url" content="${fullUrl}" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(ogTitle)}" />
@@ -1877,13 +2378,13 @@ async function serveHtmlWithMetadata(req, res) {
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="${escapeHtml(ogTitle)}" />
-    <link rel="apple-touch-icon" href="${faviconUrl}" />
+    <link rel="apple-touch-icon" href="${origin}/apple-touch-icon.png" />
     `;
         html = html.replace(/<title>.*?<\/title>/i, `<title>${escapeHtml(pageTitle)}</title>`);
         html = html.replace(/<link id="dynamic-favicon"[^>]*>/i, `<link id="dynamic-favicon" rel="icon" href="${faviconUrl}" />`);
         const manifestHref = tenantSlug
             ? `/api/public/manifest.webmanifest?tenant=${encodeURIComponent(tenantSlug)}`
-            : '/api/public/manifest.webmanifest';
+            : '/manifest.json';
         html = html.replace(/<link id="dynamic-manifest"[^>]*>/i, `<link id="dynamic-manifest" rel="manifest" href="${manifestHref}" />`);
         html = html.replace('</head>', `${ogTags}\n  </head>`);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -1894,13 +2395,25 @@ async function serveHtmlWithMetadata(req, res) {
     }
 }
 app.get([
-    '/c/:token',
-    '/q/:token',
-    '/p/:token',
-    '/cotizacion/:token',
+    '/p/pago/:token',
+    '/p/nota/:token',
     '/np/:token',
     '/pago/:token',
     '/nota-pago/:token',
+    '/nota/:token',
+    '/p/cotizacion/:token',
+    '/cotizacion/:token',
+    '/c/:token',
+    '/q/:token',
+    '/p/:token',
+    '/p/os/:token',
+    '/p/orden/:token',
+    '/os/:token',
+    '/orden/:token',
+    '/p/w/:token',
+    '/p/workspace/:token',
+    '/w/:token',
+    '/grilla/:token',
     '/servicios',
     '/p/servicios',
     '/s/:slug',

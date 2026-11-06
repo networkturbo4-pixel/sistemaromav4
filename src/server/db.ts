@@ -40,6 +40,8 @@ import {
   DriveFolder,
   DriveFolderBlueprint,
   TenantDriveConfig,
+  AppNotification,
+  PushSubscriptionRecord,
 } from '../shared/types';
 import { ALL_PERMISSION_KEYS, PermissionKey } from '../shared/permissions';
 
@@ -63,6 +65,8 @@ export interface DatabaseState {
   driveFiles: DriveFile[];
   driveFolders: DriveFolder[];
   driveFolderBlueprints: DriveFolderBlueprint[];
+  notifications: AppNotification[];
+  pushSubscriptions: PushSubscriptionRecord[];
 }
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -109,6 +113,8 @@ export class DatabaseManager {
         if (!Array.isArray(parsed.driveFiles)) parsed.driveFiles = [];
         if (!Array.isArray(parsed.driveFolders)) parsed.driveFolders = [];
         if (!Array.isArray(parsed.driveFolderBlueprints)) parsed.driveFolderBlueprints = [];
+        if (!Array.isArray(parsed.notifications)) parsed.notifications = [];
+        if (!Array.isArray(parsed.pushSubscriptions)) parsed.pushSubscriptions = [];
         return parsed as DatabaseState;
       }
     } catch (e) {
@@ -133,6 +139,8 @@ export class DatabaseManager {
       driveFiles: [],
       driveFolders: [],
       driveFolderBlueprints: [],
+      notifications: [],
+      pushSubscriptions: [],
     };
     return defaultState;
   }
@@ -1985,6 +1993,319 @@ export class DatabaseManager {
     if (deleted) this.saveLocalState();
     return deleted;
   }
+
+  // ===========================================================================
+  // NOTIFICACIONES MULTITENANT & PWA PUSH
+  // ===========================================================================
+
+  public async getNotifications(
+    tenantId: string,
+    options?: { limit?: number; unreadOnly?: boolean; module?: string }
+  ): Promise<AppNotification[]> {
+    if (this.isPostgresConnected && this.pool) {
+      try {
+        let query = `
+          SELECT 
+            id, tenant_id as "tenantId", title, message, type, module,
+            entity_id as "entityId", action, link, actor_user_id as "actorUserId",
+            actor_user_name as "actorUserName", is_read as "isRead", metadata,
+            created_at as "createdAt"
+          FROM notifications
+          WHERE tenant_id = $1
+        `;
+        const params: any[] = [tenantId];
+        if (options?.unreadOnly) {
+          params.push(false);
+          query += ` AND is_read = $${params.length}`;
+        }
+        if (options?.module && options.module !== 'all') {
+          params.push(options.module);
+          query += ` AND module = $${params.length}`;
+        }
+        query += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`;
+        params.push(options?.limit || 50);
+
+        const res = await this.pool.query(query, params);
+        return res.rows;
+      } catch (err) {
+        console.warn('[DB] Fallback a localState para getNotifications:', err);
+      }
+    }
+
+    let list = (this.localState.notifications || []).filter((n) => n.tenantId === tenantId);
+    if (options?.unreadOnly) {
+      list = list.filter((n) => !n.isRead);
+    }
+    if (options?.module && options.module !== 'all') {
+      list = list.filter((n) => n.module === options.module);
+    }
+    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return list.slice(0, options?.limit || 50);
+  }
+
+  public async createNotification(
+    data: Omit<AppNotification, 'id' | 'createdAt' | 'isRead'> & {
+      id?: string;
+      createdAt?: string;
+      isRead?: boolean;
+    }
+  ): Promise<AppNotification> {
+    const id = data.id || `notif-${Date.now()}-${generateToken(4)}`;
+    const createdAt = data.createdAt || new Date().toISOString();
+    const isRead = data.isRead ?? false;
+
+    const notif: AppNotification = {
+      id,
+      tenantId: data.tenantId,
+      title: data.title,
+      message: data.message,
+      type: data.type || 'info',
+      module: data.module || 'general',
+      entityId: data.entityId,
+      action: data.action,
+      link: data.link,
+      actorUserId: data.actorUserId,
+      actorUserName: data.actorUserName,
+      isRead,
+      createdAt,
+      metadata: data.metadata || {},
+    };
+
+    if (this.isPostgresConnected && this.pool) {
+      try {
+        await this.pool.query(
+          `INSERT INTO notifications (
+            id, tenant_id, title, message, type, module, entity_id, action, link,
+            actor_user_id, actor_user_name, is_read, metadata, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+          [
+            notif.id,
+            notif.tenantId,
+            notif.title,
+            notif.message,
+            notif.type,
+            notif.module,
+            notif.entityId || null,
+            notif.action || null,
+            notif.link || null,
+            notif.actorUserId || null,
+            notif.actorUserName || null,
+            notif.isRead,
+            JSON.stringify(notif.metadata || {}),
+            notif.createdAt,
+          ]
+        );
+      } catch (err) {
+        console.warn('[DB] Fallback al guardar notificación en localState:', err);
+      }
+    }
+
+    if (!Array.isArray(this.localState.notifications)) {
+      this.localState.notifications = [];
+    }
+    this.localState.notifications.unshift(notif);
+    // Limitar histórico local a 500 notificaciones por seguridad
+    if (this.localState.notifications.length > 500) {
+      this.localState.notifications = this.localState.notifications.slice(0, 500);
+    }
+    this.saveLocalState();
+    return notif;
+  }
+
+  public async markNotificationAsRead(tenantId: string, id: string): Promise<boolean> {
+    let updated = false;
+    if (this.isPostgresConnected && this.pool) {
+      try {
+        const res = await this.pool.query(
+          'UPDATE notifications SET is_read = TRUE WHERE tenant_id = $1 AND id = $2',
+          [tenantId, id]
+        );
+        updated = (res.rowCount ?? 0) > 0;
+      } catch (err) {
+        console.warn('[DB] Fallback postgres markNotificationAsRead:', err);
+      }
+    }
+
+    const item = (this.localState.notifications || []).find(
+      (n) => n.tenantId === tenantId && n.id === id
+    );
+    if (item) {
+      item.isRead = true;
+      this.saveLocalState();
+      updated = true;
+    }
+    return updated;
+  }
+
+  public async markAllNotificationsAsRead(tenantId: string): Promise<number> {
+    let count = 0;
+    if (this.isPostgresConnected && this.pool) {
+      try {
+        const res = await this.pool.query(
+          'UPDATE notifications SET is_read = TRUE WHERE tenant_id = $1 AND is_read = FALSE',
+          [tenantId]
+        );
+        count = res.rowCount ?? 0;
+      } catch (err) {
+        console.warn('[DB] Fallback postgres markAllNotificationsAsRead:', err);
+      }
+    }
+
+    (this.localState.notifications || []).forEach((n) => {
+      if (n.tenantId === tenantId && !n.isRead) {
+        n.isRead = true;
+        count++;
+      }
+    });
+    this.saveLocalState();
+    return count;
+  }
+
+  public async deleteNotification(tenantId: string, id: string): Promise<boolean> {
+    let deleted = false;
+    if (this.isPostgresConnected && this.pool) {
+      try {
+        const res = await this.pool.query(
+          'DELETE FROM notifications WHERE tenant_id = $1 AND id = $2',
+          [tenantId, id]
+        );
+        deleted = (res.rowCount ?? 0) > 0;
+      } catch (err) {
+        console.warn('[DB] Fallback postgres deleteNotification:', err);
+      }
+    }
+
+    const before = (this.localState.notifications || []).length;
+    this.localState.notifications = (this.localState.notifications || []).filter(
+      (n) => !(n.tenantId === tenantId && n.id === id)
+    );
+    if (this.localState.notifications.length < before) {
+      this.saveLocalState();
+      deleted = true;
+    }
+    return deleted;
+  }
+
+  public async clearAllNotifications(tenantId: string): Promise<number> {
+    let count = 0;
+    if (this.isPostgresConnected && this.pool) {
+      try {
+        const res = await this.pool.query('DELETE FROM notifications WHERE tenant_id = $1', [
+          tenantId,
+        ]);
+        count = res.rowCount ?? 0;
+      } catch (err) {
+        console.warn('[DB] Fallback postgres clearAllNotifications:', err);
+      }
+    }
+
+    const before = (this.localState.notifications || []).length;
+    this.localState.notifications = (this.localState.notifications || []).filter(
+      (n) => n.tenantId !== tenantId
+    );
+    count = Math.max(count, before - this.localState.notifications.length);
+    this.saveLocalState();
+    return count;
+  }
+
+  // --- SUSCRIPCIONES PUSH WEB / PWA ---
+
+  public async getPushSubscriptions(tenantId: string): Promise<PushSubscriptionRecord[]> {
+    if (this.isPostgresConnected && this.pool) {
+      try {
+        const res = await this.pool.query(
+          `SELECT id, tenant_id as "tenantId", user_id as "userId", endpoint, keys,
+                  user_agent as "userAgent", created_at as "createdAt", updated_at as "updatedAt"
+           FROM push_subscriptions WHERE tenant_id = $1`,
+          [tenantId]
+        );
+        return res.rows;
+      } catch (err) {
+        console.warn('[DB] Fallback getPushSubscriptions:', err);
+      }
+    }
+    return (this.localState.pushSubscriptions || []).filter((s) => s.tenantId === tenantId);
+  }
+
+  public async savePushSubscription(
+    sub: Omit<PushSubscriptionRecord, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
+  ): Promise<PushSubscriptionRecord> {
+    const now = new Date().toISOString();
+    const id = sub.id || `push-${Date.now()}-${generateToken(4)}`;
+
+    const record: PushSubscriptionRecord = {
+      id,
+      tenantId: sub.tenantId,
+      userId: sub.userId,
+      endpoint: sub.endpoint,
+      keys: sub.keys,
+      userAgent: sub.userAgent,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    if (this.isPostgresConnected && this.pool) {
+      try {
+        await this.pool.query(
+          `INSERT INTO push_subscriptions (id, tenant_id, user_id, endpoint, keys, user_agent, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (endpoint) DO UPDATE SET 
+             tenant_id = EXCLUDED.tenant_id,
+             user_id = EXCLUDED.user_id,
+             keys = EXCLUDED.keys,
+             user_agent = EXCLUDED.user_agent,
+             updated_at = EXCLUDED.updated_at`,
+          [
+            record.id,
+            record.tenantId,
+            record.userId || null,
+            record.endpoint,
+            JSON.stringify(record.keys),
+            record.userAgent || null,
+            record.createdAt,
+            record.updatedAt,
+          ]
+        );
+      } catch (err) {
+        console.warn('[DB] Fallback savePushSubscription postgres:', err);
+      }
+    }
+
+    if (!Array.isArray(this.localState.pushSubscriptions)) {
+      this.localState.pushSubscriptions = [];
+    }
+    const idx = this.localState.pushSubscriptions.findIndex((s) => s.endpoint === sub.endpoint);
+    if (idx >= 0) {
+      this.localState.pushSubscriptions[idx] = {
+        ...this.localState.pushSubscriptions[idx],
+        ...record,
+        id: this.localState.pushSubscriptions[idx].id,
+      };
+    } else {
+      this.localState.pushSubscriptions.push(record);
+    }
+    this.saveLocalState();
+    return record;
+  }
+
+  public async deletePushSubscription(endpoint: string): Promise<boolean> {
+    if (this.isPostgresConnected && this.pool) {
+      try {
+        await this.pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [endpoint]);
+      } catch (err) {
+        console.warn('[DB] Fallback deletePushSubscription postgres:', err);
+      }
+    }
+
+    const before = (this.localState.pushSubscriptions || []).length;
+    this.localState.pushSubscriptions = (this.localState.pushSubscriptions || []).filter(
+      (s) => s.endpoint !== endpoint
+    );
+    const deleted = this.localState.pushSubscriptions.length < before;
+    if (deleted) this.saveLocalState();
+    return deleted;
+  }
+
 
 }
 

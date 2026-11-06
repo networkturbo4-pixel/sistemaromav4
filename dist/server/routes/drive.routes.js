@@ -10,6 +10,7 @@ const googleapis_1 = require("googleapis");
 const auth_1 = require("../middleware/auth");
 const db_1 = require("../db");
 const googleDriveService_1 = require("../services/googleDriveService");
+const notificationService_1 = require("../services/notificationService");
 const router = (0, express_1.Router)();
 const upload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
@@ -611,6 +612,17 @@ router.post('/register-file', auth_1.requireAuth, (0, auth_1.requirePermission)(
             durationMillis: resolvedDuration,
             createdBy: req.auth.user.name,
         });
+        (0, notificationService_1.notifyEvent)({
+            tenantId,
+            module: 'drive',
+            type: 'info',
+            title: 'Nuevo archivo en Drive',
+            message: `Se subió el archivo "${created.name}"`,
+            entityId: created.id,
+            link: '/?module=drive',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.status(201).json({ file: created });
     }
     catch (err) {
@@ -695,6 +707,17 @@ router.post('/upload-stream', auth_1.requireAuth, (0, auth_1.requirePermission)(
             durationMillis: resolvedDur ? Number(resolvedDur) : undefined,
             createdBy: req.auth.user.name,
         });
+        (0, notificationService_1.notifyEvent)({
+            tenantId,
+            module: 'drive',
+            type: 'info',
+            title: 'Nuevo archivo en Drive',
+            message: `Se subió el archivo "${created.name}"`,
+            entityId: created.id,
+            link: '/?module=drive',
+            actorUserId: req.auth.user.id,
+            actorUserName: req.auth.user.name,
+        }).catch(() => { });
         res.status(201).json({ file: created });
     }
     catch (err) {

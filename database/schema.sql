@@ -391,6 +391,46 @@ CREATE TABLE IF NOT EXISTS drive_folder_blueprints (
 
 CREATE INDEX IF NOT EXISTS idx_drive_blueprints_tenant ON drive_folder_blueprints(tenant_id);
 
+-- =============================================================================
+-- 18. TABLA DE NOTIFICACIONES MULTITENANT
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS notifications (
+    id VARCHAR(64) PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    type VARCHAR(32) NOT NULL DEFAULT 'info',
+    module VARCHAR(64) NOT NULL DEFAULT 'general',
+    entity_id VARCHAR(64),
+    action VARCHAR(64),
+    link TEXT,
+    actor_user_id VARCHAR(64),
+    actor_user_name VARCHAR(180),
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_tenant_read ON notifications(tenant_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(tenant_id, created_at DESC);
+
+-- =============================================================================
+-- 19. TABLA DE SUSCRIPCIONES PUSH WEB / PWA
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id VARCHAR(64) PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    user_id VARCHAR(64) REFERENCES users(id) ON DELETE CASCADE,
+    endpoint TEXT NOT NULL UNIQUE,
+    keys JSONB NOT NULL DEFAULT '{}'::jsonb,
+    user_agent TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_push_sub_tenant ON push_subscriptions(tenant_id);
+
+
 
 
 

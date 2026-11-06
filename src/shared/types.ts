@@ -978,6 +978,60 @@ export interface DriveUploadItem {
   startedAt: number;
 }
 
+// =============================================================================
+// SISTEMA DE NOTIFICACIONES MULTITENANT & PWA PUSH
+// =============================================================================
+
+export type NotificationType = 'info' | 'success' | 'warning' | 'alert';
+
+export type NotificationModule =
+  | 'clients'
+  | 'quotes'
+  | 'services'
+  | 'service_orders'
+  | 'payments'
+  | 'workspace'
+  | 'drive'
+  | 'users'
+  | 'roles'
+  | 'settings'
+  | 'onboarding'
+  | string;
+
+export interface AppNotification {
+  id: string;
+  tenantId: string;
+  title: string;
+  message: string;
+  type: NotificationType;
+  module: NotificationModule;
+  entityId?: string;
+  action?: string;
+  link?: string;
+  actorUserId?: string;
+  actorUserName?: string;
+  isRead: boolean;
+  createdAt: string;
+  metadata?: Record<string, any>;
+}
+
+export interface PushSubscriptionKeys {
+  p256dh: string;
+  auth: string;
+}
+
+export interface PushSubscriptionRecord {
+  id: string;
+  tenantId: string;
+  userId?: string;
+  endpoint: string;
+  keys: PushSubscriptionKeys;
+  userAgent?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+
 
 
 
