@@ -1677,11 +1677,28 @@ app.get(
 app.get(
   '/api/tenants-available-users',
   requireAuth,
-  requireAnyPermission(['settings.tenants.view', 'settings.tenants.manage']),
-  async (_req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const users = await db.getAvailableUsersForTenants();
-      res.json({ users });
+      const isSuperAdmin =
+        req.auth?.role?.isSystem ||
+        hasAnyPermission(req.auth?.role?.permissions, ['settings.tenants.manage', 'settings.tenants.view', 'settings.users.manage']);
+
+      if (isSuperAdmin) {
+        const users = await db.getAvailableUsersForTenants();
+        res.json({ users });
+      } else {
+        const currentTenantUsers = await db.getUsersByTenant(req.auth!.tenant.id);
+        const mapped = currentTenantUsers.map((u) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          pin: u.pin,
+          jobTitle: u.jobTitle,
+          avatarUrl: u.avatarUrl,
+          tenantIds: [u.tenantId],
+        }));
+        res.json({ users: mapped });
+      }
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }

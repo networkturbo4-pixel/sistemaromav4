@@ -1190,10 +1190,27 @@ app.get('/api/tenants', auth_1.requireAuth, (0, auth_1.requireAnyPermission)(['s
         res.status(500).json({ error: err.message });
     }
 });
-app.get('/api/tenants-available-users', auth_1.requireAuth, (0, auth_1.requireAnyPermission)(['settings.tenants.view', 'settings.tenants.manage']), async (_req, res) => {
+app.get('/api/tenants-available-users', auth_1.requireAuth, async (req, res) => {
     try {
-        const users = await db_1.db.getAvailableUsersForTenants();
-        res.json({ users });
+        const isSuperAdmin = req.auth?.role?.isSystem ||
+            (0, permissions_1.hasAnyPermission)(req.auth?.role?.permissions, ['settings.tenants.manage', 'settings.tenants.view', 'settings.users.manage']);
+        if (isSuperAdmin) {
+            const users = await db_1.db.getAvailableUsersForTenants();
+            res.json({ users });
+        }
+        else {
+            const currentTenantUsers = await db_1.db.getUsersByTenant(req.auth.tenant.id);
+            const mapped = currentTenantUsers.map((u) => ({
+                id: u.id,
+                name: u.name,
+                email: u.email,
+                pin: u.pin,
+                jobTitle: u.jobTitle,
+                avatarUrl: u.avatarUrl,
+                tenantIds: [u.tenantId],
+            }));
+            res.json({ users: mapped });
+        }
     }
     catch (err) {
         res.status(500).json({ error: err.message });

@@ -72,6 +72,12 @@ import {
   Link,
   ZoomIn,
   Copy,
+  Search,
+  FileText,
+  Briefcase,
+  ClipboardList,
+  CheckCheck,
+  LayoutDashboard,
 } from 'lucide-react';
 import { GoogleDriveSettingsTab } from '../components/GoogleDriveSettingsTab';
 import { copyTextToClipboard } from '../utils/clipboard';
@@ -695,6 +701,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     permissions: [] as PermissionKey[],
   });
   const [savingRole, setSavingRole] = useState<boolean>(false);
+  const [rolePermissionSearch, setRolePermissionSearch] = useState<string>('');
+  const [roleModuleFilter, setRoleModuleFilter] = useState<string>('all');
 
   const loadUsersAndRoles = async () => {
     setLoadingUsersRoles(true);
@@ -812,6 +820,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 
   const openCreateRoleModal = () => {
     setEditingRole(null);
+    setRolePermissionSearch('');
+    setRoleModuleFilter('all');
     setRoleForm({
       name: '',
       description: '',
@@ -823,6 +833,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 
   const openEditRoleModal = (r: Role) => {
     setEditingRole(r);
+    setRolePermissionSearch('');
+    setRoleModuleFilter('all');
     setRoleForm({
       name: r.name,
       description: r.description,
@@ -830,6 +842,50 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       permissions: [...r.permissions],
     });
     roleDialogRef.current?.showModal();
+  };
+
+  const grantAllPermissions = () => {
+    if (editingRole?.isSystem) return;
+    setRoleForm((prev) => ({
+      ...prev,
+      permissions: [...ALL_PERMISSION_KEYS],
+    }));
+  };
+
+  const grantOnlyViewPermissions = () => {
+    if (editingRole?.isSystem) return;
+    const viewKeys = PERMISSIONS_CATALOG.filter((p) => p.key.endsWith('.view')).map((p) => p.key);
+    setRoleForm((prev) => ({
+      ...prev,
+      permissions: viewKeys,
+    }));
+  };
+
+  const clearAllPermissions = () => {
+    if (editingRole?.isSystem) return;
+    setRoleForm((prev) => ({
+      ...prev,
+      permissions: [],
+    }));
+  };
+
+  const toggleGroupViewOnly = (keys: PermissionKey[]) => {
+    if (editingRole?.isSystem) return;
+    const viewKeys = keys.filter((k) => k.endsWith('.view'));
+    setRoleForm((prev) => {
+      const allViewsSelected = viewKeys.length > 0 && viewKeys.every((k) => prev.permissions.includes(k));
+      if (allViewsSelected) {
+        return {
+          ...prev,
+          permissions: prev.permissions.filter((k) => !viewKeys.includes(k)),
+        };
+      } else {
+        return {
+          ...prev,
+          permissions: Array.from(new Set([...prev.permissions, ...viewKeys])),
+        };
+      }
+    });
   };
 
   const togglePermissionInRole = (key: PermissionKey) => {
@@ -977,7 +1033,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     setTenantLogoInputMode('upload');
     const users = await loadAvailableUsers();
     // Asignar por defecto al usuario actual si existe
-    const defaultIds = user?.id ? [user.id] : (users.length > 0 ? [users[0].id] : []);
+    const defaultIds = currentUser?.id ? [currentUser.id] : (users.length > 0 ? [users[0].id] : []);
     setTenantForm({
       name: '',
       slug: '',
@@ -989,10 +1045,10 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       whatsapp: '+51 ',
       address: '',
       status: 'active',
-      adminName: user?.name || 'Director General',
-      adminEmail: user?.email || '',
-      adminPin: user?.pin || '11223344',
-      adminJobTitle: user?.jobTitle || 'Director General & Fundador',
+      adminName: currentUser?.name || 'Director General',
+      adminEmail: currentUser?.email || '',
+      adminPin: currentUser?.pin || '11223344',
+      adminJobTitle: currentUser?.jobTitle || 'Director General & Fundador',
       logoUrl: '',
       assignedUserIds: defaultIds,
     });
@@ -1031,7 +1087,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       adminPin: '',
       adminJobTitle: '',
       logoUrl: t.customization?.logoLightUrl || t.customization?.logoDarkUrl || '',
-      assignedUserIds: existingAssigned.length > 0 ? existingAssigned : (user?.id ? [user.id] : []),
+      assignedUserIds: existingAssigned.length > 0 ? existingAssigned : (currentUser?.id ? [currentUser.id] : []),
     });
     tenantDialogRef.current?.showModal();
   };
@@ -4570,15 +4626,15 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
         ref={roleDialogRef}
         closedby="any"
         aria-labelledby="role-dialog-title"
-        className="m-auto p-0 border-0 outline-none bg-transparent max-w-2xl w-[94vw] sm:w-[640px]"
+        className="m-auto p-0 border-0 outline-none bg-transparent max-w-6xl w-[96vw] sm:w-[1100px]"
       >
         <div
-          className="border rounded-[24px] sm:rounded-[28px] shadow-2xl overflow-hidden max-h-[85dvh] sm:max-h-[90dvh] flex flex-col transition-colors duration-200"
+          className="border rounded-[24px] sm:rounded-[32px] shadow-2xl overflow-hidden max-h-[90dvh] sm:max-h-[92dvh] flex flex-col transition-colors duration-200"
           style={{
             backgroundColor: 'var(--app-surface)',
             borderColor: 'var(--app-border)',
             color: 'var(--app-text)',
-            boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.4)',
+            boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.45)',
           }}
         >
           {/* Mobile Sheet Handle */}
@@ -4586,12 +4642,12 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 
           {/* Header Rol */}
           <div
-            className="px-5 sm:px-6 py-3.5 sm:py-4.5 border-b flex items-center justify-between gap-3 shrink-0"
+            className="px-5 sm:px-7 py-3.5 sm:py-4.5 border-b flex items-center justify-between gap-3 shrink-0"
             style={{ borderColor: 'var(--app-border)' }}
           >
             <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
               <div
-                className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center shrink-0 border"
+                className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center shrink-0 border shadow-sm"
                 style={{
                   backgroundColor: 'color-mix(in srgb, var(--app-primary) 12%, transparent)',
                   borderColor: 'color-mix(in srgb, var(--app-primary) 25%, transparent)',
@@ -4601,20 +4657,27 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <span
-                  className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full whitespace-nowrap shrink-0"
-                  style={{
-                    backgroundColor: 'color-mix(in srgb, var(--app-primary) 12%, transparent)',
-                    color: 'var(--app-primary)',
-                  }}
-                >
-                  MATRIZ DE PERMISOS
-                </span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full whitespace-nowrap shrink-0"
+                    style={{
+                      backgroundColor: 'color-mix(in srgb, var(--app-primary) 12%, transparent)',
+                      color: 'var(--app-primary)',
+                    }}
+                  >
+                    MATRIZ DE PERMISOS
+                  </span>
+                  {editingRole?.isSystem && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                      Rol de Sistema Protegido
+                    </span>
+                  )}
+                </div>
                 <h3 id="role-dialog-title" className="text-base sm:text-lg font-black tracking-tight mt-0.5 truncate">
                   {editingRole ? `Configurar: ${editingRole.name}` : 'Crear Nuevo Rol'}
                 </h3>
                 <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
-                  Control granular de accesos para los usuarios de la agencia.
+                  Control granular de accesos, permisos de lectura, creación, edición y administración para este rol.
                 </p>
               </div>
             </div>
@@ -4631,131 +4694,412 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 
           <form onSubmit={handleSaveRole} className="flex flex-col flex-1 min-h-0 overflow-hidden">
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 overscroll-contain">
-            <div
-              className="p-4 rounded-2xl border space-y-3"
-              style={{
-                backgroundColor: 'color-mix(in srgb, var(--app-surface) 60%, var(--app-bg) 40%)',
-                borderColor: 'var(--app-border)',
-              }}
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold mb-1.5 text-slate-700 dark:text-slate-200">
-                    Nombre del Rol <span className="text-rose-500">*</span>
-                  </label>
+              {/* Bloque 1: Configuración Básica del Rol */}
+              <div
+                className="p-4 sm:p-5 rounded-2xl border space-y-3"
+                style={{
+                  backgroundColor: 'color-mix(in srgb, var(--app-surface) 60%, var(--app-bg) 40%)',
+                  borderColor: 'var(--app-border)',
+                }}
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-end">
+                  <div className="sm:col-span-6">
+                    <label className="block text-xs font-bold mb-1.5 text-slate-700 dark:text-slate-200">
+                      Nombre del Rol <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={roleForm.name}
+                      onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
+                      placeholder="Ej. Diseñador Senior, Trafficker, Ejecutivo de Cuentas..."
+                      className="w-full rounded-xl border px-3.5 py-2.5 text-xs font-semibold outline-none transition focus:ring-2 focus:ring-indigo-500/20"
+                      style={{
+                        backgroundColor: 'var(--app-surface)',
+                        borderColor: 'var(--app-border)',
+                        color: 'var(--app-text)',
+                      }}
+                    />
+                  </div>
+                  <div className="sm:col-span-4">
+                    <label className="block text-xs font-bold mb-1.5 text-slate-700 dark:text-slate-200">
+                      Descripción Operativa <span className="text-[10px] text-slate-400 font-normal">(opcional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={roleForm.description}
+                      onChange={(e) => setRoleForm({ ...roleForm, description: e.target.value })}
+                      placeholder="Ej. Acceso a cotizaciones y clientes..."
+                      className="w-full rounded-xl border px-3.5 py-2.5 text-xs outline-none transition focus:ring-2 focus:ring-indigo-500/20"
+                      style={{
+                        backgroundColor: 'var(--app-surface)',
+                        borderColor: 'var(--app-border)',
+                        color: 'var(--app-text)',
+                      }}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold mb-1.5 text-slate-700 dark:text-slate-200">
+                      Badge de Color
+                    </label>
+                    <div
+                      className="flex items-center gap-2 rounded-xl border px-3 py-1.5 h-[38px]"
+                      style={{
+                        backgroundColor: 'var(--app-surface)',
+                        borderColor: 'var(--app-border)',
+                      }}
+                    >
+                      <input
+                        type="color"
+                        value={roleForm.badgeColor}
+                        onChange={(e) => setRoleForm({ ...roleForm, badgeColor: e.target.value })}
+                        className="w-6 h-6 rounded-lg cursor-pointer border-0 bg-transparent p-0"
+                      />
+                      <span className="font-mono-pin text-[11px] font-bold">{roleForm.badgeColor}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bloque 2: Barra de Control y Acciones Rápidas */}
+              <div
+                className="p-3.5 rounded-2xl border flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3"
+                style={{
+                  backgroundColor: 'color-mix(in srgb, var(--app-surface) 80%, var(--app-bg) 20%)',
+                  borderColor: 'var(--app-border)',
+                }}
+              >
+                {/* Buscador de Permisos */}
+                <div className="relative flex-1 min-w-[240px]">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
-                    required
-                    value={roleForm.name}
-                    onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
-                    placeholder="Ej. Diseñador Senior, Trafficker..."
-                    className="w-full rounded-xl border px-3.5 py-2.5 text-xs font-semibold outline-none transition focus:ring-2 focus:ring-indigo-500/20"
+                    value={rolePermissionSearch}
+                    onChange={(e) => setRolePermissionSearch(e.target.value)}
+                    placeholder="Buscar permiso por nombre, módulo o descripción..."
+                    className="w-full pl-9 pr-8 py-2 rounded-xl text-xs font-medium border outline-none transition focus:ring-2 focus:ring-indigo-500/20"
                     style={{
                       backgroundColor: 'var(--app-surface)',
                       borderColor: 'var(--app-border)',
                       color: 'var(--app-text)',
                     }}
                   />
+                  {rolePermissionSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setRolePermissionSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-xs font-bold mb-1.5 text-slate-700 dark:text-slate-200">
-                    Badge de Color
-                  </label>
+
+                {/* Acciones Rápidas Globales y Contador */}
+                <div className="flex flex-wrap items-center gap-2 justify-between md:justify-end">
                   <div
-                    className="flex items-center gap-2 rounded-xl border px-3 py-2"
+                    className="px-3 py-1.5 rounded-xl border flex items-center gap-1.5 shrink-0"
                     style={{
-                      backgroundColor: 'var(--app-surface)',
                       borderColor: 'var(--app-border)',
+                      backgroundColor: 'var(--app-surface)',
                     }}
                   >
-                    <input
-                      type="color"
-                      value={roleForm.badgeColor}
-                      onChange={(e) => setRoleForm({ ...roleForm, badgeColor: e.target.value })}
-                      className="w-7 h-7 rounded-lg cursor-pointer border-0 bg-transparent p-0"
-                    />
-                    <span className="font-mono-pin text-xs font-bold">{roleForm.badgeColor}</span>
+                    <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
+                    <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">
+                      {roleForm.permissions.length}
+                    </span>
+                    <span className="text-[11px] text-slate-400">/ {ALL_PERMISSION_KEYS.length} activos</span>
                   </div>
+
+                  {!editingRole?.isSystem && (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={grantAllPermissions}
+                        title="Conceder todos los permisos del sistema"
+                        className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-sm transition cursor-pointer flex items-center gap-1"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        <span>Conceder Todos</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={grantOnlyViewPermissions}
+                        title="Conceder únicamente permisos de lectura y consulta"
+                        className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-500/10 transition cursor-pointer flex items-center gap-1"
+                      >
+                        <Eye className="w-3 h-3" />
+                        <span>Solo Lectura</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearAllPermissions}
+                        title="Desmarcar todos los permisos"
+                        className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold border border-rose-200 dark:border-rose-900/40 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer flex items-center gap-1"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>Limpiar</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
 
-            {/* Matriz de Permisos */}
-            <div className="space-y-3 pt-1">
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                <Shield className="w-3.5 h-3.5" style={{ color: 'var(--app-primary)' }} />
-                Permisos Granulares Activos ({roleForm.permissions.length})
-              </span>
-
-              <div className="space-y-3">
-                {(
-                  [
-                    { key: 'dashboard', title: 'Dashboard & Métricas', items: groupedPermissions.dashboard },
-                    { key: 'clients', title: 'Clientes & Marcas', items: groupedPermissions.clients },
-                    { key: 'quotes', title: 'Cotizaciones & Propuestas Comerciales', items: groupedPermissions.quotes },
-                    { key: 'services', title: 'Servicios de Agencia', items: groupedPermissions.services },
-                    { key: 'payments', title: 'Notas de Pago & Cobranzas', items: groupedPermissions.payments },
-                    { key: 'service_orders', title: 'Órdenes de Servicio (OS)', items: groupedPermissions.service_orders },
-                    { key: 'workspace', title: 'Workspace (Redes Sociales & Tareas)', items: groupedPermissions.workspace },
-                    { key: 'drive', title: 'Archivos Cloud & Google Drive', items: groupedPermissions.drive },
-                    { key: 'settings', title: 'Configuración & Seguridad', items: groupedPermissions.settings },
-                  ] as const
-                ).map((g) => {
-                  const allInGroupChecked = g.items.length > 0 && g.items.every((p) => roleForm.permissions.includes(p.key));
-
+              {/* Filtro de Categoría por Pestañas Rápidas */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                {[
+                  { id: 'all', label: 'Todos los Módulos' },
+                  { id: 'dashboard', label: 'Dashboard' },
+                  { id: 'clients', label: 'Clientes' },
+                  { id: 'quotes', label: 'Cotizaciones' },
+                  { id: 'services', label: 'Servicios' },
+                  { id: 'payments', label: 'Notas de Pago' },
+                  { id: 'service_orders', label: 'Órdenes OS' },
+                  { id: 'workspace', label: 'Workspace' },
+                  { id: 'drive', label: 'Google Drive' },
+                  { id: 'settings', label: 'Configuración' },
+                ].map((tab) => {
+                  const isActive = roleModuleFilter === tab.id;
                   return (
-                    <div
-                      key={g.key}
-                      className="p-3.5 rounded-2xl border space-y-2.5 transition-colors"
-                      style={{
-                        backgroundColor: 'color-mix(in srgb, var(--app-surface) 60%, var(--app-bg) 40%)',
-                        borderColor: 'var(--app-border)',
-                      }}
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setRoleModuleFilter(tab.id)}
+                      className={`px-3 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition cursor-pointer ${
+                        isActive
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-500/10'
+                      }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-                          {g.title}
-                        </p>
-                        {!editingRole?.isSystem && g.items.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => toggleAllPermissionsInGroup(g.items.map((p) => p.key))}
-                            className="text-[11px] font-bold text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer"
-                          >
-                            {allInGroupChecked ? 'Desmarcar todo' : 'Marcar todo el módulo'}
-                          </button>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {g.items.map((p) => {
-                          const checked = roleForm.permissions.includes(p.key);
-                          return (
-                            <label
-                              key={p.key}
-                              className={`p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer text-xs transition ${
-                                checked
-                                  ? 'border-indigo-500/40 bg-indigo-50/50 dark:bg-indigo-500/10 font-bold'
-                                  : 'border-slate-200 dark:border-slate-800 text-slate-500'
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                disabled={editingRole?.isSystem}
-                                checked={checked}
-                                onChange={() => togglePermissionInRole(p.key)}
-                                className="rounded accent-indigo-600 cursor-pointer"
-                              />
-                              <span className="truncate">{p.label}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
+                      {tab.label}
+                    </button>
                   );
                 })}
               </div>
-            </div>
 
+              {/* Matriz de Permisos por Módulo */}
+              <div className="space-y-4 pt-1">
+                {(
+                  [
+                    {
+                      key: 'dashboard',
+                      title: 'Dashboard & Métricas Operativas',
+                      items: groupedPermissions.dashboard,
+                      icon: LayoutDashboard,
+                      color: 'text-sky-500',
+                      bg: 'bg-sky-500/10',
+                    },
+                    {
+                      key: 'clients',
+                      title: 'Clientes, Cuentas & Marcas',
+                      items: groupedPermissions.clients,
+                      icon: Users,
+                      color: 'text-emerald-500',
+                      bg: 'bg-emerald-500/10',
+                    },
+                    {
+                      key: 'quotes',
+                      title: 'Cotizaciones & Propuestas Comerciales',
+                      items: groupedPermissions.quotes,
+                      icon: FileText,
+                      color: 'text-amber-500',
+                      bg: 'bg-amber-500/10',
+                    },
+                    {
+                      key: 'services',
+                      title: 'Servicios de Agencia & Paquetes',
+                      items: groupedPermissions.services,
+                      icon: Briefcase,
+                      color: 'text-violet-500',
+                      bg: 'bg-violet-500/10',
+                    },
+                    {
+                      key: 'payments',
+                      title: 'Notas de Pago & Registro de Cobranzas',
+                      items: groupedPermissions.payments,
+                      icon: CreditCard,
+                      color: 'text-teal-500',
+                      bg: 'bg-teal-500/10',
+                    },
+                    {
+                      key: 'service_orders',
+                      title: 'Órdenes de Servicio (OS) & Switchers',
+                      items: groupedPermissions.service_orders,
+                      icon: ClipboardList,
+                      color: 'text-indigo-500',
+                      bg: 'bg-indigo-500/10',
+                    },
+                    {
+                      key: 'workspace',
+                      title: 'Workspace, Redes Sociales & Tareas',
+                      items: groupedPermissions.workspace,
+                      icon: Globe,
+                      color: 'text-pink-500',
+                      bg: 'bg-pink-500/10',
+                    },
+                    {
+                      key: 'drive',
+                      title: 'Archivos Cloud & Google Drive APIs',
+                      items: groupedPermissions.drive,
+                      icon: HardDrive,
+                      color: 'text-blue-500',
+                      bg: 'bg-blue-500/10',
+                    },
+                    {
+                      key: 'settings',
+                      title: 'Configuración, Multitenant & Seguridad',
+                      items: groupedPermissions.settings,
+                      icon: Shield,
+                      color: 'text-rose-500',
+                      bg: 'bg-rose-500/10',
+                    },
+                  ] as const
+                )
+                  .filter((g) => roleModuleFilter === 'all' || roleModuleFilter === g.key)
+                  .map((g) => {
+                    const searchLower = rolePermissionSearch.trim().toLowerCase();
+                    const filteredItems = g.items.filter((p) => {
+                      if (!searchLower) return true;
+                      return (
+                        p.label.toLowerCase().includes(searchLower) ||
+                        p.description.toLowerCase().includes(searchLower) ||
+                        p.key.toLowerCase().includes(searchLower)
+                      );
+                    });
+
+                    if (filteredItems.length === 0) return null;
+
+                    const allGroupKeys = g.items.map((p) => p.key);
+                    const activeCountInGroup = g.items.filter((p) => roleForm.permissions.includes(p.key)).length;
+                    const isAllGroupActive = g.items.length > 0 && activeCountInGroup === g.items.length;
+                    const IconComp = g.icon;
+
+                    return (
+                      <div
+                        key={g.key}
+                        className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border space-y-3 transition-colors shadow-sm"
+                        style={{
+                          backgroundColor: 'color-mix(in srgb, var(--app-surface) 65%, var(--app-bg) 35%)',
+                          borderColor: 'var(--app-border)',
+                        }}
+                      >
+                        {/* Cabecera del Módulo */}
+                        <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2 border-b border-slate-100 dark:border-slate-800/60">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className={`w-8 h-8 rounded-xl ${g.bg} flex items-center justify-center shrink-0`}>
+                              <IconComp className={`w-4 h-4 ${g.color}`} />
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="text-xs sm:text-sm font-black tracking-tight text-slate-800 dark:text-slate-100 truncate">
+                                {g.title}
+                              </h4>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                    isAllGroupActive
+                                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                      : activeCountInGroup > 0
+                                      ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20'
+                                      : 'bg-slate-500/10 text-slate-500 border border-slate-500/20'
+                                  }`}
+                                >
+                                  {activeCountInGroup} de {g.items.length} activos
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {!editingRole?.isSystem && g.items.length > 0 && (
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => toggleAllPermissionsInGroup(allGroupKeys)}
+                                className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer text-slate-600 dark:text-slate-300"
+                              >
+                                {isAllGroupActive ? 'Desmarcar todo' : 'Todo el módulo'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => toggleGroupViewOnly(allGroupKeys)}
+                                className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer text-slate-600 dark:text-slate-300"
+                              >
+                                Solo Ver
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Grid de Permisos con Descripción Clara */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                          {filteredItems.map((p) => {
+                            const checked = roleForm.permissions.includes(p.key);
+                            return (
+                              <label
+                                key={p.key}
+                                className={`group relative p-3 sm:p-3.5 rounded-2xl border transition-all duration-150 flex flex-col justify-between cursor-pointer select-none ${
+                                  checked
+                                    ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/30 shadow-sm ring-1 ring-indigo-500/30'
+                                    : 'border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/40 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                                }`}
+                              >
+                                <div>
+                                  {/* Fila superior: Checkbox + Nombre + Badge Crítico */}
+                                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      <input
+                                        type="checkbox"
+                                        disabled={editingRole?.isSystem}
+                                        checked={checked}
+                                        onChange={() => togglePermissionInRole(p.key)}
+                                        className="w-4 h-4 rounded text-indigo-600 accent-indigo-600 cursor-pointer shrink-0 mt-0.5"
+                                      />
+                                      <span
+                                        className={`text-xs font-bold leading-tight ${
+                                          checked
+                                            ? 'text-indigo-950 dark:text-indigo-100 font-extrabold'
+                                            : 'text-slate-800 dark:text-slate-200'
+                                        }`}
+                                      >
+                                        {p.label}
+                                      </span>
+                                    </div>
+                                    {p.isCritical && (
+                                      <span
+                                        className="shrink-0 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"
+                                        title="Permiso crítico o de alto privilegio"
+                                      >
+                                        Crítico
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Descripción en lenguaje natural y comprensible */}
+                                  <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400 pl-6.5">
+                                    {p.description}
+                                  </p>
+                                </div>
+
+                                {/* Pie de la tarjeta: Identificador y estado visual */}
+                                <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between text-[10px] pl-6.5">
+                                  <span className="font-mono text-slate-400 dark:text-slate-500 text-[9.5px] truncate max-w-[140px]">
+                                    {p.key}
+                                  </span>
+                                  <span
+                                    className={`text-[10px] font-bold ${
+                                      checked ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'
+                                    }`}
+                                  >
+                                    {checked ? 'Concedido' : 'Sin acceso'}
+                                  </span>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
             </div>
 
             {/* Footer Botones Fijo */}
@@ -5145,7 +5489,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                     onClick={() => {
                       setTenantForm({
                         ...tenantForm,
-                        assignedUserIds: user?.id ? [user.id] : [],
+                        assignedUserIds: currentUser?.id ? [currentUser.id] : [],
                       });
                     }}
                     className="text-[10px] font-bold px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-800 hover:bg-slate-500/10 cursor-pointer text-slate-500"
