@@ -5,7 +5,15 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.notificationService = void 0;
 exports.notifyEvent = notifyEvent;
-const web_push_1 = __importDefault(require("web-push"));
+// Import seguro y resiliente de web-push (no detiene ni crashea el servidor si aún no se corrió npm install en cPanel)
+let webpush = null;
+try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    webpush = require('web-push');
+}
+catch {
+    console.warn('⚠️ [NotificationService] Paquete web-push no instalado en node_modules. Las notificaciones SSE y en base de datos continuarán operando con normalidad.');
+}
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const db_1 = require("../db");
@@ -47,8 +55,11 @@ class NotificationService {
             }
             // 3. Si no existen, generar un par de claves VAPID único y persistirlo
             if (!this.vapidPublicKey || !this.vapidPrivateKey) {
+                if (!webpush) {
+                    return;
+                }
                 try {
-                    const generated = web_push_1.default.generateVAPIDKeys();
+                    const generated = webpush.generateVAPIDKeys();
                     this.vapidPublicKey = generated.publicKey;
                     this.vapidPrivateKey = generated.privateKey;
                     fs_1.default.writeFileSync(VAPID_KEYS_FILE, JSON.stringify({
@@ -63,9 +74,9 @@ class NotificationService {
                 }
             }
         }
-        if (this.vapidPublicKey && this.vapidPrivateKey) {
+        if (webpush && this.vapidPublicKey && this.vapidPrivateKey) {
             try {
-                web_push_1.default.setVapidDetails(this.vapidSubject, this.vapidPublicKey, this.vapidPrivateKey);
+                webpush.setVapidDetails(this.vapidSubject, this.vapidPublicKey, this.vapidPrivateKey);
             }
             catch (err) {
                 console.error('[NotificationService] Error configurando webpush:', err);
@@ -115,7 +126,7 @@ class NotificationService {
      * Envía la notificación Web Push a todos los celulares / dispositivos PWA suscritos
      */
     async sendPushToTenant(tenantId, notification) {
-        if (!this.vapidPublicKey || !this.vapidPrivateKey) {
+        if (!webpush || !this.vapidPublicKey || !this.vapidPrivateKey) {
             return { sent: 0, failed: 0 };
         }
         const subscriptions = await db_1.db.getPushSubscriptions(tenantId);
@@ -151,7 +162,7 @@ class NotificationService {
                         auth: sub.keys.auth,
                     },
                 };
-                await web_push_1.default.sendNotification(pushSub, pushPayload, {
+                await webpush.sendNotification(pushSub, pushPayload, {
                     TTL: 60 * 60 * 24, // 24 horas
                     urgency: 'high',
                 });

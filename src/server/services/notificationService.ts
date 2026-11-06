@@ -1,4 +1,12 @@
-import webpush from 'web-push';
+// Import seguro y resiliente de web-push (no detiene ni crashea el servidor si aún no se corrió npm install en cPanel)
+let webpush: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  webpush = require('web-push');
+} catch {
+  console.warn('⚠️ [NotificationService] Paquete web-push no instalado en node_modules. Las notificaciones SSE y en base de datos continuarán operando con normalidad.');
+}
+
 import fs from 'fs';
 import path from 'path';
 import { Response } from 'express';
@@ -59,6 +67,9 @@ class NotificationService {
 
       // 3. Si no existen, generar un par de claves VAPID único y persistirlo
       if (!this.vapidPublicKey || !this.vapidPrivateKey) {
+        if (!webpush) {
+          return;
+        }
         try {
           const generated = webpush.generateVAPIDKeys();
           this.vapidPublicKey = generated.publicKey;
@@ -83,7 +94,7 @@ class NotificationService {
       }
     }
 
-    if (this.vapidPublicKey && this.vapidPrivateKey) {
+    if (webpush && this.vapidPublicKey && this.vapidPrivateKey) {
       try {
         webpush.setVapidDetails(this.vapidSubject, this.vapidPublicKey, this.vapidPrivateKey);
       } catch (err) {
@@ -142,7 +153,7 @@ class NotificationService {
     tenantId: string,
     notification: AppNotification
   ): Promise<{ sent: number; failed: number }> {
-    if (!this.vapidPublicKey || !this.vapidPrivateKey) {
+    if (!webpush || !this.vapidPublicKey || !this.vapidPrivateKey) {
       return { sent: 0, failed: 0 };
     }
 
