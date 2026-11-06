@@ -1634,6 +1634,240 @@ export class DatabaseManager {
   }
 
   // ===========================================================================
+  // WORKSPACE: HERRAMIENTAS - BIOLINKS (LINK IN BIO)
+  // ===========================================================================
+
+  public async getBiolinks(tenantId: string): Promise<BiolinkProfile[]> {
+    if (!Array.isArray(this.localState.biolinks)) {
+      this.localState.biolinks = [];
+    }
+    return this.localState.biolinks.filter((b) => b.tenantId === tenantId);
+  }
+
+  public async getBiolinkById(id: string, tenantId: string): Promise<BiolinkProfile | null> {
+    const list = await this.getBiolinks(tenantId);
+    return list.find((b) => b.id === id) || null;
+  }
+
+  public async getBiolinkBySlug(slug: string): Promise<{ profile: BiolinkProfile; tenant: any } | null> {
+    if (!Array.isArray(this.localState.biolinks)) {
+      this.localState.biolinks = [];
+    }
+    const cleanSlug = slug.trim().toLowerCase();
+    const profile = this.localState.biolinks.find(
+      (b) => b.slug.toLowerCase() === cleanSlug || b.id === slug
+    );
+    if (!profile) return null;
+    const tenant = this.localState.tenants.find((t) => t.id === profile.tenantId);
+    return { profile, tenant: tenant || null };
+  }
+
+  public async createBiolink(tenantId: string, data: Partial<BiolinkProfile>): Promise<BiolinkProfile> {
+    if (!Array.isArray(this.localState.biolinks)) {
+      this.localState.biolinks = [];
+    }
+    const now = new Date().toISOString();
+    const cleanSlug = (data.slug || `bio-${Date.now().toString(36)}`)
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9-_]/g, '-');
+
+    const newProfile: BiolinkProfile = {
+      id: data.id || `bio-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      tenantId,
+      slug: cleanSlug,
+      title: data.title || 'Mi Biolink',
+      bio: data.bio || '',
+      avatarUrl: data.avatarUrl || '',
+      verified: !!data.verified,
+      theme: data.theme || 'roma_agency',
+      buttonShape: data.buttonShape || 'rounded',
+      customBgColor: data.customBgColor,
+      customTextColor: data.customTextColor,
+      customAccentColor: data.customAccentColor,
+      socialLinks: data.socialLinks || [],
+      blocks: data.blocks || [],
+      viewsCount: 0,
+      clicksCount: 0,
+      viewsHistory: [
+        { date: now.split('T')[0], views: 1, clicks: 0 }
+      ],
+      seoTitle: data.seoTitle,
+      seoDescription: data.seoDescription,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.localState.biolinks.unshift(newProfile);
+    this.saveLocalState();
+    return newProfile;
+  }
+
+  public async updateBiolink(id: string, tenantId: string, data: Partial<BiolinkProfile>): Promise<BiolinkProfile | null> {
+    if (!Array.isArray(this.localState.biolinks)) {
+      this.localState.biolinks = [];
+    }
+    const idx = this.localState.biolinks.findIndex((b) => b.id === id && b.tenantId === tenantId);
+    if (idx === -1) return null;
+
+    if (data.slug) {
+      data.slug = data.slug.toLowerCase().trim().replace(/[^a-z0-9-_]/g, '-');
+    }
+
+    this.localState.biolinks[idx] = {
+      ...this.localState.biolinks[idx],
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+    this.saveLocalState();
+    return this.localState.biolinks[idx];
+  }
+
+  public async deleteBiolink(id: string, tenantId: string): Promise<boolean> {
+    if (!Array.isArray(this.localState.biolinks)) {
+      this.localState.biolinks = [];
+      return false;
+    }
+    const before = this.localState.biolinks.length;
+    this.localState.biolinks = this.localState.biolinks.filter(
+      (b) => !(b.id === id && b.tenantId === tenantId)
+    );
+    const deleted = this.localState.biolinks.length < before;
+    if (deleted) this.saveLocalState();
+    return deleted;
+  }
+
+  public async recordBiolinkView(slug: string): Promise<boolean> {
+    if (!Array.isArray(this.localState.biolinks)) return false;
+    const cleanSlug = slug.trim().toLowerCase();
+    const profile = this.localState.biolinks.find(
+      (b) => b.slug.toLowerCase() === cleanSlug || b.id === slug
+    );
+    if (!profile) return false;
+    profile.viewsCount = (profile.viewsCount || 0) + 1;
+    const today = new Date().toISOString().split('T')[0];
+    if (!Array.isArray(profile.viewsHistory)) profile.viewsHistory = [];
+    const dayStat = profile.viewsHistory.find((h) => h.date === today);
+    if (dayStat) {
+      dayStat.views = (dayStat.views || 0) + 1;
+    } else {
+      profile.viewsHistory.push({ date: today, views: 1, clicks: 0 });
+    }
+    this.saveLocalState();
+    return true;
+  }
+
+  public async recordBiolinkClick(slug: string, blockId?: string): Promise<boolean> {
+    if (!Array.isArray(this.localState.biolinks)) return false;
+    const cleanSlug = slug.trim().toLowerCase();
+    const profile = this.localState.biolinks.find(
+      (b) => b.slug.toLowerCase() === cleanSlug || b.id === slug
+    );
+    if (!profile) return false;
+    profile.clicksCount = (profile.clicksCount || 0) + 1;
+    if (blockId && Array.isArray(profile.blocks)) {
+      const block = profile.blocks.find((b) => b.id === blockId);
+      if (block) {
+        block.clicksCount = (block.clicksCount || 0) + 1;
+      }
+    }
+    const today = new Date().toISOString().split('T')[0];
+    if (!Array.isArray(profile.viewsHistory)) profile.viewsHistory = [];
+    const dayStat = profile.viewsHistory.find((h) => h.date === today);
+    if (dayStat) {
+      dayStat.clicks = (dayStat.clicks || 0) + 1;
+    } else {
+      profile.viewsHistory.push({ date: today, views: 0, clicks: 1 });
+    }
+    this.saveLocalState();
+    return true;
+  }
+
+  // ===========================================================================
+  // WORKSPACE: HERRAMIENTAS - PALETAS GUARDADAS
+  // ===========================================================================
+
+  public async getSavedPalettes(tenantId: string): Promise<SavedColorPalette[]> {
+    if (!Array.isArray(this.localState.savedPalettes)) {
+      this.localState.savedPalettes = [];
+    }
+    return this.localState.savedPalettes.filter((p) => p.tenantId === tenantId);
+  }
+
+  public async savePalette(tenantId: string, data: Partial<SavedColorPalette>): Promise<SavedColorPalette> {
+    if (!Array.isArray(this.localState.savedPalettes)) {
+      this.localState.savedPalettes = [];
+    }
+    const newPalette: SavedColorPalette = {
+      id: data.id || `pal-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      tenantId,
+      name: data.name || 'Nueva Paleta',
+      primaryShade: data.primaryShade || 700,
+      shades: data.shades || [],
+      createdAt: new Date().toISOString(),
+    };
+    this.localState.savedPalettes.unshift(newPalette);
+    this.saveLocalState();
+    return newPalette;
+  }
+
+  public async deletePalette(id: string, tenantId: string): Promise<boolean> {
+    if (!Array.isArray(this.localState.savedPalettes)) {
+      this.localState.savedPalettes = [];
+      return false;
+    }
+    const before = this.localState.savedPalettes.length;
+    this.localState.savedPalettes = this.localState.savedPalettes.filter(
+      (p) => !(p.id === id && p.tenantId === tenantId)
+    );
+    const deleted = this.localState.savedPalettes.length < before;
+    if (deleted) this.saveLocalState();
+    return deleted;
+  }
+
+  // ===========================================================================
+  // WORKSPACE: HERRAMIENTAS - HISTORIAL DE CÓDIGOS (QR / BARRAS)
+  // ===========================================================================
+
+  public async getCodeHistory(tenantId: string): Promise<GeneratedCodeHistoryItem[]> {
+    if (!Array.isArray(this.localState.codeHistory)) {
+      this.localState.codeHistory = [];
+    }
+    return this.localState.codeHistory.filter((c) => c.tenantId === tenantId).slice(0, 50);
+  }
+
+  public async addCodeHistory(tenantId: string, data: Partial<GeneratedCodeHistoryItem>): Promise<GeneratedCodeHistoryItem> {
+    if (!Array.isArray(this.localState.codeHistory)) {
+      this.localState.codeHistory = [];
+    }
+    const item: GeneratedCodeHistoryItem = {
+      id: `code-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      tenantId,
+      type: data.type || 'qr',
+      subType: data.subType || 'url',
+      value: data.value || '',
+      label: data.label || '',
+      createdAt: new Date().toISOString(),
+    };
+    this.localState.codeHistory.unshift(item);
+    if (this.localState.codeHistory.length > 100) {
+      this.localState.codeHistory = this.localState.codeHistory.slice(0, 100);
+    }
+    this.saveLocalState();
+    return item;
+  }
+
+  public async clearCodeHistory(tenantId: string): Promise<boolean> {
+    if (!Array.isArray(this.localState.codeHistory)) {
+      this.localState.codeHistory = [];
+      return true;
+    }
+    this.localState.codeHistory = this.localState.codeHistory.filter((c) => c.tenantId !== tenantId);
+    this.saveLocalState();
+    return true;
+  }
+
+  // ===========================================================================
   // ORDENES DE SERVICIO (OS)
   // ===========================================================================
 

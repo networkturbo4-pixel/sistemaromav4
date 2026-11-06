@@ -1079,6 +1079,36 @@ app.post('/api/public/workspace/months/:token/posts/:postId/comments', async (re
 });
 
 // =============================================================================
+// ENDPOINTS PÚBLICOS DE BIOLINKS (LINKTREE SAAS)
+// =============================================================================
+
+app.get('/api/public/biolinks/:slug', async (req: Request, res: Response) => {
+  try {
+    const slug = req.params.slug as string;
+    const result = await db.getBiolinkBySlug(slug);
+    if (!result) {
+      return res.status(404).json({ error: 'Perfil de Biolink no encontrado o inactivo.' });
+    }
+    // Registrar vista de manera asíncrona
+    db.recordBiolinkView(slug).catch(() => {});
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.post('/api/public/biolinks/:slug/click', async (req: Request, res: Response) => {
+  try {
+    const slug = req.params.slug as string;
+    const { blockId } = req.body;
+    await db.recordBiolinkClick(slug, blockId);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// =============================================================================
 // MÓDULO DE WORKSPACE: REDES SOCIALES & PROYECTOS
 // =============================================================================
 
@@ -1499,6 +1529,179 @@ app.delete(
       if (!deleted) {
         return res.status(404).json({ error: 'Tarea no encontrada' });
       }
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// =============================================================================
+// MÓDULO DE WORKSPACE: HERRAMIENTAS (BIOLINKS, PALETAS, CÓDIGOS)
+// =============================================================================
+
+// Listar Biolinks
+app.get(
+  '/api/workspace/biolinks',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const list = await db.getBiolinks(req.auth!.tenant.id);
+      res.json(list);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// Obtener un Biolink por ID
+app.get(
+  '/api/workspace/biolinks/:id',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const item = await db.getBiolinkById(req.params.id as string, req.auth!.tenant.id);
+      if (!item) return res.status(404).json({ error: 'Perfil de Biolink no encontrado' });
+      res.json(item);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// Crear Biolink
+app.post(
+  '/api/workspace/biolinks',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const created = await db.createBiolink(req.auth!.tenant.id, req.body);
+      res.status(201).json(created);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// Actualizar Biolink
+app.put(
+  '/api/workspace/biolinks/:id',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const updated = await db.updateBiolink(
+        req.params.id as string,
+        req.auth!.tenant.id,
+        req.body
+      );
+      if (!updated) return res.status(404).json({ error: 'Perfil de Biolink no encontrado' });
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// Eliminar Biolink
+app.delete(
+  '/api/workspace/biolinks/:id',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const deleted = await db.deleteBiolink(req.params.id as string, req.auth!.tenant.id);
+      if (!deleted) return res.status(404).json({ error: 'Perfil de Biolink no encontrado' });
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// Paletas Guardadas
+app.get(
+  '/api/workspace/palettes',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const list = await db.getSavedPalettes(req.auth!.tenant.id);
+      res.json(list);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+app.post(
+  '/api/workspace/palettes',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const created = await db.savePalette(req.auth!.tenant.id, req.body);
+      res.status(201).json(created);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+app.delete(
+  '/api/workspace/palettes/:id',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const deleted = await db.deletePalette(req.params.id as string, req.auth!.tenant.id);
+      if (!deleted) return res.status(404).json({ error: 'Paleta no encontrada' });
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// Historial de Códigos
+app.get(
+  '/api/workspace/codes/history',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const list = await db.getCodeHistory(req.auth!.tenant.id);
+      res.json(list);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+app.post(
+  '/api/workspace/codes/history',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const item = await db.addCodeHistory(req.auth!.tenant.id, req.body);
+      res.status(201).json(item);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+app.delete(
+  '/api/workspace/codes/history',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      await db.clearCodeHistory(req.auth!.tenant.id);
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });

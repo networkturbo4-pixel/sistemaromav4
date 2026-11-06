@@ -1,11 +1,11 @@
 import React from 'react';
-import { Share2, ListTodo, HardDrive, ArrowRight } from 'lucide-react';
+import { Share2, ListTodo, HardDrive, ArrowRight, Sparkles, Wrench } from 'lucide-react';
 import { WorkspaceProject, WorkspaceTask } from '../../../../shared/types';
 
 interface WorkspaceHubViewProps {
   projects: WorkspaceProject[];
   tasks: WorkspaceTask[];
-  onSelectSubmodule: (view: 'social' | 'tasks' | 'drive') => void;
+  onSelectSubmodule: (view: 'social' | 'tasks' | 'drive' | 'tools') => void;
 }
 
 export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
@@ -29,8 +29,8 @@ export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
         </p>
       </div>
 
-      {/* Accesos Directos Responsivos: 2 columnas en móvil y tablet, 3 columnas en pantallas grandes */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 max-w-5xl">
+      {/* Accesos Directos Responsivos: 2 columnas en móvil y tablet, 4 columnas en pantallas grandes */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 max-w-6xl">
         {/* SUBMÓDULO 1: REDES SOCIALES */}
         <button
           type="button"
@@ -99,7 +99,7 @@ export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
         <button
           type="button"
           onClick={() => onSelectSubmodule('drive')}
-          className="group bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 text-left shadow-xs hover:shadow-md hover:border-blue-400 dark:hover:border-blue-600 hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between cursor-pointer col-span-2 lg:col-span-1"
+          className="group bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 text-left shadow-xs hover:shadow-md hover:border-blue-400 dark:hover:border-blue-600 hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between cursor-pointer"
         >
           <div>
             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 mb-2.5 sm:mb-3 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-200">
@@ -108,7 +108,7 @@ export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
 
             <div className="flex items-center gap-1.5 mb-0.5 sm:mb-1">
               <span className="text-[10px] sm:text-xs font-bold text-slate-400">
-                Cloud central & Google Drive
+                Cloud central & Drive
               </span>
             </div>
 
@@ -117,11 +117,43 @@ export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
             </h3>
 
             <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-tight sm:leading-relaxed">
-              Almacenamiento en la nube, carpetas de clientes, entregables finales y Google Drive.
+              Carpetas de clientes, entregables finales y Google Drive.
             </p>
           </div>
 
           <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] sm:text-xs font-bold text-blue-600 dark:text-blue-400">
+            <span>Ingresar</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </button>
+
+        {/* SUBMÓDULO 4: HERRAMIENTAS CREATIVAS (PALETAS, CÓDIGOS, BIOLINKS) */}
+        <button
+          type="button"
+          onClick={() => onSelectSubmodule('tools')}
+          className="group bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 text-left shadow-xs hover:shadow-md hover:border-purple-400 dark:hover:border-purple-600 hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between cursor-pointer"
+        >
+          <div>
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 mb-2.5 sm:mb-3 group-hover:bg-purple-600 group-hover:text-white transition-colors duration-200">
+              <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
+            </div>
+
+            <div className="flex items-center gap-1.5 mb-0.5 sm:mb-1">
+              <span className="text-[10px] sm:text-xs font-bold text-slate-400">
+                Paletas, Códigos & Biolinks
+              </span>
+            </div>
+
+            <h3 className="text-xs sm:text-base font-extrabold text-slate-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors line-clamp-1">
+              Herramientas
+            </h3>
+
+            <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-tight sm:leading-relaxed">
+              Generador de paletas de color, códigos QR, códigos de barras y perfiles Biolink.
+            </p>
+          </div>
+
+          <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] sm:text-xs font-bold text-purple-600 dark:text-purple-400">
             <span>Ingresar</span>
             <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
           </div>

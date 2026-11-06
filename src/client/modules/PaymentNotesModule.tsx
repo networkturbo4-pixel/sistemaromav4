@@ -264,15 +264,36 @@ export const PaymentNotesModule: React.FC = () => {
 
   // KPIs
   const kpis = useMemo(() => {
-    const totalEmitted = paymentNotes.reduce((acc, n) => acc + (Number(n.total) || 0), 0);
-    const totalPaid = paymentNotes.reduce((acc, n) => acc + (Number(n.paidAmount) || 0), 0);
-    const totalPending = Math.max(0, totalEmitted - totalPaid);
+    let totalEmitted = 0;
+    let totalPaid = 0;
+    let pendingCount = 0;
+
+    paymentNotes.forEach((n) => {
+      const calc = calculatePaymentNoteActiveTotals({
+        isMembership: n.isMembership,
+        membershipInstallments: n.membershipInstallments,
+        extraItems: n.extraItems,
+        items: n.items,
+        includeTax: n.includeTax,
+        taxRate: n.taxRate,
+        discountAmount: Number(n.discountAmount) || 0,
+        manualPaidAmount: n.paidAmount,
+      });
+
+      totalEmitted += calc.total;
+      totalPaid += calc.paidAmount;
+
+      const effStatus = n.status === 'cancelled' ? 'cancelled' : calc.status;
+      if (effStatus === 'pending' || effStatus === 'partial') {
+        pendingCount++;
+      }
+    });
+
+    const totalPending = Math.max(0, Math.round((totalEmitted - totalPaid) * 100) / 100);
     const collectionRate = totalEmitted > 0 ? Math.round((totalPaid / totalEmitted) * 100) : 0;
-    const pendingCount = paymentNotes.filter((n) => n.status === 'pending' || n.status === 'partial')
-      .length;
     return {
-      totalEmitted,
-      totalPaid,
+      totalEmitted: Math.round(totalEmitted * 100) / 100,
+      totalPaid: Math.round(totalPaid * 100) / 100,
       totalPending,
       collectionRate,
       pendingCount,
@@ -282,7 +303,19 @@ export const PaymentNotesModule: React.FC = () => {
   // Filtrado de Notas de Pago
   const filteredNotes = useMemo(() => {
     return paymentNotes.filter((n) => {
-      if (statusFilter !== 'ALL' && n.status !== statusFilter) return false;
+      const calc = calculatePaymentNoteActiveTotals({
+        isMembership: n.isMembership,
+        membershipInstallments: n.membershipInstallments,
+        extraItems: n.extraItems,
+        items: n.items,
+        includeTax: n.includeTax,
+        taxRate: n.taxRate,
+        discountAmount: Number(n.discountAmount) || 0,
+        manualPaidAmount: n.paidAmount,
+      });
+      const effStatus = n.status === 'cancelled' ? 'cancelled' : calc.status;
+
+      if (statusFilter !== 'ALL' && effStatus !== statusFilter) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchCode = (n.code || '').toLowerCase().includes(q);
@@ -1574,8 +1607,24 @@ export const PaymentNotesModule: React.FC = () => {
 
     setSaving(true);
     try {
+      const calc = calculatePaymentNoteActiveTotals({
+        isMembership: formData.isMembership,
+        membershipInstallments: formData.membershipInstallments,
+        extraItems: formData.extraItems,
+        items: formData.items,
+        includeTax: formData.includeTax,
+        taxRate: formData.taxRate,
+        discountAmount: Number(formData.discountAmount) || 0,
+        manualPaidAmount: formData.paidAmount,
+      });
+
       const payloadToSave = {
         ...formData,
+        subtotal: calc.subtotal,
+        taxAmount: calc.taxAmount,
+        total: calc.total,
+        paidAmount: formData.isMembership ? calc.paidAmount : formData.paidAmount,
+        status: formData.isMembership ? calc.status : (formData.status || calc.status),
         bankAccounts: globalBankAccounts,
       };
       if (editingNote) {
@@ -3932,15 +3981,30 @@ export const PaymentNotesModule: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5">
           {filteredNotes.map((note) => {
-            const isPaid = note.status === 'paid';
-            const isPartial = note.status === 'partial';
-            const isPending = note.status === 'pending';
-            const isCancelled = note.status === 'cancelled';
-            const pendingBalance = Math.max(0, Number(note.total) - Number(note.paidAmount || 0));
-            const paymentProgress = Math.min(
-              100,
-              Math.max(0, Math.round(((Number(note.paidAmount) || 0) / (Number(note.total) || 1)) * 100))
-            );
+            const activeTotals = calculatePaymentNoteActiveTotals({
+              isMembership: note.isMembership,
+              membershipInstallments: note.membershipInstallments,
+              extraItems: note.extraItems,
+              items: note.items,
+              includeTax: note.includeTax,
+              taxRate: note.taxRate,
+              discountAmount: Number(note.discountAmount) || 0,
+              manualPaidAmount: note.paidAmount,
+            });
+
+            const effectiveTotal = activeTotals.total;
+            const effectivePaid = activeTotals.paidAmount;
+            const pendingBalance = activeTotals.balance;
+            const effectiveStatus = note.status === 'cancelled' ? 'cancelled' : activeTotals.status;
+
+            const isPaid = effectiveStatus === 'paid' || (effectiveTotal > 0 && effectivePaid >= effectiveTotal);
+            const isPartial = !isPaid && effectiveStatus === 'partial';
+            const isPending = !isPaid && !isPartial && (effectiveStatus === 'pending' || note.status === 'pending');
+            const isCancelled = effectiveStatus === 'cancelled';
+
+            const paymentProgress = effectiveTotal > 0
+              ? Math.min(100, Math.max(0, Math.round((effectivePaid / effectiveTotal) * 100)))
+              : (isPaid ? 100 : 0);
 
             // Cantidad de cuotas
             const cuotasCount =
@@ -4110,7 +4174,7 @@ export const PaymentNotesModule: React.FC = () => {
                         </span>
                         <span className="text-sm sm:text-base font-black text-slate-900 dark:text-slate-100 font-mono tracking-tight">
                           {note.currencySymbol}{' '}
-                          {Number(note.total).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                          {Number(effectiveTotal).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                         </span>
                       </div>
 
@@ -4127,13 +4191,32 @@ export const PaymentNotesModule: React.FC = () => {
                     <div className="border-t border-dashed border-slate-200 dark:border-slate-800 my-2" />
 
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="text-[10px] sm:text-xs font-black tracking-wider uppercase text-rose-500">
+                      <span
+                        className={`text-[10px] sm:text-xs font-black tracking-wider uppercase ${
+                          pendingBalance <= 0
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-rose-500'
+                        }`}
+                      >
                         SALDO PENDIENTE
                       </span>
-                      <span className="text-base sm:text-lg font-black font-mono tracking-tight text-rose-500">
-                        {note.currencySymbol}{' '}
-                        {pendingBalance.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`text-base sm:text-lg font-black font-mono tracking-tight ${
+                            pendingBalance <= 0
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-rose-500'
+                          }`}
+                        >
+                          {note.currencySymbol}{' '}
+                          {pendingBalance.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                        </span>
+                        {pendingBalance <= 0 && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                            PAGADO
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

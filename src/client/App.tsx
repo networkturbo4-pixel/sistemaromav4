@@ -19,6 +19,7 @@ import { PublicServiceDetailView } from './components/PublicServiceDetailView';
 import { PublicPaymentNoteView } from './components/PublicPaymentNoteView';
 import { PublicServiceOrderView } from './components/PublicServiceOrderView';
 import { PublicWorkspaceMonthView } from './components/PublicWorkspaceMonthView';
+import { PublicBiolinkView } from './components/PublicBiolinkView';
 
 const MainRouter: React.FC = () => {
   const { user, isLoading, can } = useApp();
@@ -144,6 +145,22 @@ const MainRouter: React.FC = () => {
 
       const path = window.location.pathname;
       const match = path.match(/^\/(?:w|grilla|p\/w|p\/workspace)\/([^/?#]+)/i);
+      if (match && match[1]) {
+        return decodeURIComponent(match[1]);
+      }
+    } catch {}
+    return null;
+  });
+
+  // 7. Detección de enlace público de Biolink (tipo Linktree /b/:slug)
+  const [publicBiolinkSlug] = useState<string | null>(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const bio = urlParams.get('b') || urlParams.get('bio') || urlParams.get('linktree') || urlParams.get('biolink');
+      if (bio) return bio;
+
+      const path = window.location.pathname;
+      const match = path.match(/^\/(?:b|bio|linktree)\/([^/?#]+)/i);
       if (match && match[1]) {
         return decodeURIComponent(match[1]);
       }
@@ -284,6 +301,11 @@ const MainRouter: React.FC = () => {
   // 6. Si es una vista pública de Workspace / Grilla de contenidos, mostrar con soporte de PIN
   if (publicWorkspaceToken) {
     return <PublicWorkspaceMonthView token={publicWorkspaceToken} />;
+  }
+
+  // 7. Si es una vista pública de Biolink (tipo Linktree /b/:slug), mostrar directamente sin exigir PIN
+  if (publicBiolinkSlug) {
+    return <PublicBiolinkView slug={publicBiolinkSlug} />;
   }
 
   if (isLoading) {

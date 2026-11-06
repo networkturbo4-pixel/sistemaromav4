@@ -150,7 +150,7 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
     const agencyName =
       tenant.companyInfo?.commercialName || tenant.companyInfo?.brandName || tenant.name;
     const message = encodeURIComponent(
-      `Hola *${paymentNote.clientName}*,\n\nTe compartimos tu *Nota de Pago ${paymentNote.code}* de *${agencyName}* por un total de *${paymentNote.currencySymbol} ${Number(paymentNote.total).toLocaleString('es-PE', { minimumFractionDigits: 2 })}*.\n\nPuedes revisar y descargar tu comprobante en el siguiente enlace:\n${window.location.href}\n\n¡Muchas gracias!`
+      `Hola *${paymentNote.clientName}*,\n\nTe compartimos tu *Nota de Pago ${paymentNote.code}* de *${agencyName}* por un total de *${paymentNote.currencySymbol} ${Number(activeTotals.total).toLocaleString('es-PE', { minimumFractionDigits: 2 })}*.\n\nPuedes revisar y descargar tu comprobante en el siguiente enlace:\n${window.location.href}\n\n¡Muchas gracias!`
     );
     const phone = (paymentNote.whatsapp || '').replace(/[^0-9]/g, '');
     const waUrl = phone
@@ -172,7 +172,7 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
       try {
         await navigator.share({
           title: `Comprobante ${paymentNote.code} - ${agencyName}`,
-          text: `Comprobante de Pago ${paymentNote.code} (${paymentNote.currencySymbol} ${Number(paymentNote.total).toLocaleString('es-PE', { minimumFractionDigits: 2 })})`,
+          text: `Comprobante de Pago ${paymentNote.code} (${paymentNote.currencySymbol} ${Number(activeTotals.total).toLocaleString('es-PE', { minimumFractionDigits: 2 })})`,
           url: window.location.href,
         });
         return;
@@ -1265,39 +1265,47 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
                 )}
 
                 <div className="pt-2 border-t border-slate-200 flex justify-between items-baseline">
-                  <span className="text-xs sm:text-sm font-black text-slate-900 uppercase">
-                    Total a Pagar:
+                  <span className="text-xs sm:text-sm font-bold text-slate-700 uppercase">
+                    Total Facturado:
                   </span>
-                  <span className="text-lg sm:text-xl font-black text-emerald-600 font-mono">
+                  <span className="text-base sm:text-lg font-black text-slate-900 font-mono">
                     {paymentNote.currencySymbol}{' '}
                     {Number(activeTotals.total).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
 
                 {activeTotals.paidAmount > 0 && (
-                  <div className="pt-2 border-t border-slate-200 space-y-1">
-                    <div className="flex justify-between text-emerald-700 font-bold">
-                      <span>Monto Abonado:</span>
-                      <span className="font-mono">
-                        {paymentNote.currencySymbol}{' '}
-                        {Number(activeTotals.paidAmount).toLocaleString('es-PE', {
-                          minimumFractionDigits: 2,
-                        })}
-                      </span>
-                    </div>
-                    {activeTotals.balance > 0 && (
-                      <div className="flex justify-between text-amber-700 font-bold">
-                        <span>Saldo Pendiente:</span>
-                        <span className="font-mono">
-                          {paymentNote.currencySymbol}{' '}
-                          {Number(activeTotals.balance).toLocaleString('es-PE', {
-                            minimumFractionDigits: 2,
-                          })}
-                        </span>
-                      </div>
-                    )}
+                  <div className="flex justify-between text-emerald-700 font-bold">
+                    <span>Monto Abonado:</span>
+                    <span className="font-mono">
+                      {paymentNote.currencySymbol}{' '}
+                      {Number(activeTotals.paidAmount).toLocaleString('es-PE', {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
                   </div>
                 )}
+
+                <div className="pt-2 border-t border-slate-200 flex justify-between items-baseline">
+                  <span className="text-xs sm:text-sm font-black uppercase text-slate-900">
+                    {activeTotals.balance <= 0 ? 'Total a Pagar / Saldo:' : 'Total a Pagar:'}
+                  </span>
+                  {activeTotals.balance <= 0 ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg sm:text-xl font-black text-emerald-600 font-mono">
+                        {paymentNote.currencySymbol} 0.00
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        PAGADO
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-lg sm:text-xl font-black text-amber-600 font-mono">
+                      {paymentNote.currencySymbol}{' '}
+                      {Number(activeTotals.balance).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 

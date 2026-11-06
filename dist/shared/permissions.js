@@ -219,6 +219,13 @@ exports.PERMISSIONS_CATALOG = [
         module: 'workspace',
         moduleLabel: 'Workspace Operativo',
     },
+    {
+        key: 'workspace.tools.manage',
+        label: 'Gestionar Herramientas Creativas (Paletas, Códigos y Biolinks)',
+        description: 'Generar y exportar paletas de color, códigos QR, códigos de barras y administrar perfiles de Biolink.',
+        module: 'workspace',
+        moduleLabel: 'Workspace Operativo',
+    },
     // ÓRDENES DE SERVICIO (OS)
     {
         key: 'service_orders.view',

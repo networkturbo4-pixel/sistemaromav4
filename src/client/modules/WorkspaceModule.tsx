@@ -32,6 +32,7 @@ import { SocialPostsGridView } from './workspace/submodules/social/SocialPostsGr
 import { SocialKanbanView } from './workspace/submodules/social/SocialKanbanView';
 import { TasksView } from './workspace/submodules/tasks/TasksView';
 import { DriveModule } from './DriveModule';
+import { ToolsModuleView } from './workspace/submodules/tools/ToolsModuleView';
 
 // Modales
 import { ProjectModal } from './workspace/modals/ProjectModal';
@@ -46,8 +47,8 @@ import { X } from 'lucide-react';
 export const WorkspaceModule: React.FC = () => {
   const { tenant, toast, confirmAction, apiFetch } = useApp();
 
-  // Nivel 0: Navegación de Submódulos ('hub', 'social', 'tasks', 'drive')
-  const [currentView, setCurrentView] = useState<'hub' | 'social' | 'tasks' | 'drive'>('hub');
+  // Nivel 0: Navegación de Submódulos ('hub', 'social', 'tasks', 'drive', 'tools')
+  const [currentView, setCurrentView] = useState<'hub' | 'social' | 'tasks' | 'drive' | 'tools'>('hub');
 
   // Nivel 1: Fases de Redes Sociales
   // 1 = Proyectos de Redes Sociales
@@ -161,7 +162,7 @@ export const WorkspaceModule: React.FC = () => {
   useEffect(() => {
     const handleOpenWorkspaceSubview = (e: any) => {
       const detail = e.detail;
-      if (detail === 'social' || detail === 'tasks' || detail === 'drive' || detail === 'hub') {
+      if (detail === 'social' || detail === 'tasks' || detail === 'drive' || detail === 'hub' || detail === 'tools') {
         setCurrentView(detail);
         if (detail === 'social') {
           setSocialPhase(1);
@@ -997,6 +998,15 @@ export const WorkspaceModule: React.FC = () => {
       {currentView === 'drive' && (
         <div className="space-y-4 animate-fadeIn">
           <DriveModule onBack={() => setCurrentView('hub')} />
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* SUBMÓDULO: HERRAMIENTAS CREATIVAS (PALETAS, CÓDIGOS, BIOLINKS) */}
+      {/* ===================================================================== */}
+      {currentView === 'tools' && (
+        <div className="space-y-4 animate-fadeIn">
+          <ToolsModuleView onBackToHub={() => setCurrentView('hub')} />
         </div>
       )}
 
