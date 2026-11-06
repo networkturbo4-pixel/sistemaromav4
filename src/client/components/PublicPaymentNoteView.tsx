@@ -103,6 +103,32 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
     }
   }, [token]);
 
+  const paymentNote = data?.paymentNote || (data as any)?.note;
+  const tenant = data?.tenant;
+
+  const activeTotals = useMemo(() => {
+    if (!paymentNote) {
+      return {
+        subtotal: 0,
+        taxAmount: 0,
+        total: 0,
+        paidAmount: 0,
+        balance: 0,
+        status: 'pending' as const,
+      };
+    }
+    return calculatePaymentNoteActiveTotals({
+      isMembership: paymentNote.isMembership,
+      membershipInstallments: paymentNote.membershipInstallments,
+      extraItems: paymentNote.extraItems,
+      items: paymentNote.items,
+      includeTax: paymentNote.includeTax,
+      taxRate: paymentNote.taxRate || 18,
+      discountAmount: Number(paymentNote.discountAmount) || 0,
+      manualPaidAmount: paymentNote.paidAmount,
+    });
+  }, [paymentNote]);
+
   const handleCopy = async (text: string, label: string) => {
     const ok = await copyTextToClipboard(text);
     if (ok) {
@@ -190,8 +216,6 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
     );
   }
 
-  const paymentNote = data?.paymentNote || (data as any)?.note;
-  const tenant = data?.tenant;
   if (!paymentNote || !tenant) {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col items-center justify-center p-4 text-center">
@@ -210,19 +234,6 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
   const agencyName = company.commercialName || company.brandName || tenant.name;
   const agencyRuc = company.ruc || company.taxId || '';
   const agencyPhone = company.whatsapp || company.phone || '';
-
-  const activeTotals = useMemo(() => {
-    return calculatePaymentNoteActiveTotals({
-      isMembership: paymentNote.isMembership,
-      membershipInstallments: paymentNote.membershipInstallments,
-      extraItems: paymentNote.extraItems,
-      items: paymentNote.items,
-      includeTax: paymentNote.includeTax,
-      taxRate: paymentNote.taxRate || 18,
-      discountAmount: Number(paymentNote.discountAmount) || 0,
-      manualPaidAmount: paymentNote.paidAmount,
-    });
-  }, [paymentNote]);
 
   const effectiveStatus = paymentNote.status === 'cancelled' ? 'cancelled' : activeTotals.status;
   const isPaid = effectiveStatus === 'paid';
