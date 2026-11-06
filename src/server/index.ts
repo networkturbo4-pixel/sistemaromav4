@@ -1049,7 +1049,15 @@ app.post('/api/public/workspace/months/:token/posts/:postId/comments', async (re
     };
 
     const updatedComments = [...(post.comments || []), newComment];
-    await db.updateWorkspacePost(post.id, post.tenantId, { comments: updatedComments });
+    const tenantId = post.tenantId || monthData.month.tenantId;
+    const updatedPost = await db.updateWorkspacePost(post.id, tenantId, { comments: updatedComments });
+    if (!updatedPost) {
+      const pIdx = (db as any).localState?.workspacePosts?.findIndex((p: any) => p.id === post.id);
+      if (pIdx !== -1 && pIdx !== undefined) {
+        (db as any).localState.workspacePosts[pIdx].comments = updatedComments;
+        (db as any).saveLocalState();
+      }
+    }
 
     notificationService.notify({
       tenantId: post.tenantId,

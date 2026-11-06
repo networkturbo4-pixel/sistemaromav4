@@ -816,7 +816,15 @@ app.post('/api/public/workspace/months/:token/posts/:postId/comments', async (re
             createdAt: new Date().toISOString(),
         };
         const updatedComments = [...(post.comments || []), newComment];
-        await db_1.db.updateWorkspacePost(post.id, post.tenantId, { comments: updatedComments });
+        const tenantId = post.tenantId || monthData.month.tenantId;
+        const updatedPost = await db_1.db.updateWorkspacePost(post.id, tenantId, { comments: updatedComments });
+        if (!updatedPost) {
+            const pIdx = db_1.db.localState?.workspacePosts?.findIndex((p) => p.id === post.id);
+            if (pIdx !== -1 && pIdx !== undefined) {
+                db_1.db.localState.workspacePosts[pIdx].comments = updatedComments;
+                db_1.db.saveLocalState();
+            }
+        }
         notificationService_1.notificationService.notify({
             tenantId: post.tenantId,
             module: 'workspace',
