@@ -5,7 +5,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
-const multer_1 = __importDefault(require("multer"));
 const compression_1 = __importDefault(require("compression"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
@@ -14,12 +13,28 @@ const util_1 = require("util");
 const dotenv_1 = __importDefault(require("dotenv"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("./db");
+// Import resiliente para multer y qrcode (no detiene el inicio del servidor en cPanel si falta correr npm install)
+let multerModule = null;
+try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    multerModule = require('multer');
+}
+catch {
+    console.warn('⚠️ [Multer] Paquete multer no instalado aún en node_modules.');
+}
+let qrcodeModule = null;
+try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    qrcodeModule = require('qrcode');
+}
+catch {
+    console.warn('⚠️ [QRCode] Paquete qrcode no instalado aún en node_modules.');
+}
 const execAsync = (0, util_1.promisify)(child_process_1.exec);
 const auth_1 = require("./middleware/auth");
 const permissions_1 = require("../shared/permissions");
 const drive_routes_1 = __importDefault(require("./routes/drive.routes"));
 const googleDriveService_1 = require("./services/googleDriveService");
-const qrcode_1 = __importDefault(require("qrcode"));
 const totp_1 = require("./utils/totp");
 const notificationService_1 = require("./services/notificationService");
 dotenv_1.default.config();
@@ -943,27 +958,35 @@ app.post('/api/public/biolinks/:slug/click', async (req, res) => {
 // =============================================================================
 // SUBMÓDULO: FORMULARIOS INTERACTIVOS (PÚBLICO Y SUBIDA DE ARCHIVOS)
 // =============================================================================
-const formsUploadStorage = multer_1.default.diskStorage({
-    destination: (_req, _file, cb) => {
-        const dir = path_1.default.resolve(process.cwd(), 'uploads', 'forms');
-        if (!fs_1.default.existsSync(dir)) {
-            fs_1.default.mkdirSync(dir, { recursive: true });
-        }
-        cb(null, dir);
-    },
-    filename: (_req, file, cb) => {
-        const ext = path_1.default.extname(file.originalname).toLowerCase();
-        const cleanBase = path_1.default.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, '_').slice(0, 50);
-        const unique = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-        cb(null, `${cleanBase}_${unique}${ext}`);
-    },
-});
-const formUpload = (0, multer_1.default)({
-    storage: formsUploadStorage,
-    limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
-});
+const formUploadSingle = (req, res, next) => {
+    if (!multerModule) {
+        return res.status(503).json({
+            error: 'El módulo multer para carga de archivos no está instalado en el servidor. Ejecuta "Run NPM Install" en Setup Node.js App.',
+        });
+    }
+    const formsUploadStorage = multerModule.diskStorage({
+        destination: (_req, _file, cb) => {
+            const dir = path_1.default.resolve(process.cwd(), 'uploads', 'forms');
+            if (!fs_1.default.existsSync(dir)) {
+                fs_1.default.mkdirSync(dir, { recursive: true });
+            }
+            cb(null, dir);
+        },
+        filename: (_req, file, cb) => {
+            const ext = path_1.default.extname(file.originalname).toLowerCase();
+            const cleanBase = path_1.default.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, '_').slice(0, 50);
+            const unique = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+            cb(null, `${cleanBase}_${unique}${ext}`);
+        },
+    });
+    const formUpload = multerModule({
+        storage: formsUploadStorage,
+        limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+    });
+    return formUpload.single('file')(req, res, next);
+};
 // Subida de archivos desde formulario público o preview
-app.post('/api/public/forms/upload', formUpload.single('file'), (req, res) => {
+app.post('/api/public/forms/upload', formUploadSingle, (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No se ha proporcionado ningún archivo' });
@@ -980,7 +1003,7 @@ app.post('/api/public/forms/upload', formUpload.single('file'), (req, res) => {
     }
 });
 // Subida de portadas y logos para formularios (autenticado)
-app.post('/api/workspace/forms/upload-asset', auth_1.requireAuth, formUpload.single('file'), (req, res) => {
+app.post('/api/workspace/forms/upload-asset', auth_1.requireAuth, formUploadSingle, (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No se ha proporcionado ningún archivo' });
@@ -1647,7 +1670,10 @@ app.post('/api/administration/hr/authenticator/setup', auth_1.requireAuth, (0, a
         const issuer = req.auth.tenant.name || 'ROMA SaaS';
         const account = 'Administrador de RRHH';
         const otpAuthUri = (0, totp_1.buildOtpAuthUri)(issuer, account, secret);
-        const qrCodeDataUrl = await qrcode_1.default.toDataURL(otpAuthUri, { width: 280, margin: 2 });
+        let qrCodeDataUrl = '';
+        if (qrcodeModule) {
+            qrCodeDataUrl = await qrcodeModule.toDataURL(otpAuthUri, { width: 280, margin: 2 });
+        }
         res.json({
             secret,
             qrCodeDataUrl,
@@ -3454,9 +3480,9 @@ if (fs_1.default.existsSync(clientDistPath)) {
 }
 async function bootstrap() {
     await db_1.db.initialize();
-    // Auto-migración en segundo plano al iniciar si la carpeta del sistema anterior existe
-    const legacyDir = process.env.UPLOADS_DIR || '/home/iqxalgre/public_html/uploads';
-    if (fs_1.default.existsSync(legacyDir)) {
+    // Auto-migración en segundo plano al iniciar solo si existe una carpeta externa configurada
+    const legacyDir = process.env.UPLOADS_DIR;
+    if (legacyDir && fs_1.default.existsSync(legacyDir) && path_1.default.resolve(legacyDir) !== path_1.default.resolve(uploadsDir)) {
         console.log(`📦 [Auto-Migración] Detectada carpeta del sistema anterior en: ${legacyDir}`);
         console.log(`⏳ [Auto-Migración] Sincronizando archivos hacia ${uploadsDir} en segundo plano...`);
         setImmediate(() => {

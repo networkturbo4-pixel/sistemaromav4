@@ -1,6 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import multer from 'multer';
 import compression from 'compression';
 import path from 'path';
 import fs from 'fs';
@@ -9,6 +8,23 @@ import { promisify } from 'util';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import { db } from './db';
+
+// Import resiliente para multer y qrcode (no detiene el inicio del servidor en cPanel si falta correr npm install)
+let multerModule: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  multerModule = require('multer');
+} catch {
+  console.warn('⚠️ [Multer] Paquete multer no instalado aún en node_modules.');
+}
+
+let qrcodeModule: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  qrcodeModule = require('qrcode');
+} catch {
+  console.warn('⚠️ [QRCode] Paquete qrcode no instalado aún en node_modules.');
+}
 
 const execAsync = promisify(exec);
 import {
@@ -21,7 +37,6 @@ import {
 import { PERMISSIONS_CATALOG, hasPermission, hasAnyPermission } from '../shared/permissions';
 import driveRouter from './routes/drive.routes';
 import { googleDriveService } from './services/googleDriveService';
-import QRCode from 'qrcode';
 import { generateTotpSecret, generateTotpCode, verifyTotpCode, buildOtpAuthUri } from './utils/totp';
 import { notificationService, notifyEvent } from './services/notificationService';
 
@@ -1188,29 +1203,38 @@ app.post('/api/public/biolinks/:slug/click', async (req: Request, res: Response)
 // SUBMÓDULO: FORMULARIOS INTERACTIVOS (PÚBLICO Y SUBIDA DE ARCHIVOS)
 // =============================================================================
 
-const formsUploadStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    const dir = path.resolve(process.cwd(), 'uploads', 'forms');
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    cb(null, dir);
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const cleanBase = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, '_').slice(0, 50);
-    const unique = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    cb(null, `${cleanBase}_${unique}${ext}`);
-  },
-});
+const formUploadSingle = (req: Request, res: Response, next: NextFunction) => {
+  if (!multerModule) {
+    return res.status(503).json({
+      error: 'El módulo multer para carga de archivos no está instalado en el servidor. Ejecuta "Run NPM Install" en Setup Node.js App.',
+    });
+  }
+  const formsUploadStorage = multerModule.diskStorage({
+    destination: (_req: any, _file: any, cb: any) => {
+      const dir = path.resolve(process.cwd(), 'uploads', 'forms');
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      cb(null, dir);
+    },
+    filename: (_req: any, file: any, cb: any) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const cleanBase = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, '_').slice(0, 50);
+      const unique = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      cb(null, `${cleanBase}_${unique}${ext}`);
+    },
+  });
 
-const formUpload = multer({
-  storage: formsUploadStorage,
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
-});
+  const formUpload = multerModule({
+    storage: formsUploadStorage,
+    limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+  });
+
+  return formUpload.single('file')(req, res, next);
+};
 
 // Subida de archivos desde formulario público o preview
-app.post('/api/public/forms/upload', formUpload.single('file'), (req: Request, res: Response) => {
+app.post('/api/public/forms/upload', formUploadSingle, (req: Request, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No se ha proporcionado ningún archivo' });
@@ -1227,7 +1251,7 @@ app.post('/api/public/forms/upload', formUpload.single('file'), (req: Request, r
 });
 
 // Subida de portadas y logos para formularios (autenticado)
-app.post('/api/workspace/forms/upload-asset', requireAuth, formUpload.single('file'), (req: AuthenticatedRequest, res: Response) => {
+app.post('/api/workspace/forms/upload-asset', requireAuth, formUploadSingle, (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No se ha proporcionado ningún archivo' });
@@ -2173,7 +2197,10 @@ app.post(
       const issuer = req.auth!.tenant.name || 'ROMA SaaS';
       const account = 'Administrador de RRHH';
       const otpAuthUri = buildOtpAuthUri(issuer, account, secret);
-      const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUri, { width: 280, margin: 2 });
+      let qrCodeDataUrl = '';
+      if (qrcodeModule) {
+        qrCodeDataUrl = await qrcodeModule.toDataURL(otpAuthUri, { width: 280, margin: 2 });
+      }
 
       res.json({
         secret,
@@ -4360,9 +4387,9 @@ if (fs.existsSync(clientDistPath)) {
 async function bootstrap() {
   await db.initialize();
 
-  // Auto-migración en segundo plano al iniciar si la carpeta del sistema anterior existe
-  const legacyDir = process.env.UPLOADS_DIR || '/home/iqxalgre/public_html/uploads';
-  if (fs.existsSync(legacyDir)) {
+  // Auto-migración en segundo plano al iniciar solo si existe una carpeta externa configurada
+  const legacyDir = process.env.UPLOADS_DIR;
+  if (legacyDir && fs.existsSync(legacyDir) && path.resolve(legacyDir) !== path.resolve(uploadsDir)) {
     console.log(`📦 [Auto-Migración] Detectada carpeta del sistema anterior en: ${legacyDir}`);
     console.log(`⏳ [Auto-Migración] Sincronizando archivos hacia ${uploadsDir} en segundo plano...`);
     setImmediate(() => {
