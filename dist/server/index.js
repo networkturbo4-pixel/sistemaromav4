@@ -2100,6 +2100,64 @@ app.get('/api/public/tenant-icon', async (req, res) => {
         res.status(500).send('Error');
     }
 });
+// Endpoint dinámico para servir el icono/favicon del tenant optimizado para Open Graph (WhatsApp, Telegram, etc.)
+app.get(['/api/public/tenant-og-image.png', '/api/public/tenant-og-image'], async (req, res) => {
+    try {
+        const slug = req.query.tenant || req.query.id || '';
+        const tenant = await db_1.db.getPublicTenantBranding(slug);
+        // Priorizar favicon o logo del tenant correspondiente
+        const iconUrl = tenant?.customization?.faviconUrl ||
+            tenant?.customization?.logoPwaUrl ||
+            tenant?.customization?.logoLightUrl ||
+            tenant?.customization?.logoDarkUrl;
+        if (iconUrl && iconUrl.startsWith('data:image/')) {
+            const matches = iconUrl.match(/^data:(image\/[a-zA-Z0-9\+\-\.]+);base64,(.+)$/);
+            if (matches) {
+                const mime = matches[1];
+                // Si no es SVG, enviar directamente (WhatsApp requiere PNG/JPEG raster)
+                if (mime !== 'image/svg+xml') {
+                    const buffer = Buffer.from(matches[2], 'base64');
+                    res.setHeader('Content-Type', mime);
+                    res.setHeader('Cache-Control', 'public, max-age=86400');
+                    res.send(buffer);
+                    return;
+                }
+            }
+        }
+        else if (iconUrl && (iconUrl.startsWith('http://') || iconUrl.startsWith('https://'))) {
+            res.redirect(iconUrl);
+            return;
+        }
+        else if (iconUrl && iconUrl.startsWith('/uploads/')) {
+            const filePath = path_1.default.resolve(process.cwd(), iconUrl.replace(/^\/+/, ''));
+            if (fs_1.default.existsSync(filePath)) {
+                res.setHeader('Cache-Control', 'public, max-age=86400');
+                res.sendFile(filePath);
+                return;
+            }
+        }
+        // Fallback a icono cuadrado PNG 512x512
+        const pngPath = path_1.default.resolve(process.cwd(), 'public', 'icon-512.png');
+        if (fs_1.default.existsSync(pngPath)) {
+            res.setHeader('Content-Type', 'image/png');
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            res.sendFile(pngPath);
+            return;
+        }
+        const favPath = path_1.default.resolve(process.cwd(), 'public', 'favicon.svg');
+        if (fs_1.default.existsSync(favPath)) {
+            res.setHeader('Content-Type', 'image/svg+xml');
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            res.sendFile(favPath);
+        }
+        else {
+            res.status(404).send('Icono no encontrado');
+        }
+    }
+    catch (err) {
+        res.status(500).send('Error');
+    }
+});
 // Manifiesto PWA Dinámico por Tenant (compatible con /manifest.json y /api/public/manifest.webmanifest)
 app.get(['/manifest.json', '/api/public/manifest.webmanifest'], async (req, res) => {
     try {
@@ -2192,10 +2250,10 @@ async function serveHtmlWithMetadata(req, res) {
         let pageTitle = 'ROMA SaaS — Sistema de Agencia de Publicidad y Diseño';
         let ogTitle = 'ROMA SaaS — Sistema de Agencia';
         let ogDescription = 'Plataforma integral de gestión de proyectos, clientes, cotizaciones y notas de pago.';
-        let ogImage = `${origin}/og-preview.png`;
-        let faviconUrl = '/favicon.svg';
+        let tenantSlug = req.query.tenant || 'roma-agencia';
+        let ogImage = `${origin}/api/public/tenant-og-image.png?tenant=${encodeURIComponent(tenantSlug)}`;
+        let faviconUrl = `/api/public/tenant-icon?tenant=${encodeURIComponent(tenantSlug)}`;
         let themeColor = '#0055ff';
-        let tenantSlug = req.query.tenant || '';
         const pathname = req.path;
         // 1. Notas de Pago / Comprobantes públicos (/p/pago/:token, /p/nota/:token, /np/:token, /pago/:token, /nota/:token)
         const noteMatch = pathname.match(/^\/(?:np|pago|nota|nota-pago|p\/pago|p\/nota)\/([^/?#]+)/i);
@@ -2226,7 +2284,7 @@ async function serveHtmlWithMetadata(req, res) {
                 pageTitle = `Comprobante ${n.code || ''} — ${clientStr} | ${agencyName}`;
                 ogTitle = `Comprobante de Pago ${n.code || ''} — ${agencyName}`;
                 ogDescription = `Cliente: ${clientStr} • Total a pagar: ${totalFormatted} • Estado: ${statusLabel}. Haz clic para revisar el desglose y cuentas oficiales.`;
-                ogImage = `${origin}/og-preview.png`;
+                ogImage = `${origin}/api/public/tenant-og-image.png?tenant=${encodeURIComponent(t.slug)}`;
                 faviconUrl = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
                 themeColor = t.customization?.lightPalette?.primary || '#0055ff';
             }
@@ -2244,7 +2302,7 @@ async function serveHtmlWithMetadata(req, res) {
                 pageTitle = `Orden de Servicio ${os.code || ''} — ${agencyName}`;
                 ogTitle = `Orden de Servicio ${os.code || ''} — ${agencyName}`;
                 ogDescription = `Hoja de ruta y entregables: ${os.title || 'Servicio'}. Estado: ${os.status || 'Activo'}.`;
-                ogImage = `${origin}/og-preview.png`;
+                ogImage = `${origin}/api/public/tenant-og-image.png?tenant=${encodeURIComponent(t.slug)}`;
                 faviconUrl = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
                 themeColor = t.customization?.lightPalette?.primary || '#0055ff';
             }
@@ -2268,7 +2326,7 @@ async function serveHtmlWithMetadata(req, res) {
                 pageTitle = `Grilla de Contenidos ${m.name || ''} — ${projectName} | ${agencyName}`;
                 ogTitle = `Grilla ${m.name || ''} — ${projectName}`;
                 ogDescription = `Calendario editorial y piezas de contenido de ${agencyName}. Total piezas: ${postsCount}. Haz clic para revisar y aprobar.`;
-                ogImage = `${origin}/og-preview.png`;
+                ogImage = `${origin}/api/public/tenant-og-image.png?tenant=${encodeURIComponent(tenantSlug)}`;
             }
         }
         // 4. Catálogo o Servicio público (/s/:slug, /servicio/:slug, /p/servicio/:slug)
@@ -2285,7 +2343,7 @@ async function serveHtmlWithMetadata(req, res) {
                 pageTitle = `${s.title} | ${agencyName}`;
                 ogTitle = `${s.title} — ${agencyName}`;
                 ogDescription = s.briefDescription || s.fullDescription || 'Consulta los paquetes, entregables e inversión de este servicio profesional.';
-                ogImage = s.coverImage && (s.coverImage.startsWith('http') || s.coverImage.startsWith('/uploads')) ? (s.coverImage.startsWith('http') ? s.coverImage : `${origin}${s.coverImage}`) : `${origin}/og-preview.png`;
+                ogImage = `${origin}/api/public/tenant-og-image.png?tenant=${encodeURIComponent(t.slug)}`;
                 faviconUrl = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
             }
         }
@@ -2296,7 +2354,7 @@ async function serveHtmlWithMetadata(req, res) {
             pageTitle = `Catálogo de Servicios y Paquetes — ${agencyName}`;
             ogTitle = `Catálogo de Servicios — ${agencyName}`;
             ogDescription = `Descubre nuestros servicios profesionales de diseño, publicidad, branding y marketing digital.`;
-            ogImage = `${origin}/og-preview.png`;
+            ogImage = `${origin}/api/public/tenant-og-image.png?tenant=${encodeURIComponent(tenantSlug)}`;
         }
         // 6. Cotizaciones públicas (/c/:token, /q/:token, /cotizacion/:token, /p/cotizacion/:token, /p/:token)
         else {
@@ -2333,7 +2391,7 @@ async function serveHtmlWithMetadata(req, res) {
                     pageTitle = `Propuesta ${q.code || ''} — ${clientStr} | ${agencyName}`;
                     ogTitle = `Propuesta Comercial ${q.code || ''} — ${clientStr}`;
                     ogDescription = `Propuesta de servicios profesionales emitida por ${agencyName}. Inversión: ${currSymbol} ${Number(q.total || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
-                    ogImage = `${origin}/og-preview.png`;
+                    ogImage = `${origin}/api/public/tenant-og-image.png?tenant=${encodeURIComponent(t.slug)}`;
                     faviconUrl = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
                     themeColor = t.customization?.lightPalette?.primary || '#0055ff';
                 }
@@ -2347,7 +2405,7 @@ async function serveHtmlWithMetadata(req, res) {
                     pageTitle = `${name} — Sistema SaaS`;
                     ogTitle = name;
                     ogDescription = `Sistema de gestión para agencias de diseño y publicidad — ${name}`;
-                    ogImage = `${origin}/og-preview.png`;
+                    ogImage = `${origin}/api/public/tenant-og-image.png?tenant=${encodeURIComponent(tenantSlug)}`;
                     faviconUrl = `${origin}/api/public/tenant-icon?tenant=${encodeURIComponent(tenantSlug)}`;
                     themeColor = defaultTenant.customization?.lightPalette?.primary || '#0055ff';
                 }
@@ -2367,10 +2425,10 @@ async function serveHtmlWithMetadata(req, res) {
     <meta property="og:image" content="${ogImage}" />
     <meta property="og:image:secure_url" content="${ogImage}" />
     <meta property="og:image:type" content="image/png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
     <meta property="og:url" content="${fullUrl}" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="${escapeHtml(ogTitle)}" />
     <meta name="twitter:description" content="${escapeHtml(ogDescription)}" />
     <meta name="twitter:image" content="${ogImage}" />
@@ -2378,7 +2436,7 @@ async function serveHtmlWithMetadata(req, res) {
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="${escapeHtml(ogTitle)}" />
-    <link rel="apple-touch-icon" href="${origin}/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" href="${ogImage}" />
     `;
         html = html.replace(/<title>.*?<\/title>/i, `<title>${escapeHtml(pageTitle)}</title>`);
         html = html.replace(/<link id="dynamic-favicon"[^>]*>/i, `<link id="dynamic-favicon" rel="icon" href="${faviconUrl}" />`);
@@ -2386,6 +2444,9 @@ async function serveHtmlWithMetadata(req, res) {
             ? `/api/public/manifest.webmanifest?tenant=${encodeURIComponent(tenantSlug)}`
             : '/manifest.json';
         html = html.replace(/<link id="dynamic-manifest"[^>]*>/i, `<link id="dynamic-manifest" rel="manifest" href="${manifestHref}" />`);
+        // Limpiar cualquier meta tag previo de og o twitter para evitar duplicidades
+        html = html.replace(/<meta\s+property=["']og:[^>]*>/gi, '');
+        html = html.replace(/<meta\s+name=["']twitter:[^>]*>/gi, '');
         html = html.replace('</head>', `${ogTags}\n  </head>`);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.send(html);
