@@ -226,6 +226,13 @@ exports.PERMISSIONS_CATALOG = [
         module: 'workspace',
         moduleLabel: 'Workspace Operativo',
     },
+    {
+        key: 'workspace.forms.manage',
+        label: 'Gestionar Formularios Interactivos',
+        description: 'Crear, editar, publicar y recolectar respuestas de formularios modernos personalizados.',
+        module: 'workspace',
+        moduleLabel: 'Workspace Operativo',
+    },
     // ÓRDENES DE SERVICIO (OS)
     {
         key: 'service_orders.view',
@@ -375,6 +382,71 @@ exports.PERMISSIONS_CATALOG = [
         module: 'settings',
         moduleLabel: 'Configuración y Seguridad Multitenant',
         isCritical: true,
+    },
+    // ADMINISTRACIÓN (RRHH, FINANZAS, CONTABILIDAD)
+    {
+        key: 'administration.view',
+        label: 'Acceso a Módulo de Administración',
+        description: 'Acceder a la central de administración, RRHH, finanzas y contabilidad.',
+        module: 'administration',
+        moduleLabel: 'Administración y Gestión Empresarial',
+    },
+    {
+        key: 'administration.hr.view',
+        label: 'Ver Personal y Recursos Humanos',
+        description: 'Ver lista de personal, salarios, horarios y asistencias.',
+        module: 'administration',
+        moduleLabel: 'Administración y Gestión Empresarial',
+    },
+    {
+        key: 'administration.hr.manage',
+        label: 'Gestionar Personal y Configuración RRHH',
+        description: 'Crear o editar perfiles de personal, salarios, horarios y reglas de refrigerio/tardanza.',
+        module: 'administration',
+        moduleLabel: 'Administración y Gestión Empresarial',
+        isCritical: true,
+    },
+    {
+        key: 'administration.attendance.record',
+        label: 'Registrar Marcación de Asistencia',
+        description: 'Permite al usuario marcar entrada, inicio/fin de refrigerio y salida.',
+        module: 'administration',
+        moduleLabel: 'Administración y Gestión Empresarial',
+    },
+    {
+        key: 'administration.attendance.manage',
+        label: 'Gestionar y Auditar Historial de Asistencias',
+        description: 'Editar, justificar o auditar las marcaciones y fotos de asistencia de todo el equipo.',
+        module: 'administration',
+        moduleLabel: 'Administración y Gestión Empresarial',
+    },
+    {
+        key: 'administration.finances.view',
+        label: 'Ver Módulo de Finanzas',
+        description: 'Consultar flujo de caja, ingresos, egresos y balances.',
+        module: 'administration',
+        moduleLabel: 'Administración y Gestión Empresarial',
+    },
+    {
+        key: 'administration.finances.manage',
+        label: 'Gestionar Transacciones Financieras',
+        description: 'Registrar, categorizar y modificar ingresos y gastos.',
+        module: 'administration',
+        moduleLabel: 'Administración y Gestión Empresarial',
+    },
+    {
+        key: 'administration.accounting.view',
+        label: 'Ver Contabilidad y Libros',
+        description: 'Visualizar asientos contables y estados financieros.',
+        module: 'administration',
+        moduleLabel: 'Administración y Gestión Empresarial',
+    },
+    {
+        key: 'administration.accounting.manage',
+        label: 'Gestionar Asientos Contables',
+        description: 'Crear y modificar asientos del libro diario.',
+        module: 'administration',
+        moduleLabel: 'Administración y Gestión Empresarial',
     },
 ];
 exports.ALL_PERMISSION_KEYS = exports.PERMISSIONS_CATALOG.map((p) => p.key);

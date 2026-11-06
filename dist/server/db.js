@@ -123,6 +123,20 @@ class DatabaseManager {
                     parsed.savedPalettes = [];
                 if (!Array.isArray(parsed.codeHistory))
                     parsed.codeHistory = [];
+                if (!Array.isArray(parsed.hrSettings))
+                    parsed.hrSettings = [];
+                if (!Array.isArray(parsed.employeeProfiles))
+                    parsed.employeeProfiles = [];
+                if (!Array.isArray(parsed.attendanceRecords))
+                    parsed.attendanceRecords = [];
+                if (!Array.isArray(parsed.financeTransactions))
+                    parsed.financeTransactions = [];
+                if (!Array.isArray(parsed.accountingEntries))
+                    parsed.accountingEntries = [];
+                if (!Array.isArray(parsed.workspaceForms))
+                    parsed.workspaceForms = [];
+                if (!Array.isArray(parsed.formSubmissions))
+                    parsed.formSubmissions = [];
                 // Limpieza automática de artefactos HTML y de IA en copys y briefs existentes
                 let dirtyPostsCleaned = 0;
                 for (const post of parsed.workspacePosts) {
@@ -167,6 +181,13 @@ class DatabaseManager {
             biolinks: [],
             savedPalettes: [],
             codeHistory: [],
+            hrSettings: [],
+            employeeProfiles: [],
+            attendanceRecords: [],
+            financeTransactions: [],
+            accountingEntries: [],
+            workspaceForms: [],
+            formSubmissions: [],
         };
         return defaultState;
     }
@@ -2315,6 +2336,702 @@ class DatabaseManager {
         const before = (this.localState.pushSubscriptions || []).length;
         this.localState.pushSubscriptions = (this.localState.pushSubscriptions || []).filter((s) => s.endpoint !== endpoint);
         const deleted = this.localState.pushSubscriptions.length < before;
+        if (deleted)
+            this.saveLocalState();
+        return deleted;
+    }
+    // ===========================================================================
+    // WORKSPACE: SUBMÓDULO FORMULARIOS INTERACTIVOS DE AGENCIA
+    // ===========================================================================
+    async getForms(tenantId) {
+        if (!Array.isArray(this.localState.workspaceForms)) {
+            this.localState.workspaceForms = [];
+        }
+        return this.localState.workspaceForms.filter((f) => f.tenantId === tenantId);
+    }
+    async getFormById(id, tenantId) {
+        const list = await this.getForms(tenantId);
+        return list.find((f) => f.id === id) || null;
+    }
+    async getFormBySlug(slug) {
+        if (!Array.isArray(this.localState.workspaceForms)) {
+            this.localState.workspaceForms = [];
+        }
+        const cleanSlug = slug.trim().toLowerCase();
+        const form = this.localState.workspaceForms.find((f) => f.slug.toLowerCase() === cleanSlug || f.id === slug);
+        if (!form)
+            return null;
+        const tenant = this.localState.tenants.find((t) => t.id === form.tenantId);
+        return { form, tenant: tenant || null };
+    }
+    async createForm(tenantId, data) {
+        if (!Array.isArray(this.localState.workspaceForms)) {
+            this.localState.workspaceForms = [];
+        }
+        const now = new Date().toISOString();
+        const rawSlug = (data.slug || data.title || ('form-' + Date.now().toString(36)))
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9-_]/g, '-')
+            .replace(/-+/g, '-');
+        const baseSlug = rawSlug.replace(/^-|-$/g, '') || ('form-' + Date.now().toString(36));
+        let finalSlug = baseSlug;
+        let counter = 1;
+        while (this.localState.workspaceForms.some((f) => f.slug === finalSlug)) {
+            finalSlug = baseSlug + '-' + (counter++);
+        }
+        const newForm = {
+            id: data.id || ('form-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6)),
+            tenantId,
+            title: data.title?.trim() || 'Nuevo Formulario',
+            description: data.description || '',
+            slug: finalSlug,
+            status: data.status || 'draft',
+            fields: Array.isArray(data.fields) ? data.fields : [],
+            customization: {
+                coverImage: data.customization?.coverImage || '',
+                logoUrl: data.customization?.logoUrl || '',
+                primaryColor: data.customization?.primaryColor || '#6366f1',
+                themeMode: data.customization?.themeMode || 'light',
+                borderRadius: data.customization?.borderRadius || 'rounded-2xl',
+                fontFamily: data.customization?.fontFamily || 'sans',
+                bgPattern: data.customization?.bgPattern || 'dots',
+            },
+            settings: {
+                collectClientName: data.settings?.collectClientName ?? true,
+                collectClientEmail: data.settings?.collectClientEmail ?? true,
+                showAgencyLogo: data.settings?.showAgencyLogo ?? true,
+                isMultiStep: !!data.settings?.isMultiStep,
+                welcomeScreen: {
+                    enabled: data.settings?.welcomeScreen?.enabled ?? false,
+                    title: data.settings?.welcomeScreen?.title || 'Bienvenido a nuestro formulario',
+                    description: data.settings?.welcomeScreen?.description || 'Por favor tómate unos minutos para responder las siguientes preguntas.',
+                    buttonText: data.settings?.welcomeScreen?.buttonText || 'Comenzar ahora',
+                },
+                thankYouScreen: {
+                    title: data.settings?.thankYouScreen?.title || '¡Muchas gracias por tu respuesta!',
+                    message: data.settings?.thankYouScreen?.message || 'Hemos registrado tu información correctamente. Nos pondremos en contacto contigo pronto.',
+                    buttonText: data.settings?.thankYouScreen?.buttonText || '',
+                    buttonUrl: data.settings?.thankYouScreen?.buttonUrl || '',
+                },
+            },
+            viewsCount: 0,
+            submissionsCount: 0,
+            createdAt: now,
+            updatedAt: now,
+        };
+        this.localState.workspaceForms.unshift(newForm);
+        this.saveLocalState();
+        return newForm;
+    }
+    async updateForm(id, tenantId, data) {
+        if (!Array.isArray(this.localState.workspaceForms)) {
+            this.localState.workspaceForms = [];
+        }
+        const idx = this.localState.workspaceForms.findIndex((f) => f.id === id && f.tenantId === tenantId);
+        if (idx === -1)
+            return null;
+        let nextSlug = this.localState.workspaceForms[idx].slug;
+        if (data.slug && data.slug.trim() !== '') {
+            const cleanSlug = data.slug
+                .toLowerCase()
+                .trim()
+                .replace(/[^a-z0-9-_]/g, '-')
+                .replace(/-+/g, '-')
+                .replace(/^-|-$/g, '');
+            if (cleanSlug) {
+                let finalSlug = cleanSlug;
+                let counter = 1;
+                while (this.localState.workspaceForms.some((f) => f.slug === finalSlug && f.id !== id)) {
+                    finalSlug = cleanSlug + '-' + (counter++);
+                }
+                nextSlug = finalSlug;
+            }
+        }
+        const current = this.localState.workspaceForms[idx];
+        this.localState.workspaceForms[idx] = {
+            ...current,
+            ...data,
+            slug: nextSlug,
+            customization: {
+                ...current.customization,
+                ...(data.customization || {}),
+            },
+            settings: {
+                ...current.settings,
+                ...(data.settings || {}),
+                welcomeScreen: {
+                    ...current.settings.welcomeScreen,
+                    ...(data.settings?.welcomeScreen || {}),
+                },
+                thankYouScreen: {
+                    ...current.settings.thankYouScreen,
+                    ...(data.settings?.thankYouScreen || {}),
+                },
+            },
+            updatedAt: new Date().toISOString(),
+        };
+        this.saveLocalState();
+        return this.localState.workspaceForms[idx];
+    }
+    async deleteForm(id, tenantId) {
+        if (!Array.isArray(this.localState.workspaceForms)) {
+            this.localState.workspaceForms = [];
+            return false;
+        }
+        const before = this.localState.workspaceForms.length;
+        this.localState.workspaceForms = this.localState.workspaceForms.filter((f) => !(f.id === id && f.tenantId === tenantId));
+        const deleted = this.localState.workspaceForms.length < before;
+        if (deleted) {
+            if (Array.isArray(this.localState.formSubmissions)) {
+                this.localState.formSubmissions = this.localState.formSubmissions.filter((s) => !(s.formId === id && s.tenantId === tenantId));
+            }
+            this.saveLocalState();
+        }
+        return deleted;
+    }
+    async duplicateForm(id, tenantId) {
+        const original = await this.getFormById(id, tenantId);
+        if (!original)
+            return null;
+        const copyData = {
+            title: original.title + ' (Copia)',
+            description: original.description,
+            slug: original.slug + '-copia',
+            status: 'draft',
+            fields: JSON.parse(JSON.stringify(original.fields || [])),
+            customization: JSON.parse(JSON.stringify(original.customization || {})),
+            settings: JSON.parse(JSON.stringify(original.settings || {})),
+        };
+        return this.createForm(tenantId, copyData);
+    }
+    async recordFormView(slug) {
+        if (!Array.isArray(this.localState.workspaceForms))
+            return false;
+        const cleanSlug = slug.trim().toLowerCase();
+        const form = this.localState.workspaceForms.find((f) => f.slug.toLowerCase() === cleanSlug || f.id === slug);
+        if (!form)
+            return false;
+        form.viewsCount = (form.viewsCount || 0) + 1;
+        this.saveLocalState();
+        return true;
+    }
+    async submitFormAnswers(slug, payload) {
+        if (!Array.isArray(this.localState.workspaceForms)) {
+            this.localState.workspaceForms = [];
+        }
+        if (!Array.isArray(this.localState.formSubmissions)) {
+            this.localState.formSubmissions = [];
+        }
+        const cleanSlug = slug.trim().toLowerCase();
+        const form = this.localState.workspaceForms.find((f) => f.slug.toLowerCase() === cleanSlug || f.id === slug);
+        if (!form) {
+            throw new Error('Formulario no encontrado o no disponible');
+        }
+        const now = new Date().toISOString();
+        const submission = {
+            id: 'sub-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+            tenantId: form.tenantId,
+            formId: form.id,
+            formTitle: form.title,
+            clientName: payload.clientName?.trim() || undefined,
+            clientEmail: payload.clientEmail?.trim() || undefined,
+            answers: payload.answers || {},
+            files: Array.isArray(payload.files) ? payload.files : [],
+            submittedAt: now,
+            ip: payload.ip,
+            userAgent: payload.userAgent,
+        };
+        this.localState.formSubmissions.unshift(submission);
+        form.submissionsCount = (form.submissionsCount || 0) + 1;
+        form.updatedAt = now;
+        try {
+            if (Array.isArray(this.localState.notifications)) {
+                this.localState.notifications.unshift({
+                    id: 'notif-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+                    tenantId: form.tenantId,
+                    title: 'Nueva respuesta: ' + form.title,
+                    message: payload.clientName
+                        ? payload.clientName + ' ha respondido el formulario "' + form.title + '".'
+                        : 'Se ha recibido una nueva respuesta en el formulario "' + form.title + '".',
+                    type: 'info',
+                    module: 'workspace',
+                    entityId: form.id,
+                    action: 'form_submission',
+                    link: '/workspace?sub=forms&formId=' + form.id,
+                    isRead: false,
+                    createdAt: now,
+                    metadata: { formId: form.id, submissionId: submission.id },
+                });
+            }
+        }
+        catch (e) {
+            console.warn('[DB] No se pudo crear notificación de formulario:', e);
+        }
+        this.saveLocalState();
+        return submission;
+    }
+    async getFormSubmissions(formId, tenantId) {
+        if (!Array.isArray(this.localState.formSubmissions)) {
+            this.localState.formSubmissions = [];
+        }
+        return this.localState.formSubmissions.filter((s) => s.formId === formId && s.tenantId === tenantId);
+    }
+    async deleteFormSubmission(submissionId, tenantId) {
+        if (!Array.isArray(this.localState.formSubmissions)) {
+            this.localState.formSubmissions = [];
+            return false;
+        }
+        const before = this.localState.formSubmissions.length;
+        this.localState.formSubmissions = this.localState.formSubmissions.filter((s) => !(s.id === submissionId && s.tenantId === tenantId));
+        const deleted = this.localState.formSubmissions.length < before;
+        if (deleted) {
+            this.saveLocalState();
+        }
+        return deleted;
+    }
+    // ===========================================================================
+    // ADMINISTRACIÓN: RECURSOS HUMANOS (CONFIGURACIÓN GLOBAL)
+    // ===========================================================================
+    async getHrSettings(tenantId) {
+        if (!this.localState.hrSettings)
+            this.localState.hrSettings = [];
+        let settings = this.localState.hrSettings.find((s) => s.tenantId === tenantId);
+        if (!settings) {
+            settings = {
+                ...types_1.DEFAULT_HR_SETTINGS,
+                tenantId,
+                updatedAt: new Date().toISOString(),
+            };
+            this.localState.hrSettings.push(settings);
+            this.saveLocalState();
+        }
+        return settings;
+    }
+    async updateHrSettings(tenantId, data) {
+        if (!this.localState.hrSettings)
+            this.localState.hrSettings = [];
+        const idx = this.localState.hrSettings.findIndex((s) => s.tenantId === tenantId);
+        const now = new Date().toISOString();
+        let updated;
+        if (idx === -1) {
+            updated = {
+                ...types_1.DEFAULT_HR_SETTINGS,
+                ...data,
+                tenantId,
+                updatedAt: now,
+            };
+            this.localState.hrSettings.push(updated);
+        }
+        else {
+            updated = {
+                ...this.localState.hrSettings[idx],
+                ...data,
+                tenantId,
+                updatedAt: now,
+            };
+            this.localState.hrSettings[idx] = updated;
+        }
+        this.saveLocalState();
+        return updated;
+    }
+    // ===========================================================================
+    // ADMINISTRACIÓN: PERSONAL / EMPLEADOS
+    // ===========================================================================
+    async getEmployeeProfiles(tenantId) {
+        if (!this.localState.employeeProfiles)
+            this.localState.employeeProfiles = [];
+        const tenantUsers = await this.getUsersByTenant(tenantId);
+        const existing = this.localState.employeeProfiles.filter((p) => p.tenantId === tenantId);
+        return existing.map((profile) => {
+            const u = tenantUsers.find((user) => user.id === profile.userId);
+            return {
+                ...profile,
+                userName: u?.name || profile.userName || 'Usuario',
+                userEmail: u?.email || profile.userEmail || '',
+                userAvatar: u?.avatarUrl || profile.userAvatar || '',
+                jobTitle: u?.jobTitle || profile.jobTitle || 'Colaborador',
+            };
+        });
+    }
+    async getEmployeeProfileByUserId(tenantId, userId) {
+        const list = await this.getEmployeeProfiles(tenantId);
+        return list.find((p) => p.userId === userId) || null;
+    }
+    async saveEmployeeProfile(tenantId, data) {
+        if (!this.localState.employeeProfiles)
+            this.localState.employeeProfiles = [];
+        const now = new Date().toISOString();
+        const existingIdx = data.id
+            ? this.localState.employeeProfiles.findIndex((p) => p.id === data.id && p.tenantId === tenantId)
+            : this.localState.employeeProfiles.findIndex((p) => p.userId === data.userId && p.tenantId === tenantId);
+        if (existingIdx !== -1) {
+            const current = this.localState.employeeProfiles[existingIdx];
+            const updated = {
+                ...current,
+                ...data,
+                publicToken: current.publicToken || data.publicToken || generateToken(16),
+                payments: data.payments || current.payments || [],
+                tenantId,
+                updatedAt: now,
+            };
+            this.localState.employeeProfiles[existingIdx] = updated;
+            this.saveLocalState();
+            return updated;
+        }
+        else {
+            const newProfile = {
+                id: crypto_1.default.randomUUID(),
+                tenantId,
+                publicToken: data.publicToken || generateToken(16),
+                payments: data.payments || [],
+                userId: data.userId || '',
+                userName: data.userName,
+                userEmail: data.userEmail,
+                userAvatar: data.userAvatar,
+                jobTitle: data.jobTitle,
+                documentNumber: data.documentNumber || '',
+                documentType: data.documentType || 'DNI',
+                birthDate: data.birthDate || '',
+                hireDate: data.hireDate || now.split('T')[0],
+                salary: Number(data.salary) || 0,
+                salaryCurrency: data.salaryCurrency || 'PEN',
+                paymentFrequency: data.paymentFrequency || 'monthly',
+                entryTime: data.entryTime || '09:00',
+                exitTime: data.exitTime || '18:00',
+                workDays: data.workDays && data.workDays.length > 0 ? data.workDays : [1, 2, 3, 4, 5],
+                department: data.department || 'Operaciones',
+                emergencyContact: data.emergencyContact,
+                bankAccount: data.bankAccount,
+                status: data.status || 'active',
+                createdAt: now,
+                updatedAt: now,
+            };
+            this.localState.employeeProfiles.unshift(newProfile);
+            this.saveLocalState();
+            return newProfile;
+        }
+    }
+    async getEmployeeProfileByPublicToken(token) {
+        if (!this.localState.employeeProfiles)
+            this.localState.employeeProfiles = [];
+        const emp = this.localState.employeeProfiles.find((p) => p.publicToken === token);
+        if (!emp)
+            return null;
+        const tenant = await this.getTenantById(emp.tenantId);
+        if (!tenant)
+            return null;
+        const user = this.localState.users.find((u) => u.id === emp.userId);
+        const enriched = {
+            ...emp,
+            userName: user?.name || emp.userName || 'Colaborador',
+            userEmail: user?.email || emp.userEmail || '',
+            userAvatar: user?.avatarUrl || emp.userAvatar || '',
+            jobTitle: user?.jobTitle || emp.jobTitle || 'Equipo',
+        };
+        return {
+            employee: enriched,
+            tenant,
+            companyInfo: tenant.companyInfo || types_1.DEFAULT_COMPANY_INFO,
+        };
+    }
+    async addEmployeePayment(tenantId, employeeId, paymentData) {
+        if (!this.localState.employeeProfiles)
+            this.localState.employeeProfiles = [];
+        const idx = this.localState.employeeProfiles.findIndex((p) => (p.id === employeeId || p.userId === employeeId) && p.tenantId === tenantId);
+        if (idx === -1)
+            throw new Error('Colaborador no encontrado');
+        const emp = this.localState.employeeProfiles[idx];
+        if (!Array.isArray(emp.payments))
+            emp.payments = [];
+        const now = new Date().toISOString();
+        const newPayment = {
+            id: crypto_1.default.randomUUID(),
+            employeeId: emp.id,
+            tenantId,
+            paymentDate: paymentData.paymentDate || now.split('T')[0],
+            paymentTime: paymentData.paymentTime || now.split('T')[1].slice(0, 5),
+            amount: Number(paymentData.amount) || 0,
+            currency: paymentData.currency || emp.salaryCurrency || 'PEN',
+            periodConcept: paymentData.periodConcept || 'Pago de Remuneración',
+            paymentMethod: paymentData.paymentMethod || 'Transferencia',
+            operationNumber: paymentData.operationNumber || '',
+            voucherUrl: paymentData.voucherUrl,
+            voucherName: paymentData.voucherName,
+            notes: paymentData.notes || '',
+            createdAt: now,
+        };
+        emp.payments.unshift(newPayment);
+        emp.updatedAt = now;
+        await this.createFinanceTransaction(tenantId, {
+            type: 'expense',
+            category: 'Nómina & Sueldos',
+            amount: newPayment.amount,
+            currency: newPayment.currency,
+            date: newPayment.paymentDate,
+            description: 'Pago de haberes: ' + (emp.userName || 'Personal') + ' - ' + newPayment.periodConcept,
+            paymentMethod: newPayment.paymentMethod,
+            reference: newPayment.operationNumber,
+            receiptUrl: newPayment.voucherUrl,
+        });
+        this.saveLocalState();
+        return { employee: emp, payment: newPayment };
+    }
+    async deleteEmployeePayment(tenantId, employeeId, paymentId) {
+        if (!this.localState.employeeProfiles)
+            this.localState.employeeProfiles = [];
+        const idx = this.localState.employeeProfiles.findIndex((p) => (p.id === employeeId || p.userId === employeeId) && p.tenantId === tenantId);
+        if (idx === -1)
+            throw new Error('Colaborador no encontrado');
+        const emp = this.localState.employeeProfiles[idx];
+        if (Array.isArray(emp.payments)) {
+            emp.payments = emp.payments.filter((p) => p.id !== paymentId);
+            emp.updatedAt = new Date().toISOString();
+            this.saveLocalState();
+        }
+        return emp;
+    }
+    async deleteEmployeeProfile(tenantId, id) {
+        if (!this.localState.employeeProfiles)
+            return false;
+        const before = this.localState.employeeProfiles.length;
+        this.localState.employeeProfiles = this.localState.employeeProfiles.filter((p) => !(p.id === id && p.tenantId === tenantId));
+        const deleted = this.localState.employeeProfiles.length < before;
+        if (deleted)
+            this.saveLocalState();
+        return deleted;
+    }
+    // ===========================================================================
+    // ADMINISTRACIÓN: REGISTRO DE ASISTENCIAS Y MARCACIONES
+    // ===========================================================================
+    async getAttendanceRecords(tenantId, filters) {
+        if (!this.localState.attendanceRecords)
+            this.localState.attendanceRecords = [];
+        let list = this.localState.attendanceRecords.filter((r) => r.tenantId === tenantId);
+        if (filters?.userId) {
+            list = list.filter((r) => r.userId === filters.userId);
+        }
+        if (filters?.date) {
+            list = list.filter((r) => r.date === filters.date);
+        }
+        if (filters?.month) {
+            list = list.filter((r) => r.date.startsWith(filters.month));
+        }
+        if (filters?.status && filters.status !== 'all') {
+            list = list.filter((r) => r.status === filters.status);
+        }
+        return list.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+    }
+    async getTodayAttendance(tenantId, userId) {
+        if (!this.localState.attendanceRecords)
+            this.localState.attendanceRecords = [];
+        const today = new Date().toISOString().split('T')[0];
+        const rec = this.localState.attendanceRecords.find((r) => r.tenantId === tenantId && r.userId === userId && r.date === today);
+        return rec || null;
+    }
+    async recordAttendanceStamp(tenantId, userId, action, stamp) {
+        if (!this.localState.attendanceRecords)
+            this.localState.attendanceRecords = [];
+        const today = new Date().toISOString().split('T')[0];
+        const now = new Date().toISOString();
+        const user = this.localState.users.find((u) => u.id === userId);
+        const profile = await this.getEmployeeProfileByUserId(tenantId, userId);
+        const hrSettings = await this.getHrSettings(tenantId);
+        let record = this.localState.attendanceRecords.find((r) => r.tenantId === tenantId && r.userId === userId && r.date === today);
+        const expectedEntryTime = profile?.entryTime || hrSettings.defaultEntryTime || '09:00';
+        const toleranceMins = hrSettings.toleranceMinutes || 15;
+        if (!record) {
+            let status = 'present';
+            if (action === 'check_in') {
+                const [expH, expM] = expectedEntryTime.split(':').map(Number);
+                const [stampH, stampM] = stamp.time.split(':').map(Number);
+                const expTotalMins = expH * 60 + expM + toleranceMins;
+                const stampTotalMins = stampH * 60 + stampM;
+                if (stampTotalMins > expTotalMins) {
+                    status = 'late';
+                }
+            }
+            record = {
+                id: crypto_1.default.randomUUID(),
+                tenantId,
+                userId,
+                userName: user?.name || profile?.userName || 'Colaborador',
+                userEmail: user?.email || profile?.userEmail || '',
+                userAvatar: user?.avatarUrl || profile?.userAvatar || '',
+                jobTitle: user?.jobTitle || profile?.jobTitle || 'Equipo',
+                date: today,
+                checkIn: action === 'check_in' ? stamp : undefined,
+                breakStart: action === 'break_start' ? stamp : undefined,
+                breakEnd: action === 'break_end' ? stamp : undefined,
+                checkOut: action === 'check_out' ? stamp : undefined,
+                status: action === 'check_out' ? 'present' : status,
+                createdAt: now,
+                updatedAt: now,
+            };
+            this.localState.attendanceRecords.unshift(record);
+        }
+        else {
+            if (action === 'check_in') {
+                record.checkIn = stamp;
+                const [expH, expM] = expectedEntryTime.split(':').map(Number);
+                const [stampH, stampM] = stamp.time.split(':').map(Number);
+                if (stampH * 60 + stampM > expH * 60 + expM + toleranceMins) {
+                    record.status = 'late';
+                }
+                else {
+                    record.status = 'present';
+                }
+            }
+            else if (action === 'break_start') {
+                record.breakStart = stamp;
+            }
+            else if (action === 'break_end') {
+                record.breakEnd = stamp;
+            }
+            else if (action === 'check_out') {
+                record.checkOut = stamp;
+                if (record.status !== 'late') {
+                    record.status = 'present';
+                }
+            }
+            if (record.checkIn && record.checkOut) {
+                const inMs = new Date(record.checkIn.timestamp).getTime();
+                const outMs = new Date(record.checkOut.timestamp).getTime();
+                let totalMins = Math.max(0, Math.round((outMs - inMs) / 60000));
+                let breakMins = 0;
+                if (record.breakStart && record.breakEnd) {
+                    const bsMs = new Date(record.breakStart.timestamp).getTime();
+                    const beMs = new Date(record.breakEnd.timestamp).getTime();
+                    breakMins = Math.max(0, Math.round((beMs - bsMs) / 60000));
+                }
+                record.breakMinutes = breakMins;
+                record.totalWorkMinutes = Math.max(0, totalMins - breakMins);
+            }
+            record.updatedAt = now;
+        }
+        this.saveLocalState();
+        return record;
+    }
+    async updateAttendanceRecord(tenantId, id, data) {
+        if (!this.localState.attendanceRecords)
+            return null;
+        const idx = this.localState.attendanceRecords.findIndex((r) => r.id === id && r.tenantId === tenantId);
+        if (idx === -1)
+            return null;
+        const current = this.localState.attendanceRecords[idx];
+        const updated = {
+            ...current,
+            ...data,
+            tenantId,
+            updatedAt: new Date().toISOString(),
+        };
+        this.localState.attendanceRecords[idx] = updated;
+        this.saveLocalState();
+        return updated;
+    }
+    // ===========================================================================
+    // ADMINISTRACIÓN: FINANZAS Y MOVIMIENTOS
+    // ===========================================================================
+    async getFinanceTransactions(tenantId, filters) {
+        if (!this.localState.financeTransactions)
+            this.localState.financeTransactions = [];
+        let list = this.localState.financeTransactions.filter((t) => t.tenantId === tenantId);
+        if (filters?.type && filters.type !== 'all') {
+            list = list.filter((t) => t.type === filters.type);
+        }
+        if (filters?.category && filters.category !== 'all') {
+            list = list.filter((t) => t.category === filters.category);
+        }
+        if (filters?.startDate) {
+            list = list.filter((t) => t.date >= filters.startDate);
+        }
+        if (filters?.endDate) {
+            list = list.filter((t) => t.date <= filters.endDate);
+        }
+        return list.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+    }
+    async createFinanceTransaction(tenantId, data) {
+        if (!this.localState.financeTransactions)
+            this.localState.financeTransactions = [];
+        const now = new Date().toISOString();
+        const item = {
+            id: crypto_1.default.randomUUID(),
+            tenantId,
+            type: data.type || 'expense',
+            category: data.category || 'General',
+            amount: Number(data.amount) || 0,
+            currency: data.currency || 'PEN',
+            date: data.date || now.split('T')[0],
+            description: data.description || '',
+            paymentMethod: data.paymentMethod || 'Transferencia',
+            reference: data.reference || '',
+            status: data.status || 'completed',
+            receiptUrl: data.receiptUrl,
+            createdAt: now,
+            updatedAt: now,
+        };
+        this.localState.financeTransactions.unshift(item);
+        this.saveLocalState();
+        return item;
+    }
+    async deleteFinanceTransaction(tenantId, id) {
+        if (!this.localState.financeTransactions)
+            return false;
+        const before = this.localState.financeTransactions.length;
+        this.localState.financeTransactions = this.localState.financeTransactions.filter((t) => !(t.id === id && t.tenantId === tenantId));
+        const deleted = this.localState.financeTransactions.length < before;
+        if (deleted)
+            this.saveLocalState();
+        return deleted;
+    }
+    // ===========================================================================
+    // ADMINISTRACIÓN: CONTABILIDAD Y ASIENTOS
+    // ===========================================================================
+    async getAccountingEntries(tenantId, filters) {
+        if (!this.localState.accountingEntries)
+            this.localState.accountingEntries = [];
+        let list = this.localState.accountingEntries.filter((e) => e.tenantId === tenantId);
+        if (filters?.status && filters.status !== 'all') {
+            list = list.filter((e) => e.status === filters.status);
+        }
+        if (filters?.startDate) {
+            list = list.filter((e) => e.date >= filters.startDate);
+        }
+        if (filters?.endDate) {
+            list = list.filter((e) => e.date <= filters.endDate);
+        }
+        return list.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+    }
+    async createAccountingEntry(tenantId, data) {
+        if (!this.localState.accountingEntries)
+            this.localState.accountingEntries = [];
+        const now = new Date().toISOString();
+        const count = this.localState.accountingEntries.filter((e) => e.tenantId === tenantId).length + 1;
+        const item = {
+            id: crypto_1.default.randomUUID(),
+            tenantId,
+            entryNumber: data.entryNumber || ('ASI-' + String(count).padStart(4, '0')),
+            date: data.date || now.split('T')[0],
+            concept: data.concept || '',
+            accountCode: data.accountCode || '60.1',
+            accountName: data.accountName || 'Operación General',
+            debit: Number(data.debit) || 0,
+            credit: Number(data.credit) || 0,
+            status: data.status || 'posted',
+            reference: data.reference || '',
+            createdAt: now,
+            updatedAt: now,
+        };
+        this.localState.accountingEntries.unshift(item);
+        this.saveLocalState();
+        return item;
+    }
+    async deleteAccountingEntry(tenantId, id) {
+        if (!this.localState.accountingEntries)
+            return false;
+        const before = this.localState.accountingEntries.length;
+        this.localState.accountingEntries = this.localState.accountingEntries.filter((e) => !(e.id === id && e.tenantId === tenantId));
+        const deleted = this.localState.accountingEntries.length < before;
         if (deleted)
             this.saveLocalState();
         return deleted;

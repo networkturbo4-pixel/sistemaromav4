@@ -770,8 +770,36 @@ export interface WorkspacePost {
   updatedAt: string;
 }
 
-export type TaskStatus = 'pending' | 'in_progress' | 'in_review' | 'completed';
+export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'approved' | 'in_review';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type TaskFrequency = 'one_time' | 'daily' | 'daily_recurring' | 'weekly' | 'monthly';
+
+export interface TaskAttachment {
+  id: string;
+  name: string;
+  url: string;
+  type?: string;
+  size?: number;
+  uploadedAt?: string;
+}
+
+export interface TaskMilestone {
+  id: string;
+  title: string;
+  descriptionHtml?: string;
+  completed: boolean;
+  collapsed?: boolean;
+  completedAt?: string;
+  attachments?: TaskAttachment[];
+}
+
+export interface TaskAssignedMember {
+  id: string;
+  name: string;
+  email?: string;
+  avatar?: string;
+  jobTitle?: string;
+}
 
 export interface WorkspaceTask {
   id: string;
@@ -783,10 +811,25 @@ export interface WorkspaceTask {
   category: string; // Redes Sociales, Identidad Visual, Audiovisual, Web, Estrategia, General
   clientId?: string;
   clientName?: string;
+  projectId?: string;
+  projectName?: string;
+  monthId?: string;
+  monthName?: string;
   assignedUserId?: string;
   assignedUserName?: string;
   assignedUserAvatar?: string;
+  assignedUsers?: TaskAssignedMember[];
+  startDate?: string; // YYYY-MM-DD
   dueDate?: string; // YYYY-MM-DD
+  frequency?: TaskFrequency;
+  tags?: string[];
+  milestones?: TaskMilestone[];
+  isPinned?: boolean;
+  isArchived?: boolean;
+  driveFolderId?: string;
+  driveFolderName?: string;
+  driveFolderUrl?: string;
+  pastedImages?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -1161,3 +1204,314 @@ export interface BiolinkProfile {
 
 
 
+
+
+// =============================================================================
+// MÓDULO DE ADMINISTRACIÓN (RRHH, FINANZAS Y CONTABILIDAD)
+// =============================================================================
+
+export interface EmployeePaymentRecord {
+  id: string;
+  employeeId: string;
+  tenantId: string;
+  paymentDate: string; // YYYY-MM-DD
+  paymentTime: string; // HH:mm
+  amount: number;
+  currency: 'PEN' | 'USD';
+  periodConcept: string; // ej. "Sueldo Mes Noviembre 2026", "Quincena 1"
+  paymentMethod: string;
+  operationNumber?: string;
+  voucherUrl?: string;
+  voucherName?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface EmployeeProfile {
+  id: string;
+  tenantId: string;
+  publicToken?: string; // Token único seguro para la vista pública de historial de pagos
+  userId: string; // Enlace directo a la cuenta User
+  userName?: string;
+  userEmail?: string;
+  userAvatar?: string;
+  jobTitle?: string;
+  documentNumber?: string; // DNI / RFC / CI
+  documentType?: 'DNI' | 'RUC' | 'CE' | 'PASSPORT' | 'OTRO';
+  birthDate?: string; // YYYY-MM-DD
+  hireDate?: string; // YYYY-MM-DD
+  salary: number; // Salario acordado
+  salaryCurrency: 'PEN' | 'USD';
+  paymentFrequency: 'monthly' | 'biweekly' | 'weekly';
+  entryTime: string; // Formato HH:mm (ej. "09:00")
+  exitTime: string; // Formato HH:mm (ej. "18:00")
+  workDays: number[]; // 1: Lunes, 2: Martes, etc.
+  department?: string;
+  emergencyContact?: {
+    name: string;
+    phone: string;
+    relationship: string;
+  };
+  bankAccount?: {
+    bankName: string;
+    accountNumber: string;
+    cci?: string;
+  };
+  payments?: EmployeePaymentRecord[];
+  status: 'active' | 'inactive' | 'vacation' | 'license';
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HrGlobalSettings {
+  tenantId: string;
+  lunchStartTime: string; // ej "13:00"
+  lunchEndTime: string; // ej "14:00"
+  lunchDurationMinutes: number; // ej 60
+  toleranceMinutes: number; // Tolerancia tardanza en minutos ej 10 o 15
+  defaultEntryTime: string; // ej "09:00"
+  defaultExitTime: string; // ej "18:00"
+  workDays: number[]; // [1, 2, 3, 4, 5]
+  requirePhoto: boolean; // Obligatorio selfie al marcar
+  requireLocation: boolean; // Obligatorio GPS
+  allowBiometrics: boolean; // Permitir biometría táctil / FaceID
+  strictTardinessLock: boolean; // Si pasa de la tolerancia, bloqueo total hasta código Google Authenticator
+  authenticatorSecret?: string; // Secreto Base32 Google Authenticator
+  overtimeAllowed: boolean;
+  notificationOnLate: boolean;
+  updatedAt: string;
+}
+
+export const DEFAULT_HR_SETTINGS: HrGlobalSettings = {
+  tenantId: '',
+  lunchStartTime: '13:00',
+  lunchEndTime: '14:00',
+  lunchDurationMinutes: 60,
+  toleranceMinutes: 15,
+  defaultEntryTime: '09:00',
+  defaultExitTime: '18:00',
+  workDays: [1, 2, 3, 4, 5],
+  requirePhoto: true,
+  requireLocation: true,
+  allowBiometrics: true,
+  strictTardinessLock: true,
+  authenticatorSecret: '',
+  overtimeAllowed: true,
+  notificationOnLate: true,
+  updatedAt: new Date().toISOString(),
+};
+
+export interface AttendanceStamp {
+  timestamp: string; // ISO string
+  time: string; // "09:04:22"
+  photoUrl?: string;
+  location?: {
+    lat: number;
+    lng: number;
+    accuracy?: number;
+    address?: string;
+  };
+  isBiometric?: boolean;
+  deviceInfo?: string;
+  notes?: string;
+}
+
+export type AttendanceActionType = 'check_in' | 'break_start' | 'break_end' | 'check_out';
+
+export type AttendanceStatus =
+  | 'present'
+  | 'late'
+  | 'early_departure'
+  | 'in_progress'
+  | 'absent'
+  | 'justified';
+
+export interface AttendanceRecord {
+  id: string;
+  tenantId: string;
+  userId: string;
+  userName: string;
+  userEmail?: string;
+  userAvatar?: string;
+  jobTitle?: string;
+  date: string; // YYYY-MM-DD
+  checkIn?: AttendanceStamp;
+  breakStart?: AttendanceStamp;
+  breakEnd?: AttendanceStamp;
+  checkOut?: AttendanceStamp;
+  totalWorkMinutes?: number;
+  breakMinutes?: number;
+  status: AttendanceStatus;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FinanceTransaction {
+  id: string;
+  tenantId: string;
+  type: 'income' | 'expense';
+  category: string;
+  amount: number;
+  currency: 'PEN' | 'USD';
+  date: string; // YYYY-MM-DD
+  description: string;
+  paymentMethod?: string;
+  reference?: string;
+  status: 'completed' | 'pending' | 'cancelled';
+  receiptUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AccountingEntry {
+  id: string;
+  tenantId: string;
+  entryNumber: string;
+  date: string; // YYYY-MM-DD
+  concept: string;
+  accountCode: string;
+  accountName: string;
+  debit: number;
+  credit: number;
+  status: 'draft' | 'posted';
+  reference?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// =============================================================================
+// SUBMÓDULO: FORMULARIOS INTERACTIVOS DE AGENCIA (WORKSPACE)
+// =============================================================================
+export type FormFieldType =
+  | 'text'
+  | 'paragraph'
+  | 'radio'
+  | 'checkbox'
+  | 'select'
+  | 'file'
+  | 'date'
+  | 'scale'
+  | 'range'
+  | 'color'
+  | 'cards'
+  | 'comparative'
+  | 'section';
+
+export interface FormCardOption {
+  id: string;
+  title: string;
+  description?: string;
+  imageUrl?: string;
+  badge?: string;
+}
+
+export interface FormComparativeOption {
+  id: string;
+  title: string;
+  tagline?: string;
+  price?: string;
+  isPopular?: boolean;
+  features: string[];
+}
+
+export interface FormField {
+  id: string;
+  type: FormFieldType;
+  label: string;
+  description?: string;
+  placeholder?: string;
+  required?: boolean;
+  options?: string[]; // Para radio, checkbox, select, presets de color
+  cardOptions?: FormCardOption[]; // Para 'cards'
+  comparativeOptions?: FormComparativeOption[]; // Para 'comparative'
+  // Configuración de subida de archivos
+  maxFileSizeMb?: number; // e.g. 5, 10, 25, 50, 100
+  maxFilesCount?: number; // e.g. 1 a 10
+  allowedFileTypes?: string[]; // e.g. ['image/*', 'application/pdf', '.doc,.docx', '.zip']
+  // Configuración de escalas (rating)
+  scaleMin?: number; // 1
+  scaleMax?: number; // 5 o 10
+  scaleMinLabel?: string; // e.g. "Poco probable" / "Malo"
+  scaleMaxLabel?: string; // e.g. "Muy probable" / "Excelente"
+  // Configuración de rango
+  rangeMin?: number; // 0
+  rangeMax?: number; // 100
+  rangeStep?: number; // 1
+  rangeUnit?: string; // e.g. "%", "USD", "pts"
+  defaultValue?: any;
+}
+
+export interface FormWelcomeScreen {
+  enabled: boolean;
+  title: string;
+  description: string;
+  buttonText: string;
+}
+
+export interface FormThankYouScreen {
+  title: string;
+  message: string;
+  buttonText?: string;
+  buttonUrl?: string;
+}
+
+export interface FormCustomization {
+  coverImage?: string;
+  logoUrl?: string;
+  primaryColor?: string; // hex
+  themeMode?: 'light' | 'dark' | 'auto';
+  borderRadius?: 'rounded-none' | 'rounded-xl' | 'rounded-2xl' | 'rounded-3xl';
+  fontFamily?: 'sans' | 'serif' | 'mono';
+  bgPattern?: 'none' | 'dots' | 'grid' | 'gradient' | 'mesh';
+}
+
+export interface FormSettings {
+  collectClientName: boolean;
+  collectClientEmail: boolean;
+  showAgencyLogo: boolean;
+  isMultiStep: boolean;
+  welcomeScreen: FormWelcomeScreen;
+  thankYouScreen: FormThankYouScreen;
+}
+
+export type FormStatus = 'draft' | 'published' | 'closed';
+
+export interface WorkspaceForm {
+  id: string;
+  tenantId: string;
+  title: string;
+  description?: string;
+  slug: string; // Enlace corto amigable (ej: "brief-marca-2026")
+  status: FormStatus;
+  fields: FormField[];
+  customization: FormCustomization;
+  settings: FormSettings;
+  viewsCount: number;
+  submissionsCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FormSubmissionFile {
+  fieldId: string;
+  fileName: string;
+  fileUrl: string;
+  fileSize?: number;
+  mimeType?: string;
+}
+
+export interface FormSubmission {
+  id: string;
+  tenantId: string;
+  formId: string;
+  formTitle: string;
+  clientName?: string;
+  clientEmail?: string;
+  answers: Record<string, any>;
+  files?: FormSubmissionFile[];
+  submittedAt: string;
+  ip?: string;
+  userAgent?: string;
+}

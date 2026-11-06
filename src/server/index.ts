@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import multer from 'multer';
 import compression from 'compression';
 import path from 'path';
 import fs from 'fs';
@@ -20,6 +21,8 @@ import {
 import { PERMISSIONS_CATALOG, hasPermission, hasAnyPermission } from '../shared/permissions';
 import driveRouter from './routes/drive.routes';
 import { googleDriveService } from './services/googleDriveService';
+import QRCode from 'qrcode';
+import { generateTotpSecret, generateTotpCode, verifyTotpCode, buildOtpAuthUri } from './utils/totp';
 import { notificationService, notifyEvent } from './services/notificationService';
 
 dotenv.config();
@@ -143,6 +146,26 @@ app.post('/api/auth/login-pin', async (req: Request, res: Response) => {
       roleId: match.role.id,
     });
 
+    const todayAttendance = await db.getTodayAttendance(match.tenant.id, match.user.id);
+    const hrSettings = await db.getHrSettings(match.tenant.id);
+    const profile = await db.getEmployeeProfileByUserId(match.tenant.id, match.user.id);
+
+    const alreadyCheckedInToday = !!todayAttendance?.checkIn;
+    const expectedEntryTime = profile?.entryTime || hrSettings.defaultEntryTime || '09:00';
+    const toleranceMinutes = hrSettings.toleranceMinutes ?? 15;
+
+    // Calcular si está fuera de hora de tolerancia
+    let isOutsideTolerance = false;
+    const now = new Date();
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    const [expH, expM] = expectedEntryTime.split(':').map(Number);
+    const limitMins = expH * 60 + expM + toleranceMinutes;
+    if (currentMins > limitMins) {
+      isOutsideTolerance = true;
+    }
+
+    const isAdmin = (match.role.permissions as any)?.includes('*') || hasPermission(match.role.permissions, 'administration.hr.manage');
+
     res.json({
       token,
       user: match.user,
@@ -150,6 +173,16 @@ app.post('/api/auth/login-pin', async (req: Request, res: Response) => {
       tenant: match.tenant,
       permissionsCatalog: PERMISSIONS_CATALOG,
       engineInfo: db.getEngineInfo(),
+      attendanceCheck: {
+        alreadyCheckedInToday,
+        requiresAttendanceCheckIn: !alreadyCheckedInToday && !isAdmin,
+        isOutsideTolerance,
+        strictTardinessLock: !!hrSettings.strictTardinessLock,
+        hasAuthenticatorConfigured: !!hrSettings.authenticatorSecret,
+        expectedEntryTime,
+        toleranceMinutes,
+        todayAttendance,
+      },
     });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
@@ -158,12 +191,41 @@ app.post('/api/auth/login-pin', async (req: Request, res: Response) => {
 
 app.get('/api/auth/me', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   const { user, role, tenant } = req.auth!;
+  const todayAttendance = await db.getTodayAttendance(tenant.id, user.id);
+  const hrSettings = await db.getHrSettings(tenant.id);
+  const profile = await db.getEmployeeProfileByUserId(tenant.id, user.id);
+
+  const alreadyCheckedInToday = !!todayAttendance?.checkIn;
+  const expectedEntryTime = profile?.entryTime || hrSettings.defaultEntryTime || '09:00';
+  const toleranceMinutes = hrSettings.toleranceMinutes ?? 15;
+
+  let isOutsideTolerance = false;
+  const now = new Date();
+  const currentMins = now.getHours() * 60 + now.getMinutes();
+  const [expH, expM] = expectedEntryTime.split(':').map(Number);
+  const limitMins = expH * 60 + expM + toleranceMinutes;
+  if (currentMins > limitMins) {
+    isOutsideTolerance = true;
+  }
+
+  const isAdmin = (role?.permissions as any)?.includes('*') || hasPermission(role?.permissions, 'administration.hr.manage');
+
   res.json({
     user,
     role,
     tenant,
     permissionsCatalog: PERMISSIONS_CATALOG,
     engineInfo: db.getEngineInfo(),
+    attendanceCheck: {
+      alreadyCheckedInToday,
+      requiresAttendanceCheckIn: !alreadyCheckedInToday && !isAdmin,
+      isOutsideTolerance,
+      strictTardinessLock: !!hrSettings.strictTardinessLock,
+      hasAuthenticatorConfigured: !!hrSettings.authenticatorSecret,
+      expectedEntryTime,
+      toleranceMinutes,
+      todayAttendance,
+    },
   });
 });
 
@@ -995,6 +1057,20 @@ app.delete(
 );
 
 // Endpoint público para que el cliente consulte su nota de pago (sin requerir autenticación)
+// --- VISTA PÚBLICA DE PERSONAL E HISTORIAL DE PAGOS ---
+app.get('/api/public/personal/:token', async (req: Request, res: Response) => {
+  try {
+    const token = req.params.token as string;
+    const data = await db.getEmployeeProfileByPublicToken(token);
+    if (!data) {
+      return res.status(404).json({ error: 'Ficha de personal no encontrada o enlace vencido' });
+    }
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 app.get('/api/public/payment-notes/:token', async (req: Request, res: Response) => {
   try {
     const result = await db.getPaymentNoteByPublicToken(req.params.token as string);
@@ -1107,6 +1183,120 @@ app.post('/api/public/biolinks/:slug/click', async (req: Request, res: Response)
     res.status(500).json({ error: (err as Error).message });
   }
 });
+
+// =============================================================================
+// SUBMÓDULO: FORMULARIOS INTERACTIVOS (PÚBLICO Y SUBIDA DE ARCHIVOS)
+// =============================================================================
+
+const formsUploadStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = path.resolve(process.cwd(), 'uploads', 'forms');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const cleanBase = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, '_').slice(0, 50);
+    const unique = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    cb(null, `${cleanBase}_${unique}${ext}`);
+  },
+});
+
+const formUpload = multer({
+  storage: formsUploadStorage,
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+});
+
+// Subida de archivos desde formulario público o preview
+app.post('/api/public/forms/upload', formUpload.single('file'), (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No se ha proporcionado ningún archivo' });
+    }
+    res.json({
+      url: `/uploads/forms/${req.file.filename}`,
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      mimeType: req.file.mimetype,
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// Subida de portadas y logos para formularios (autenticado)
+app.post('/api/workspace/forms/upload-asset', requireAuth, formUpload.single('file'), (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No se ha proporcionado ningún archivo' });
+    }
+    res.json({
+      url: `/uploads/forms/${req.file.filename}`,
+      fileName: req.file.originalname,
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// Obtener formulario público por slug
+app.get('/api/public/forms/:slug', async (req: Request, res: Response) => {
+  try {
+    const slug = req.params.slug as string;
+    const result = await db.getFormBySlug(slug);
+    if (!result) {
+      return res.status(404).json({ error: 'Formulario no encontrado o no disponible' });
+    }
+
+    db.recordFormView(slug).catch(() => {});
+
+    const { form, tenant } = result;
+    res.json({
+      form,
+      tenant: tenant
+        ? {
+            id: tenant.id,
+            name: tenant.companyInfo?.commercialName || tenant.name,
+            logoUrl: tenant.customization?.logoUrl || '',
+            faviconUrl: tenant.customization?.faviconUrl || '',
+            companyInfo: tenant.companyInfo,
+          }
+        : null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// Enviar respuestas a formulario público
+app.post('/api/public/forms/:slug/submit', async (req: Request, res: Response) => {
+  try {
+    const slug = req.params.slug as string;
+    const { clientName, clientEmail, answers, files } = req.body;
+    const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || undefined;
+    const userAgent = req.headers['user-agent'] || undefined;
+
+    const submission = await db.submitFormAnswers(slug, {
+      clientName,
+      clientEmail,
+      answers,
+      files,
+      ip,
+      userAgent,
+    });
+
+    res.status(201).json({
+      ok: true,
+      submission,
+      message: 'Respuestas registradas exitosamente',
+    });
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+});
+
 
 // =============================================================================
 // MÓDULO DE WORKSPACE: REDES SOCIALES & PROYECTOS
@@ -1703,6 +1893,533 @@ app.delete(
     try {
       await db.clearCodeHistory(req.auth!.tenant.id);
       res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// =============================================================================
+// SUBMÓDULO: FORMULARIOS DE WORKSPACE (GESTIÓN Y RESULTADOS)
+// =============================================================================
+
+// Listar formularios
+app.get(
+  '/api/workspace/forms',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const forms = await db.getForms(req.auth!.tenant.id);
+      res.json({ forms });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// Obtener un formulario por ID
+app.get(
+  '/api/workspace/forms/:id',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const form = await db.getFormById(req.params.id as string, req.auth!.tenant.id);
+      if (!form) return res.status(404).json({ error: 'Formulario no encontrado' });
+      res.json({ form });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// Crear formulario en blanco
+app.post(
+  '/api/workspace/forms',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const form = await db.createForm(req.auth!.tenant.id, req.body);
+      res.status(201).json({ form });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// Actualizar formulario
+app.put(
+  '/api/workspace/forms/:id',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const updated = await db.updateForm(req.params.id as string, req.auth!.tenant.id, req.body);
+      if (!updated) return res.status(404).json({ error: 'Formulario no encontrado' });
+      res.json({ form: updated });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// Eliminar formulario
+app.delete(
+  '/api/workspace/forms/:id',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const deleted = await db.deleteForm(req.params.id as string, req.auth!.tenant.id);
+      if (!deleted) return res.status(404).json({ error: 'Formulario no encontrado' });
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// Duplicar formulario
+app.post(
+  '/api/workspace/forms/:id/duplicate',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const copy = await db.duplicateForm(req.params.id as string, req.auth!.tenant.id);
+      if (!copy) return res.status(404).json({ error: 'Formulario no encontrado' });
+      res.status(201).json({ form: copy });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// Listar respuestas de un formulario
+app.get(
+  '/api/workspace/forms/:id/submissions',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const submissions = await db.getFormSubmissions(req.params.id as string, req.auth!.tenant.id);
+      res.json({ submissions });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// Eliminar una respuesta
+app.delete(
+  '/api/workspace/forms/submissions/:submissionId',
+  requireAuth,
+  requirePermission('workspace.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const deleted = await db.deleteFormSubmission(req.params.submissionId as string, req.auth!.tenant.id);
+      if (!deleted) return res.status(404).json({ error: 'Respuesta no encontrada' });
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// =============================================================================
+// MÓDULO DE ADMINISTRACIÓN (RRHH, FINANZAS Y CONTABILIDAD)
+// =============================================================================
+
+// --- RECURSOS HUMANOS: CONFIGURACIÓN GLOBAL ---
+app.get(
+  '/api/administration/hr/settings',
+  requireAuth,
+  requirePermission('administration.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const settings = await db.getHrSettings(req.auth!.tenant.id);
+      res.json({ settings });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+app.put(
+  '/api/administration/hr/settings',
+  requireAuth,
+  requirePermission('administration.hr.manage'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const settings = await db.updateHrSettings(req.auth!.tenant.id, req.body);
+      res.json({ settings });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// --- RECURSOS HUMANOS: EMPLEADOS Y PERSONAL ---
+app.get(
+  '/api/administration/hr/employees',
+  requireAuth,
+  requirePermission('administration.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const employees = await db.getEmployeeProfiles(req.auth!.tenant.id);
+      res.json({ employees });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+app.post(
+  '/api/administration/hr/employees',
+  requireAuth,
+  requirePermission('administration.hr.manage'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const employee = await db.saveEmployeeProfile(req.auth!.tenant.id, req.body);
+      res.status(201).json({ employee });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+app.put(
+  '/api/administration/hr/employees/:id',
+  requireAuth,
+  requirePermission('administration.hr.manage'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const employee = await db.saveEmployeeProfile(req.auth!.tenant.id, {
+        ...req.body,
+        id: req.params.id as string,
+      });
+      res.json({ employee });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+
+app.post(
+  '/api/administration/hr/employees/:id/payments',
+  requireAuth,
+  requirePermission('administration.hr.manage'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const result = await db.addEmployeePayment(
+        req.auth!.tenant.id,
+        req.params.id as string,
+        req.body
+      );
+      res.status(201).json(result);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+app.delete(
+  '/api/administration/hr/employees/:id/payments/:paymentId',
+  requireAuth,
+  requirePermission('administration.hr.manage'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const employee = await db.deleteEmployeePayment(
+        req.auth!.tenant.id,
+        req.params.id as string,
+        req.params.paymentId as string
+      );
+      res.json({ employee });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+app.delete(
+  '/api/administration/hr/employees/:id',
+  requireAuth,
+  requirePermission('administration.hr.manage'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const deleted = await db.deleteEmployeeProfile(req.auth!.tenant.id, req.params.id as string);
+      res.json({ ok: deleted });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+
+// --- GOOGLE AUTHENTICATOR CONFIGURACIÓN & DESBLOQUEO ---
+app.post(
+  '/api/administration/hr/authenticator/setup',
+  requireAuth,
+  requirePermission('administration.hr.manage'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const hrSettings = await db.getHrSettings(req.auth!.tenant.id);
+      let secret = hrSettings.authenticatorSecret;
+      if (!secret) {
+        secret = generateTotpSecret(20);
+      }
+      const issuer = req.auth!.tenant.name || 'ROMA SaaS';
+      const account = 'Administrador de RRHH';
+      const otpAuthUri = buildOtpAuthUri(issuer, account, secret);
+      const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUri, { width: 280, margin: 2 });
+
+      res.json({
+        secret,
+        qrCodeDataUrl,
+        otpAuthUri,
+        configured: !!hrSettings.authenticatorSecret,
+      });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+app.post(
+  '/api/administration/hr/authenticator/verify',
+  requireAuth,
+  requirePermission('administration.hr.manage'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { code, secret } = req.body;
+      if (!code || !secret) {
+        return res.status(400).json({ error: 'Código y secreto requeridos' });
+      }
+      const isValid = verifyTotpCode(code, secret);
+      if (!isValid) {
+        return res.status(400).json({ error: 'Código incorrecto. Verifica la hora de tu celular e intenta de nuevo.' });
+      }
+      // Si es válido, guardar el secreto en la configuración de RRHH
+      await db.updateHrSettings(req.auth!.tenant.id, {
+        authenticatorSecret: secret,
+        strictTardinessLock: true,
+      });
+      res.json({ ok: true, message: 'Google Authenticator configurado con éxito' });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// Desbloquear entrada tardía mediante código de Google Authenticator
+app.post(
+  '/api/administration/hr/attendance/unlock-late',
+  requireAuth,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { authenticatorCode, stamp } = req.body;
+      if (!authenticatorCode || !stamp) {
+        return res.status(400).json({ error: 'Código de desbloqueo y datos de marcación son obligatorios' });
+      }
+
+      const hrSettings = await db.getHrSettings(req.auth!.tenant.id);
+      if (hrSettings.strictTardinessLock && hrSettings.authenticatorSecret) {
+        const isValid = verifyTotpCode(authenticatorCode, hrSettings.authenticatorSecret);
+        if (!isValid) {
+          return res.status(400).json({
+            error: 'Código de Google Authenticator inválido o expirado. Solicita el código actual de 6 dígitos al Administrador.',
+          });
+        }
+      }
+
+      // Marcar asistencia como entrada desbloqueada
+      const record = await db.recordAttendanceStamp(
+        req.auth!.tenant.id,
+        req.auth!.user.id,
+        'check_in',
+        {
+          ...stamp,
+          notes: `Tardanza autorizada por Administrador con código Google Authenticator (${new Date().toLocaleTimeString('es-PE')})`,
+        }
+      );
+
+      res.json({ record, unlocked: true });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// --- RECURSOS HUMANOS: ASISTENCIAS Y MARCACIONES ---
+
+// Marcación del día del usuario autenticado (para Widget de Dashboard y vista personal)
+app.get(
+  '/api/administration/hr/attendance/today',
+  requireAuth,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const record = await db.getTodayAttendance(req.auth!.tenant.id, req.auth!.user.id);
+      const hrSettings = await db.getHrSettings(req.auth!.tenant.id);
+      const profile = await db.getEmployeeProfileByUserId(req.auth!.tenant.id, req.auth!.user.id);
+      res.json({ record, hrSettings, profile });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// Registrar una acción de marcación (Entrada, Inicio Refrigerio, Fin Refrigerio, Salida)
+app.post(
+  '/api/administration/hr/attendance/stamp',
+  requireAuth,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { action, stamp } = req.body;
+      if (!action || !stamp) {
+        res.status(400).json({ error: 'Acción y datos de marcación son obligatorios' });
+        return;
+      }
+      const record = await db.recordAttendanceStamp(
+        req.auth!.tenant.id,
+        req.auth!.user.id,
+        action,
+        stamp
+      );
+      res.json({ record });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// Historial completo de asistencias para el dashboard de RRHH
+app.get(
+  '/api/administration/hr/attendance',
+  requireAuth,
+  requirePermission('administration.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { userId, date, month, status } = req.query as Record<string, string | undefined>;
+      const records = await db.getAttendanceRecords(req.auth!.tenant.id, {
+        userId,
+        date,
+        month,
+        status,
+      });
+      res.json({ records });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+app.put(
+  '/api/administration/hr/attendance/:id',
+  requireAuth,
+  requirePermission('administration.hr.manage'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const updated = await db.updateAttendanceRecord(req.auth!.tenant.id, req.params.id as string, req.body);
+      res.json({ record: updated });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// --- SUBMÓDULO: FINANZAS ---
+app.get(
+  '/api/administration/finances',
+  requireAuth,
+  requirePermission('administration.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { type, category, startDate, endDate } = req.query as Record<string, string | undefined>;
+      const transactions = await db.getFinanceTransactions(req.auth!.tenant.id, {
+        type,
+        category,
+        startDate,
+        endDate,
+      });
+      res.json({ transactions });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+app.post(
+  '/api/administration/finances',
+  requireAuth,
+  requirePermission('administration.finances.manage'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const transaction = await db.createFinanceTransaction(req.auth!.tenant.id, req.body);
+      res.status(201).json({ transaction });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+app.delete(
+  '/api/administration/finances/:id',
+  requireAuth,
+  requirePermission('administration.finances.manage'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const deleted = await db.deleteFinanceTransaction(req.auth!.tenant.id, req.params.id as string);
+      res.json({ ok: deleted });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// --- SUBMÓDULO: CONTABILIDAD ---
+app.get(
+  '/api/administration/accounting',
+  requireAuth,
+  requirePermission('administration.view'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { status, startDate, endDate } = req.query as Record<string, string | undefined>;
+      const entries = await db.getAccountingEntries(req.auth!.tenant.id, {
+        status,
+        startDate,
+        endDate,
+      });
+      res.json({ entries });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+app.post(
+  '/api/administration/accounting',
+  requireAuth,
+  requirePermission('administration.accounting.manage'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const entry = await db.createAccountingEntry(req.auth!.tenant.id, req.body);
+      res.status(201).json({ entry });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+app.delete(
+  '/api/administration/accounting/:id',
+  requireAuth,
+  requirePermission('administration.accounting.manage'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const deleted = await db.deleteAccountingEntry(req.auth!.tenant.id, req.params.id as string);
+      res.json({ ok: deleted });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
@@ -3640,6 +4357,8 @@ if (fs.existsSync(clientDistPath)) {
   app.get('*', (req: Request, res: Response) => {
     if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
       serveHtmlWithMetadata(req, res);
+    } else {
+      res.status(404).json({ error: 'Ruta no encontrada' });
     }
   });
 }

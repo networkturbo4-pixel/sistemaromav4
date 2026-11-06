@@ -12,6 +12,7 @@ import {
   TaskStatus,
   Client,
   User as UserType,
+  WorkspaceForm,
 } from '../../shared/types';
 import { DriveFolderPickerModal } from '../components/DriveFolderPickerModal';
 import { PaintCanvasModal } from '../components/PaintCanvasModal';
@@ -33,6 +34,7 @@ import { SocialKanbanView } from './workspace/submodules/social/SocialKanbanView
 import { TasksView } from './workspace/submodules/tasks/TasksView';
 import { DriveModule } from './DriveModule';
 import { ToolsModuleView } from './workspace/submodules/tools/ToolsModuleView';
+import { FormsSubmoduleView } from './workspace/submodules/forms/FormsSubmoduleView';
 
 // Modales
 import { ProjectModal } from './workspace/modals/ProjectModal';
@@ -45,10 +47,11 @@ import { DriveFolderUploadModal } from './workspace/modals/DriveFolderUploadModa
 import { X } from 'lucide-react';
 
 export const WorkspaceModule: React.FC = () => {
-  const { tenant, toast, confirmAction, apiFetch } = useApp();
+  const { tenant, user, toast, confirmAction, apiFetch } = useApp();
 
-  // Nivel 0: Navegación de Submódulos ('hub', 'social', 'tasks', 'drive', 'tools')
-  const [currentView, setCurrentView] = useState<'hub' | 'social' | 'tasks' | 'drive' | 'tools'>('hub');
+  // Nivel 0: Navegación de Submódulos ('hub', 'social', 'tasks', 'drive', 'tools', 'forms')
+  const [currentView, setCurrentView] = useState<'hub' | 'social' | 'tasks' | 'drive' | 'tools' | 'forms'>('hub');
+  const [forms, setForms] = useState<WorkspaceForm[]>([]);
 
   // Nivel 1: Fases de Redes Sociales
   // 1 = Proyectos de Redes Sociales
@@ -131,6 +134,7 @@ export const WorkspaceModule: React.FC = () => {
         projectsRes,
         osRes,
         monthsRes,
+        formsRes,
       ] = await Promise.all([
         apiFetch<{ clients: Client[] }>('/api/clients').catch(() => ({ clients: [] })),
         apiFetch<{ users: UserType[] }>('/api/settings/users').catch(() => ({ users: [] })),
@@ -139,6 +143,7 @@ export const WorkspaceModule: React.FC = () => {
         apiFetch<{ projects: WorkspaceProject[] }>('/api/workspace/projects').catch(() => ({ projects: [] })),
         apiFetch<{ serviceOrders?: ServiceOrder[]; orders?: ServiceOrder[] }>('/api/service-orders').catch(() => ({ serviceOrders: [], orders: [] })),
         apiFetch<{ months: WorkspaceMonth[] }>('/api/workspace/months').catch(() => ({ months: [] })),
+        apiFetch<{ forms: WorkspaceForm[] }>('/api/workspace/forms').catch(() => ({ forms: [] })),
       ]);
       setClients(clientsRes.clients || []);
       setTeamUsers(usersRes.users || []);
@@ -147,6 +152,7 @@ export const WorkspaceModule: React.FC = () => {
       setProjects(projectsRes.projects || []);
       setServiceOrders(osRes.serviceOrders || osRes.orders || []);
       setMonths(monthsRes.months || []);
+      setForms(formsRes.forms || []);
     } catch {
       toast('Error al sincronizar datos del Workspace', 'error');
     } finally {
@@ -162,7 +168,7 @@ export const WorkspaceModule: React.FC = () => {
   useEffect(() => {
     const handleOpenWorkspaceSubview = (e: any) => {
       const detail = e.detail;
-      if (detail === 'social' || detail === 'tasks' || detail === 'drive' || detail === 'hub' || detail === 'tools') {
+      if (detail === 'social' || detail === 'tasks' || detail === 'drive' || detail === 'hub' || detail === 'tools' || detail === 'forms') {
         setCurrentView(detail);
         if (detail === 'social') {
           setSocialPhase(1);
@@ -759,17 +765,111 @@ export const WorkspaceModule: React.FC = () => {
 
   // TAREAS LOGIC & HANDLERS
   const handleOpenNewTask = (status: TaskStatus = 'pending') => {
+    const today = new Date().toISOString().split('T')[0];
+    const defaultDueDate = new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0];
     setEditingTask({
-      title: '',
-      description: '',
       status,
       priority: 'medium',
-      category: 'Redes Sociales',
+      frequency: 'one_time',
+      category: 'General / Operativa',
       clientId: clients[0]?.id || '',
       clientName: clients[0]?.name || '',
-      dueDate: new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0],
+      startDate: today,
+      dueDate: defaultDueDate,
+      tags: [],
+      milestones: [
+        {
+          id: `ms-${Date.now()}`,
+          title: 'Requerimientos & Briefing Inicial',
+          descriptionHtml: '',
+          completed: false,
+          collapsed: false,
+          attachments: [],
+        },
+      ],
+      assignedUsers: user
+        ? [
+            {
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              avatar: user.avatar,
+              jobTitle: user.jobTitle,
+            },
+          ]
+        : [],
+      assignedUserId: user?.id,
+      assignedUserName: user?.name,
     });
     setIsTaskModalOpen(true);
+  };
+
+  const handleUpdateTaskStatus = async (taskId: string, newStatus: TaskStatus) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task || task.status === newStatus) return;
+
+    // Optimistic update
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
+    );
+
+    try {
+      await apiFetch<{ task: WorkspaceTask }>(`/api/workspace/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+    } catch {
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, status: task.status } : t))
+      );
+      toast('Error al actualizar el estado de la tarea', 'error');
+    }
+  };
+
+  const handleTogglePinTask = async (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    const newPinned = !task.isPinned;
+
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, isPinned: newPinned } : t))
+    );
+
+    try {
+      await apiFetch<{ task: WorkspaceTask }>(`/api/workspace/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPinned: newPinned }),
+      });
+    } catch {
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, isPinned: task.isPinned } : t))
+      );
+      toast('Error al actualizar fijado de la tarea', 'error');
+    }
+  };
+
+  const handleArchiveTask = async (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    const newArchived = !task.isArchived;
+
+    try {
+      await apiFetch<{ task: WorkspaceTask }>(`/api/workspace/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isArchived: newArchived }),
+      });
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, isArchived: newArchived } : t))
+      );
+      setIsTaskModalOpen(false);
+      setEditingTask(null);
+      toast(newArchived ? 'Tarea archivada' : 'Tarea desarchivada', 'success');
+    } catch {
+      toast('Error al archivar la tarea', 'error');
+    }
   };
 
   const handleOpenEditTask = (task: WorkspaceTask) => {
@@ -862,6 +962,7 @@ export const WorkspaceModule: React.FC = () => {
         <WorkspaceHubView
           projects={projects}
           tasks={tasks}
+          formsCount={forms.length}
           onSelectSubmodule={(view) => {
             setCurrentView(view);
             if (view === 'social') setSocialPhase(1);
@@ -977,6 +1078,9 @@ export const WorkspaceModule: React.FC = () => {
         <TasksView
           tasks={tasks}
           clients={clients}
+          projects={projects}
+          teamUsers={teamUsers}
+          currentUser={user}
           taskSearch={taskSearch}
           setTaskSearch={setTaskSearch}
           taskClientFilter={taskClientFilter}
@@ -989,6 +1093,8 @@ export const WorkspaceModule: React.FC = () => {
           onOpenNewTask={handleOpenNewTask}
           onOpenEditTask={handleOpenEditTask}
           onDeleteTask={handleDeleteTask}
+          onUpdateTaskStatus={handleUpdateTaskStatus}
+          onTogglePinTask={handleTogglePinTask}
         />
       )}
 
@@ -1007,6 +1113,18 @@ export const WorkspaceModule: React.FC = () => {
       {currentView === 'tools' && (
         <div className="space-y-4 animate-fadeIn">
           <ToolsModuleView onBackToHub={() => setCurrentView('hub')} />
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* SUBMÓDULO: FORMULARIOS INTERACTIVOS DE AGENCIA & CLIENTES */}
+      {/* ===================================================================== */}
+      {currentView === 'forms' && (
+        <div className="space-y-4 animate-fadeIn">
+          <FormsSubmoduleView onBackToHub={() => {
+            setCurrentView('hub');
+            loadInitialData();
+          }} />
         </div>
       )}
 
@@ -1074,11 +1192,14 @@ export const WorkspaceModule: React.FC = () => {
         setEditingTask={setEditingTask}
         clients={clients}
         teamUsers={teamUsers}
+        projects={projects}
         onClose={() => {
           setIsTaskModalOpen(false);
           setEditingTask(null);
         }}
         onSaveTask={handleSaveTask}
+        onDeleteTask={handleDeleteTask}
+        onArchiveTask={handleArchiveTask}
       />
 
       {/* Modal Vista Pública del Post */}

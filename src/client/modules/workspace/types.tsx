@@ -165,27 +165,42 @@ export const POST_STATUS_MAP: Record<
 
 export const TASK_STATUS_MAP: Record<
   TaskStatus,
-  { label: string; bg: string; text: string }
+  { label: string; bg: string; text: string; dot: string; border: string }
 > = {
   pending: {
-    label: 'Por Iniciar',
-    bg: 'bg-slate-100 dark:bg-slate-800',
-    text: 'text-slate-700 dark:text-slate-300',
+    label: 'Nuevo',
+    bg: 'bg-blue-50 dark:bg-blue-950/40',
+    text: 'text-blue-700 dark:text-blue-400',
+    dot: 'bg-blue-500',
+    border: 'border-blue-200 dark:border-blue-900',
   },
   in_progress: {
-    label: 'En Proceso',
-    bg: 'bg-blue-100 dark:bg-blue-950/60',
-    text: 'text-blue-700 dark:text-blue-400',
+    label: 'Pendiente / En Curso',
+    bg: 'bg-amber-50 dark:bg-amber-950/40',
+    text: 'text-amber-700 dark:text-amber-400',
+    dot: 'bg-amber-500',
+    border: 'border-amber-200 dark:border-amber-900',
+  },
+  completed: {
+    label: 'Terminado',
+    bg: 'bg-emerald-50 dark:bg-emerald-950/40',
+    text: 'text-emerald-700 dark:text-emerald-400',
+    dot: 'bg-emerald-500',
+    border: 'border-emerald-200 dark:border-emerald-900',
+  },
+  approved: {
+    label: 'Aprobado',
+    bg: 'bg-teal-50 dark:bg-teal-950/40',
+    text: 'text-teal-700 dark:text-teal-400',
+    dot: 'bg-teal-500',
+    border: 'border-teal-200 dark:border-teal-900',
   },
   in_review: {
     label: 'En Revisión',
-    bg: 'bg-amber-100 dark:bg-amber-950/60',
-    text: 'text-amber-700 dark:text-amber-400',
-  },
-  completed: {
-    label: 'Completada',
-    bg: 'bg-emerald-100 dark:bg-emerald-950/60',
-    text: 'text-emerald-700 dark:text-emerald-300',
+    bg: 'bg-purple-50 dark:bg-purple-950/40',
+    text: 'text-purple-700 dark:text-purple-400',
+    dot: 'bg-purple-500',
+    border: 'border-purple-200 dark:border-purple-900',
   },
 };
 

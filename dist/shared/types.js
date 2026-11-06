@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DEFAULT_COMPANY_INFO = exports.DEFAULT_CUSTOMIZATION = void 0;
+exports.DEFAULT_HR_SETTINGS = exports.DEFAULT_COMPANY_INFO = exports.DEFAULT_CUSTOMIZATION = void 0;
 exports.DEFAULT_CUSTOMIZATION = {
     clientGlobalNamePlural: 'Clientes',
     clientGlobalNameSingular: 'Cliente',
@@ -76,4 +76,22 @@ exports.DEFAULT_COMPANY_INFO = {
             isActive: true,
         },
     ],
+};
+exports.DEFAULT_HR_SETTINGS = {
+    tenantId: '',
+    lunchStartTime: '13:00',
+    lunchEndTime: '14:00',
+    lunchDurationMinutes: 60,
+    toleranceMinutes: 15,
+    defaultEntryTime: '09:00',
+    defaultExitTime: '18:00',
+    workDays: [1, 2, 3, 4, 5],
+    requirePhoto: true,
+    requireLocation: true,
+    allowBiometrics: true,
+    strictTardinessLock: true,
+    authenticatorSecret: '',
+    overtimeAllowed: true,
+    notificationOnLate: true,
+    updatedAt: new Date().toISOString(),
 };

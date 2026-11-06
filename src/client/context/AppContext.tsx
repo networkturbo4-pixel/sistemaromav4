@@ -119,6 +119,17 @@ interface AppContextValue {
   ) => void;
   confirmAction: (options: ConfirmDialogOptions) => Promise<boolean>;
   apiFetch: <T = any>(url: string, options?: RequestInit) => Promise<T>;
+  attendanceCheck: {
+    alreadyCheckedInToday: boolean;
+    requiresAttendanceCheckIn: boolean;
+    isOutsideTolerance: boolean;
+    strictTardinessLock: boolean;
+    hasAuthenticatorConfigured: boolean;
+    expectedEntryTime: string;
+    toleranceMinutes: number;
+    todayAttendance?: any;
+  } | null;
+  setAttendanceCheck: React.Dispatch<React.SetStateAction<any | null>>;
   notifications: AppNotification[];
   unreadNotificationsCount: number;
   isPushSupported: boolean;
@@ -378,6 +389,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<Role | null>(null);
+  const [attendanceCheck, setAttendanceCheck] = useState<any | null>(null);
   const [tenant, setTenant] = useState<Tenant>(FALLBACK_TENANT);
   const [engineInfo, setEngineInfo] = useState({
     engine: 'PostgreSQL Ready',
@@ -784,12 +796,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setUser(data.user);
         setRole(data.role);
         setTenant(data.tenant);
+        if (data.attendanceCheck) setAttendanceCheck(data.attendanceCheck);
         if (data.engineInfo) setEngineInfo(data.engineInfo);
       } catch {
         localStorage.removeItem('roma_saas_token');
         setToken(null);
         setUser(null);
         setRole(null);
+        setAttendanceCheck(null);
       } finally {
         if (!options?.silent) {
           setIsLoading(false);
@@ -884,6 +898,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUser(data.user);
     setRole(data.role);
     setTenant(data.tenant);
+    if (data.attendanceCheck) setAttendanceCheck(data.attendanceCheck);
     if (data.engineInfo) setEngineInfo(data.engineInfo);
     toast(`¡Bienvenido, ${data.user.name.split(' ')[0]}! Conectado a ${data.tenant.name}`);
     loadTenantsList();
@@ -894,6 +909,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setToken(null);
     setUser(null);
     setRole(null);
+    setAttendanceCheck(null);
     setUserThemePreference(null);
     toast('Sesión finalizada correctamente', 'info');
   };
@@ -1359,6 +1375,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         showToast: toast,
         confirmAction,
         apiFetch,
+        attendanceCheck,
+        setAttendanceCheck,
         notifications,
         unreadNotificationsCount,
         isPushSupported,

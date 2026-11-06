@@ -55,7 +55,8 @@ export type ActiveModule =
   | 'workspace'
   | 'service_orders'
   | 'drive'
-  | 'settings';
+  | 'settings'
+  | 'administration';
 
 interface AppShellProps {
   activeModule: ActiveModule;
@@ -345,6 +346,14 @@ export const AppShell: React.FC<AppShellProps> = ({
       icon: <FolderKanban className="w-4 h-4 text-cyan-500" />,
       iconBg: 'bg-cyan-500/10 dark:bg-cyan-500/20',
       allowed: can('workspace.view'),
+    },
+    {
+      id: 'administration',
+      label: 'Administración',
+      description: 'RRHH, Finanzas y Contabilidad',
+      icon: <Building2 className="w-4 h-4 text-purple-500" />,
+      iconBg: 'bg-purple-500/10 dark:bg-purple-500/20',
+      allowed: can('administration.view'),
     },
     {
       id: 'settings',
@@ -1192,6 +1201,39 @@ export const AppShell: React.FC<AppShellProps> = ({
                   <ArrowRight className="w-3 h-3" />
                 </div>
               </button>
+
+              {/* Botón Formularios */}
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileWorkspaceSheetOpen(false);
+                  onSelectModule('workspace');
+                  setTimeout(() => {
+                    window.dispatchEvent(
+                      new CustomEvent('roma-open-workspace-subview', { detail: 'forms' })
+                    );
+                  }, 50);
+                }}
+                className="col-span-2 p-3 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-left hover:border-emerald-500/60 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition cursor-pointer flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-xs text-slate-900 dark:text-white">
+                      Formularios de Agencia
+                    </h4>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      Briefs interactivos, encuestas y captación de clientes.
+                    </p>
+                  </div>
+                </div>
+                <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 shrink-0">
+                  <span>Abrir</span>
+                  <ArrowRight className="w-3 h-3" />
+                </div>
+              </button>
             </div>
 
             {/* Botón Ver Hub General de Workspace */}
@@ -1298,6 +1340,25 @@ export const AppShell: React.FC<AppShellProps> = ({
                 >
                   <Sparkles className="w-4 h-4 text-violet-500 shrink-0" />
                   <span className="text-xs">Servicios</span>
+                </button>
+              )}
+
+                            {/* Administración */}
+              {can('administration.view') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMoreSheetOpen(false);
+                    onSelectModule('administration');
+                  }}
+                  className={`p-3 rounded-2xl border text-left transition flex items-center gap-2.5 cursor-pointer ${
+                    activeModule === 'administration'
+                      ? 'bg-purple-50 dark:bg-purple-950/50 border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300 font-bold'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  <Building2 className="w-4 h-4 text-purple-500 shrink-0" />
+                  <span className="text-xs">Administración</span>
                 </button>
               )}
 
@@ -1416,7 +1477,7 @@ export const AppShell: React.FC<AppShellProps> = ({
             setMobileMoreSheetOpen(!mobileMoreSheetOpen);
           }}
           className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-2xl transition cursor-pointer ${
-            ['payments', 'service_orders', 'services', 'settings'].includes(activeModule) || mobileMoreSheetOpen
+            ['payments', 'service_orders', 'services', 'settings', 'administration'].includes(activeModule) || mobileMoreSheetOpen
               ? 'text-indigo-600 dark:text-indigo-400 font-extrabold'
               : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
           }`}
@@ -1425,6 +1486,8 @@ export const AppShell: React.FC<AppShellProps> = ({
             <Receipt className="w-5 h-5 mb-0.5 text-emerald-500" />
           ) : activeModule === 'service_orders' ? (
             <ClipboardList className="w-5 h-5 mb-0.5 text-amber-500" />
+          ) : activeModule === 'administration' ? (
+            <Building2 className="w-5 h-5 mb-0.5 text-purple-500" />
           ) : (
             <MoreHorizontal className="w-5 h-5 mb-0.5" />
           )}
@@ -1433,6 +1496,8 @@ export const AppShell: React.FC<AppShellProps> = ({
               ? 'Pagos'
               : activeModule === 'service_orders'
               ? 'Órdenes'
+              : activeModule === 'administration'
+              ? 'Admin'
               : 'Más'}
           </span>
         </button>

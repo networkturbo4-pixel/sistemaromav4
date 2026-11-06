@@ -4,6 +4,7 @@ export interface VoucherOcrResult {
   operationNumber?: string;
   amount?: number;
   date?: string; // YYYY-MM-DD
+  time?: string; // HH:mm
   bankDetected?: string;
   rawText: string;
   confidence: number;
@@ -138,6 +139,26 @@ const extractDate = (text: string): string | undefined => {
 };
 
 /**
+ * Extrae la hora en formato HH:mm (24h)
+ */
+const extractTime = (text: string): string | undefined => {
+  const match = text.match(/\b([0-1]?[0-9]|2[0-3]):([0-5][0-9])(?::[0-5][0-9])?\s*(am|pm|a\.m\.|p\.m\.)?\b/i);
+  if (match) {
+    let hours = parseInt(match[1], 10);
+    const minutes = match[2];
+    const modifier = (match[3] || '').toLowerCase().replace(/\./g, '');
+
+    if (modifier === 'pm' && hours < 12) {
+      hours += 12;
+    } else if (modifier === 'am' && hours === 12) {
+      hours = 0;
+    }
+    return `${String(hours).padStart(2, '0')}:${minutes}`;
+  }
+  return undefined;
+};
+
+/**
  * Analiza un archivo de voucher mediante OCR y extrae datos estructurados
  */
 export const parseVoucherWithOcr = async (
@@ -163,12 +184,14 @@ export const parseVoucherWithOcr = async (
     const opNumber = extractOperationNumber(rawText);
     const amount = extractAmount(rawText);
     const date = extractDate(rawText);
+    const time = extractTime(rawText);
     const bank = detectBank(rawText);
 
     return {
       operationNumber: opNumber,
       amount,
       date,
+      time,
       bankDetected: bank,
       rawText,
       confidence,

@@ -12,6 +12,7 @@ import { WorkspaceModule } from './modules/WorkspaceModule';
 import { ServiceOrdersModule } from './modules/ServiceOrdersModule';
 import { DriveModule } from './modules/DriveModule';
 import { SettingsModule, SettingsTab } from './modules/SettingsModule';
+import { AdministrationModule } from './modules/AdministrationModule';
 import { DriveUploadProvider } from './context/DriveUploadContext';
 import { PublicQuoteView } from './components/PublicQuoteView';
 import { PublicServicesCatalogView } from './components/PublicServicesCatalogView';
@@ -20,9 +21,12 @@ import { PublicPaymentNoteView } from './components/PublicPaymentNoteView';
 import { PublicServiceOrderView } from './components/PublicServiceOrderView';
 import { PublicWorkspaceMonthView } from './components/PublicWorkspaceMonthView';
 import { PublicBiolinkView } from './components/PublicBiolinkView';
+import { PublicEmployeePaymentsView } from './components/PublicEmployeePaymentsView';
+import { PublicFormView } from './components/PublicFormView';
+import { AttendanceGateModal } from './components/AttendanceGateModal';
 
 const MainRouter: React.FC = () => {
-  const { user, isLoading, can } = useApp();
+  const { user, role, isLoading, can, logout, attendanceCheck, setAttendanceCheck } = useApp();
 
   // 1. Detección de enlace público de catálogo de servicios
   const [isPublicCatalog] = useState<boolean>(() => {
@@ -152,6 +156,22 @@ const MainRouter: React.FC = () => {
     return null;
   });
 
+  // 8. Detección de enlace público de historial de pagos de colaborador
+  const [publicPersonalToken] = useState<string | null>(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const p = urlParams.get('personal') || urlParams.get('payroll') || urlParams.get('colaborador');
+      if (p) return p;
+
+      const path = window.location.pathname;
+      const match = path.match(/^\/(?:personal|payroll|pago-personal|p\/personal)\/([^/?#]+)/i);
+      if (match && match[1]) {
+        return decodeURIComponent(match[1]);
+      }
+    } catch {}
+    return null;
+  });
+
   // 7. Detección de enlace público de Biolink (tipo Linktree /b/:slug)
   const [publicBiolinkSlug] = useState<string | null>(() => {
     try {
@@ -161,6 +181,22 @@ const MainRouter: React.FC = () => {
 
       const path = window.location.pathname;
       const match = path.match(/^\/(?:b|bio|linktree)\/([^/?#]+)/i);
+      if (match && match[1]) {
+        return decodeURIComponent(match[1]);
+      }
+    } catch {}
+    return null;
+  });
+
+  // 9. Detección de enlace público de Formulario (/f/:slug o /form/:slug o ?f=:slug)
+  const [publicFormSlug] = useState<string | null>(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const f = urlParams.get('f') || urlParams.get('form') || urlParams.get('formulario');
+      if (f) return f;
+
+      const path = window.location.pathname;
+      const match = path.match(/^\/(?:f|form|formulario)\/([^/?#]+)/i);
       if (match && match[1]) {
         return decodeURIComponent(match[1]);
       }
@@ -260,6 +296,7 @@ const MainRouter: React.FC = () => {
       workspace: 'workspace.view',
       drive: 'drive.view',
       settings: 'settings.view',
+      administration: 'administration.view',
     };
 
     const requiredPerm = modulePermissionMap[activeModule];
@@ -308,6 +345,16 @@ const MainRouter: React.FC = () => {
     return <PublicBiolinkView slug={publicBiolinkSlug} />;
   }
 
+// 8. Vista pública de historial de pagos de personal
+  if (publicPersonalToken) {
+    return <PublicEmployeePaymentsView token={publicPersonalToken} />;
+  }
+
+  // 9. Vista pública de Formulario interactivo
+  if (publicFormSlug) {
+    return <PublicFormView slug={publicFormSlug} />;
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-dvh tenant-bg tenant-text flex flex-col items-center justify-center gap-3">
@@ -325,6 +372,15 @@ const MainRouter: React.FC = () => {
     return <PinLoginScreen />;
   }
 
+  const isAdmin =
+    user.role === 'admin' ||
+    role?.id === 'admin' ||
+    role?.isSystem ||
+    role?.permissions?.includes('*');
+
+  // Si no es admin y requiere marcación obligatoria al entrar
+  const requiresAttendanceModal = !isAdmin && !!attendanceCheck?.requiresAttendanceCheckIn;
+
   const handleNavigate = (
     mod: ActiveModule,
     subTab?: SettingsTab
@@ -336,32 +392,49 @@ const MainRouter: React.FC = () => {
   };
 
   return (
-    <AppShell
-      activeModule={activeModule}
-      activeSettingsTab={settingsSubTab}
-      onSelectModule={setActiveModule}
-      onSelectSettingsTab={(tab) => {
-        setActiveModule('settings');
-        setSettingsSubTab(tab);
-      }}
-    >
-      {activeModule === 'dashboard' && can('dashboard.view') && (
-        <DashboardModule onNavigate={handleNavigate} />
-      )}
-      {activeModule === 'clients' && can('clients.view') && <ClientsModule />}
-      {activeModule === 'quotes' && can('quotes.view') && <QuotesModule />}
-      {activeModule === 'services' && can('services.view') && <ServicesModule />}
-      {activeModule === 'payments' && can('payments.view') && <PaymentNotesModule />}
-      {activeModule === 'service_orders' && can('service_orders.view') && <ServiceOrdersModule />}
-      {activeModule === 'workspace' && can('workspace.view') && <WorkspaceModule />}
-      {activeModule === 'drive' && can('drive.view') && <DriveModule />}
-      {activeModule === 'settings' && can('settings.view') && (
-        <SettingsModule
-          initialTab={settingsSubTab}
-          onTabChange={(tab) => setSettingsSubTab(tab)}
+    <>
+      {requiresAttendanceModal && (
+        <AttendanceGateModal
+          isOpen={true}
+          onSuccess={(record) => {
+            setAttendanceCheck((prev: any) => ({
+              ...(prev || {}),
+              alreadyCheckedInToday: true,
+              requiresAttendanceCheckIn: false,
+              todayAttendance: record,
+            }));
+          }}
+          onLogout={logout}
         />
       )}
-    </AppShell>
+      <AppShell
+        activeModule={activeModule}
+        activeSettingsTab={settingsSubTab}
+        onSelectModule={setActiveModule}
+        onSelectSettingsTab={(tab) => {
+          setActiveModule('settings');
+          setSettingsSubTab(tab);
+        }}
+      >
+        {activeModule === 'dashboard' && can('dashboard.view') && (
+          <DashboardModule onNavigate={handleNavigate} />
+        )}
+        {activeModule === 'clients' && can('clients.view') && <ClientsModule />}
+        {activeModule === 'quotes' && can('quotes.view') && <QuotesModule />}
+        {activeModule === 'services' && can('services.view') && <ServicesModule />}
+        {activeModule === 'payments' && can('payments.view') && <PaymentNotesModule />}
+        {activeModule === 'service_orders' && can('service_orders.view') && <ServiceOrdersModule />}
+        {activeModule === 'workspace' && can('workspace.view') && <WorkspaceModule />}
+        {activeModule === 'administration' && can('administration.view') && <AdministrationModule />}
+        {activeModule === 'drive' && can('drive.view') && <DriveModule />}
+        {activeModule === 'settings' && can('settings.view') && (
+          <SettingsModule
+            initialTab={settingsSubTab}
+            onTabChange={(tab) => setSettingsSubTab(tab)}
+          />
+        )}
+      </AppShell>
+    </>
   );
 };
 

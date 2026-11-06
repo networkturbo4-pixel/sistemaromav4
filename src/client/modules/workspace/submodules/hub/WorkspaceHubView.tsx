@@ -1,16 +1,18 @@
 import React from 'react';
-import { Share2, ListTodo, HardDrive, ArrowRight, Sparkles, Wrench } from 'lucide-react';
+import { Share2, ListTodo, HardDrive, ArrowRight, Sparkles, Wrench, FileText } from 'lucide-react';
 import { WorkspaceProject, WorkspaceTask } from '../../../../shared/types';
 
 interface WorkspaceHubViewProps {
   projects: WorkspaceProject[];
   tasks: WorkspaceTask[];
-  onSelectSubmodule: (view: 'social' | 'tasks' | 'drive' | 'tools') => void;
+  formsCount?: number;
+  onSelectSubmodule: (view: 'social' | 'tasks' | 'drive' | 'tools' | 'forms') => void;
 }
 
 export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
   projects,
   tasks,
+  formsCount = 0,
   onSelectSubmodule,
 }) => {
   return (
@@ -25,12 +27,12 @@ export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1.5 sm:mt-2 max-w-2xl leading-relaxed">
           Selecciona un submódulo para gestionar proyectos vinculados a Órdenes de Servicio activas,
-          grillas de publicaciones, producción creativa, tareas y archivos en la nube.
+          grillas de publicaciones, producción creativa, tareas, formularios interactivos y archivos en la nube.
         </p>
       </div>
 
-      {/* Accesos Directos Responsivos: 2 columnas en móvil y tablet, 4 columnas en pantallas grandes */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 max-w-6xl">
+      {/* Accesos Directos Responsivos */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 max-w-7xl">
         {/* SUBMÓDULO 1: REDES SOCIALES */}
         <button
           type="button"
@@ -154,6 +156,38 @@ export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
           </div>
 
           <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] sm:text-xs font-bold text-purple-600 dark:text-purple-400">
+            <span>Ingresar</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </button>
+
+        {/* SUBMÓDULO 5: FORMULARIOS */}
+        <button
+          type="button"
+          onClick={() => onSelectSubmodule('forms')}
+          className="group bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 text-left shadow-xs hover:shadow-md hover:border-emerald-400 dark:hover:border-emerald-600 hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between cursor-pointer col-span-2 sm:col-span-1"
+        >
+          <div>
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 mb-2.5 sm:mb-3 group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-200">
+              <FileText className="w-5 h-5 sm:w-6 sm:h-6" />
+            </div>
+
+            <div className="flex items-center gap-1.5 mb-0.5 sm:mb-1">
+              <span className="text-[10px] sm:text-xs font-bold text-slate-400">
+                {formsCount} {formsCount === 1 ? 'formulario' : 'formularios'}
+              </span>
+            </div>
+
+            <h3 className="text-xs sm:text-base font-extrabold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors line-clamp-1">
+              Formularios
+            </h3>
+
+            <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-tight sm:leading-relaxed">
+              Briefs interactivos, encuestas, cotizadores a medida y recolección de respuestas.
+            </p>
+          </div>
+
+          <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400">
             <span>Ingresar</span>
             <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
           </div>
