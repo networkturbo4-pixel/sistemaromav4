@@ -31,6 +31,36 @@ interface SocialProjectsViewProps {
   onEnterProjectBoard: (projectId: string) => void;
 }
 
+interface ProjectBrandLogoProps {
+  logoUrl?: string;
+  name: string;
+  brandColor?: string;
+}
+
+const ProjectBrandLogo: React.FC<ProjectBrandLogoProps> = ({ logoUrl, name, brandColor }) => {
+  const [hasError, setHasError] = useState(false);
+
+  if (logoUrl && !hasError) {
+    return (
+      <img
+        src={logoUrl}
+        alt={name}
+        onError={() => setHasError(true)}
+        className="w-12 h-12 rounded-2xl object-cover shrink-0 border border-slate-100 dark:border-slate-800 shadow-2xs"
+      />
+    );
+  }
+
+  return (
+    <div
+      style={{ backgroundColor: brandColor || '#881337' }}
+      className="w-12 h-12 rounded-2xl text-white font-black text-lg flex items-center justify-center shrink-0 shadow-2xs uppercase"
+    >
+      {(name || 'P').charAt(0).toUpperCase()}
+    </div>
+  );
+};
+
 export const SocialProjectsView: React.FC<SocialProjectsViewProps> = ({
   projects,
   clients,
@@ -111,9 +141,17 @@ export const SocialProjectsView: React.FC<SocialProjectsViewProps> = ({
           {projects.map((proj) => {
             const isArchived = proj.status === 'archived';
             const clientObj = clients.find((c) => c.id === proj.clientId);
-            const brandObj = clientObj?.brands?.find(
-              (b) => b.id === proj.brandId || b.name === proj.brandName
-            );
+            const allBrands = clients.flatMap((c) => c.brands || []);
+            const brandObj =
+              clientObj?.brands?.find(
+                (b) => b.id === proj.brandId || b.name === proj.brandName || b.name === proj.name
+              ) ||
+              allBrands.find(
+                (b) =>
+                  (proj.brandId && b.id === proj.brandId) ||
+                  (proj.brandName && b.name.toLowerCase() === proj.brandName.toLowerCase()) ||
+                  (b.name && b.name.toLowerCase() === proj.name.toLowerCase())
+              );
 
             return (
               <div
@@ -127,20 +165,11 @@ export const SocialProjectsView: React.FC<SocialProjectsViewProps> = ({
                 <div className="space-y-3.5">
                   {/* Fila 1: Logo Marca + Título y Cliente con ancho completo */}
                   <div className="flex items-center gap-3.5 min-w-0">
-                    {brandObj?.logoUrl ? (
-                      <img
-                        src={brandObj.logoUrl}
-                        alt={proj.brandName || proj.name}
-                        className="w-12 h-12 rounded-2xl object-cover shrink-0 border border-slate-100 dark:border-slate-800 shadow-2xs"
-                      />
-                    ) : (
-                      <div
-                        style={{ backgroundColor: brandObj?.brandColor || '#881337' }}
-                        className="w-12 h-12 rounded-2xl text-white font-black text-lg flex items-center justify-center shrink-0 shadow-2xs uppercase"
-                      >
-                        {(proj.brandName || proj.name).charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    <ProjectBrandLogo
+                      logoUrl={brandObj?.logoUrl}
+                      name={proj.brandName || proj.name}
+                      brandColor={brandObj?.brandColor}
+                    />
                     <div className="min-w-0 flex-1">
                       <h3
                         className="text-base font-black text-slate-900 dark:text-white truncate"

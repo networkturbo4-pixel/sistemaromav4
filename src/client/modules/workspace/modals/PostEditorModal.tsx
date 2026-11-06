@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   LayoutGrid,
   Lightbulb,
@@ -35,13 +35,19 @@ import {
   Plus,
   Maximize2,
   Tv,
+  Smartphone,
+  AlertCircle,
+  Eraser,
+  Calendar,
+  ChevronRight,
 } from 'lucide-react';
 import {
   WorkspacePost,
   SocialPostPlatform,
   SocialPostStatus,
 } from '../../../../shared/types';
-import { applyUnicodeFormatToTextarea } from '../../../utils/textFormat';
+import { applyUnicodeFormatToTextarea, stripHtmlToCleanText } from '../../../utils/textFormat';
+import { SocialFeedMockup } from './components/SocialFeedMockup';
 
 interface PostEditorModalProps {
   isOpen: boolean;
@@ -83,6 +89,119 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
   const [romitaDropdownOpen, setRomitaDropdownOpen] = useState(false);
   const [newCommentText, setNewCommentText] = useState('');
   const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const [rightColumnView, setRightColumnView] = useState<'reference' | 'social_preview'>('reference');
+  const [feedPreviewPlatform, setFeedPreviewPlatform] = useState<'instagram' | 'facebook' | 'tiktok' | 'x'>('instagram');
+  const [refImageError, setRefImageError] = useState(false);
+  const [finalArtImageError, setFinalArtImageError] = useState(false);
+  const [copyViewMode, setCopyViewMode] = useState<'edit' | 'preview'>('edit');
+
+  useEffect(() => {
+    if (isOpen && editingPost) {
+      setRefImageError(false);
+      setFinalArtImageError(false);
+      let needsUpdate = false;
+      let cleanCopy = editingPost.copy;
+      let cleanBrief = editingPost.designerBrief;
+
+      if (
+        editingPost.copy &&
+        (/<[a-z!][\s\S]*>/i.test(editingPost.copy) ||
+          editingPost.copy.includes('data-path-to-node') ||
+          editingPost.copy.includes('rn<'))
+      ) {
+        cleanCopy = stripHtmlToCleanText(editingPost.copy);
+        needsUpdate = true;
+      }
+      if (
+        editingPost.designerBrief &&
+        (/<[a-z!][\s\S]*>/i.test(editingPost.designerBrief) ||
+          editingPost.designerBrief.includes('data-path-to-node') ||
+          editingPost.designerBrief.includes('rn<'))
+      ) {
+        cleanBrief = stripHtmlToCleanText(editingPost.designerBrief);
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        setEditingPost((prev) =>
+          prev ? { ...prev, copy: cleanCopy, designerBrief: cleanBrief } : null
+        );
+      }
+    }
+  }, [isOpen, editingPost?.id]);
+
+  const STATUS_LIST: {
+    id: SocialPostStatus;
+    label: string;
+    icon: React.ElementType;
+    color: string;
+    badge: string;
+    desc: string;
+  }[] = [
+    {
+      id: 'idea',
+      label: '1. Idea / Borrador',
+      icon: Lightbulb,
+      color: 'text-amber-500',
+      badge: 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+      desc: 'Concepto y copy en desarrollo',
+    },
+    {
+      id: 'design',
+      label: '2. En Diseño',
+      icon: PenTool,
+      color: 'text-indigo-500',
+      badge: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
+      desc: 'Producción gráfica en proceso',
+    },
+    {
+      id: 'approved',
+      label: '3. Aprobado Cliente',
+      icon: CheckCircle2,
+      color: 'text-emerald-500',
+      badge: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+      desc: 'Validado por el cliente',
+    },
+    {
+      id: 'published',
+      label: '4. Publicado',
+      icon: Send,
+      color: 'text-sky-500',
+      badge: 'bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800',
+      desc: 'En vivo en redes sociales',
+    },
+    {
+      id: 'archived',
+      label: 'Archivado',
+      icon: Archive,
+      color: 'text-slate-500',
+      badge: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+      desc: 'Guardado en histórico',
+    },
+  ];
+
+  const currentStatusObj =
+    STATUS_LIST.find((s) => s.id === (editingPost?.status || 'idea')) || STATUS_LIST[0];
+  const CurrentStatusIcon = currentStatusObj.icon;
+
+  const hasHtmlInCopy = /<[a-z][\s\S]*>/i.test(editingPost?.copy || '');
+
+  const handleCleanCopyHtml = () => {
+    if (!editingPost?.copy) return;
+    const cleaned = stripHtmlToCleanText(editingPost.copy);
+    setEditingPost((prev) => (prev ? { ...prev, copy: cleaned } : null));
+    toast('Texto limpio de etiquetas HTML', 'success');
+  };
+
+  const getPlatformCharLimit = () => {
+    const plats = editingPost?.platforms || [];
+    if (plats.includes('x' as any)) return { name: 'X (Twitter)', limit: 280, strict: true };
+    if (plats.includes('instagram' as any)) return { name: 'Instagram', limit: 2200, strict: false };
+    if (plats.includes('tiktok' as any)) return { name: 'TikTok', limit: 2200, strict: false };
+    if (plats.includes('linkedin' as any)) return { name: 'LinkedIn', limit: 3000, strict: false };
+    return { name: 'Estándar', limit: 5000, strict: false };
+  };
 
   const referenceFileInputRef = useRef<HTMLInputElement | null>(null);
   const finalArtFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -248,72 +367,102 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
     >
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-[98vw] 2xl:max-w-[1580px] h-[94vh] shadow-2xl flex flex-col overflow-hidden text-xs">
         {/* 1. CABECERA SUPERIOR DEL MODAL */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-3.5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-100 dark:border-indigo-900/50">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-100 dark:border-indigo-900/50 shadow-xs">
               <LayoutGrid className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-black text-slate-900 dark:text-white">
-                {editingPost.id ? 'Editar Publicación' : 'Añadir Publicación'}
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-black text-slate-900 dark:text-white">
+                  {editingPost.id ? 'Editar Publicación' : 'Añadir Publicación'}
+                </h3>
+                {editingPost.id && (
+                  <span className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md font-bold">
+                    #{editingPost.id.toString().slice(-4)}
+                  </span>
+                )}
+              </div>
               <p className="text-[11px] text-slate-400">
-                Flujo: Idea de Calendario → Diseño → Aprobación de Cliente
+                {editingPost.brandName || tenant.name} • {editingPost.contentPillar || 'Contenido General'}
               </p>
             </div>
           </div>
 
-          {/* Stepper de Fases en la Cabecera */}
-          <div className="hidden lg:flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
-            {[
-              { id: 'idea', label: '1. Idea / Borrador', icon: Lightbulb },
-              { id: 'design', label: '2. En Diseño', icon: PenTool },
-              { id: 'approved', label: '3. Aprobado Cliente', icon: CheckCircle2 },
-              { id: 'published', label: '4. Publicado', icon: Send },
-              { id: 'archived', label: 'Archivado', icon: Archive },
-            ].map((step) => {
-              const IconComp = step.icon;
-              const isActive =
-                (editingPost.status || 'idea') === step.id ||
-                (editingPost.clientApprovalStatus || 'idea') === step.id;
-              return (
-                <button
-                  key={step.id}
-                  type="button"
-                  onClick={() =>
-                    setEditingPost({
-                      ...editingPost,
-                      status: step.id as SocialPostStatus,
-                      clientApprovalStatus: step.id as any,
-                    })
-                  }
-                  className={`px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer text-[11px] ${
-                    isActive
-                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs border border-indigo-100 dark:border-indigo-900/40'
-                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
-                  }`}
-                >
-                  <IconComp className="w-3.5 h-3.5" />
-                  <span>{step.label}</span>
-                </button>
-              );
-            })}
-          </div>
+          {/* Acciones y Selector de Estado */}
+          <div className="flex items-center gap-2.5">
+            {/* Dropdown de Estado Unificado */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
+                className={`px-3.5 py-2 rounded-2xl border font-bold text-xs transition flex items-center gap-2 cursor-pointer shadow-xs ${currentStatusObj.badge}`}
+              >
+                <CurrentStatusIcon className={`w-4 h-4 ${currentStatusObj.color}`} />
+                <span>{currentStatusObj.label}</span>
+                <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+              </button>
 
-          {/* Botón Guardar y Cerrar */}
-          <div className="flex items-center gap-2">
+              {statusDropdownOpen && (
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-1.5 z-40 space-y-1 animate-fadeIn">
+                  <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                    Cambiar Estado de la Publicación
+                  </div>
+                  {STATUS_LIST.map((step) => {
+                    const StepIcon = step.icon;
+                    const isSelected = (editingPost.status || 'idea') === step.id;
+                    return (
+                      <button
+                        key={step.id}
+                        type="button"
+                        onClick={() => {
+                          setEditingPost({
+                            ...editingPost,
+                            status: step.id,
+                            clientApprovalStatus: step.id as any,
+                          });
+                          setStatusDropdownOpen(false);
+                          toast(`Estado cambiado a: ${step.label}`, 'info');
+                        }}
+                        className={`w-full text-left p-2.5 rounded-xl text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                          isSelected
+                            ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400'
+                            : 'hover:bg-slate-50 dark:hover:bg-slate-800/70 text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${step.badge}`}>
+                            <StepIcon className="w-3.5 h-3.5" />
+                          </div>
+                          <div>
+                            <p className="font-extrabold text-[11px] leading-tight">{step.label}</p>
+                            <p className="text-[10px] text-slate-400 font-normal leading-tight">{step.desc}</p>
+                          </div>
+                        </div>
+                        {isSelected && <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0 ml-2" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Botón Guardar */}
             <button
               type="button"
               onClick={onSavePost}
               className="px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold transition shadow-xs flex items-center gap-2 cursor-pointer"
             >
               <Check className="w-4 h-4" />
-              <span>Guardar Borrador</span>
+              <span>Guardar Cambios</span>
             </button>
+
+            {/* Botón Cerrar */}
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-white transition cursor-pointer"
+              className="p-2.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-white transition cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+              title="Cerrar ventana"
             >
               <X className="w-5 h-5" />
             </button>
@@ -365,13 +514,13 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
             {/* Concepto / Título */}
             <div className="space-y-1.5">
               <label className="font-extrabold uppercase tracking-wider text-[10px] text-slate-400 flex items-center gap-1">
-                <span>CONCEPTO / TÍTULO</span>
+                <span>Concepto / Título</span>
                 <span className="text-pink-500">*</span>
               </label>
               <input
                 type="text"
                 required
-                placeholder="Ej. Promoción Especial de Verano"
+                placeholder="Ej. Promoción Especial de Fin de Semana"
                 value={editingPost.title || ''}
                 onChange={(e) => setEditingPost({ ...editingPost, title: e.target.value })}
                 className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -381,10 +530,10 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
             {/* Pilar de Contenido */}
             <div className="space-y-1.5">
               <label className="font-extrabold uppercase tracking-wider text-[10px] text-slate-400 flex items-center gap-1">
-                <span>PILAR DE CONTENIDO</span>
+                <span>Pilar de Contenido</span>
                 <span className="text-pink-500">*</span>
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {[
                   'Educación',
                   'Ventas',
@@ -399,14 +548,18 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
                       key={pillar}
                       type="button"
                       onClick={() => setEditingPost({ ...editingPost, contentPillar: pillar })}
-                      className={`px-3 py-2 rounded-xl text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                      className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer border ${
                         isSelected
                           ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-500 text-indigo-600 dark:text-indigo-400 shadow-xs'
                           : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300'
                       }`}
                     >
-                      <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-600'}`} />
-                      <span className="truncate">{pillar}</span>
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          isSelected ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-600'
+                        }`}
+                      />
+                      <span>{pillar}</span>
                     </button>
                   );
                 })}
@@ -416,22 +569,50 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
             {/* Plataformas */}
             <div className="space-y-1.5">
               <label className="font-extrabold uppercase tracking-wider text-[10px] text-slate-400 flex items-center gap-1">
-                <span>PLATAFORMAS</span>
+                <span>Plataformas de Difusión</span>
                 <span className="text-pink-500">*</span>
               </label>
               <div className="grid grid-cols-5 gap-1.5">
                 {[
-                  { key: 'facebook', label: 'FB' },
-                  { key: 'instagram', label: 'IG' },
-                  { key: 'tiktok', label: 'TT' },
-                  { key: 'linkedin', label: 'IN' },
-                  { key: 'x', label: 'X' },
+                  {
+                    key: 'facebook',
+                    label: 'FB',
+                    name: 'Facebook',
+                    activeStyle: 'bg-[#1877F2] border-[#1877F2] text-white shadow-xs',
+                  },
+                  {
+                    key: 'instagram',
+                    label: 'IG',
+                    name: 'Instagram',
+                    activeStyle:
+                      'bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 border-rose-500 text-white shadow-xs',
+                  },
+                  {
+                    key: 'tiktok',
+                    label: 'TT',
+                    name: 'TikTok',
+                    activeStyle:
+                      'bg-black dark:bg-slate-950 border-slate-700 text-white shadow-xs ring-1 ring-pink-500/40',
+                  },
+                  {
+                    key: 'linkedin',
+                    label: 'IN',
+                    name: 'LinkedIn',
+                    activeStyle: 'bg-[#0A66C2] border-[#0A66C2] text-white shadow-xs',
+                  },
+                  {
+                    key: 'x',
+                    label: '𝕏',
+                    name: 'X / Twitter',
+                    activeStyle: 'bg-slate-950 border-slate-900 text-white shadow-xs',
+                  },
                 ].map((plat) => {
                   const isSelected = editingPost.platforms?.includes(plat.key as any);
                   return (
                     <button
                       key={plat.key}
                       type="button"
+                      title={plat.name}
                       onClick={() => {
                         const cur = editingPost.platforms || [];
                         const next = isSelected
@@ -441,8 +622,8 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
                       }}
                       className={`py-2 rounded-xl text-xs font-black transition cursor-pointer border ${
                         isSelected
-                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
-                          : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100'
+                          ? plat.activeStyle
+                          : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100'
                       }`}
                     >
                       {plat.label}
@@ -454,25 +635,21 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
 
             {/* Fechas y Cronómetro */}
             <div className="space-y-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
-              <label className="font-extrabold uppercase tracking-wider text-[10px] text-slate-400 block">
-                FECHAS Y CRONÓMETRO
-              </label>
-
-              <div>
-                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
-                  Fecha Creación (Inicio)
-                </span>
-                <input
-                  type="text"
-                  readOnly
-                  value={editingPost.initialDate || ''}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-500 font-mono text-[11px]"
-                />
+              <div className="flex items-center justify-between">
+                <label className="font-extrabold uppercase tracking-wider text-[10px] text-slate-400">
+                  PROGRAMACIÓN & FECHAS
+                </label>
+                {editingPost.initialDate && (
+                  <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1 font-semibold">
+                    <Calendar className="w-3 h-3 text-slate-400" />
+                    <span>{editingPost.initialDate}</span>
+                  </span>
+                )}
               </div>
 
               <div>
                 <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
-                  Fecha Entrega (Cronómetro)
+                  Fecha Límite / Entrega
                 </span>
                 <input
                   type="date"
@@ -540,11 +717,39 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
                   <div className="xl:col-span-8 space-y-5">
                     {/* Copy del Post */}
                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs space-y-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <label className="font-extrabold uppercase tracking-wider text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                          <span>COPY DEL POST</span>
-                          <span className="text-pink-500">*</span>
-                        </label>
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <label className="font-extrabold uppercase tracking-wider text-[11px] text-slate-600 dark:text-slate-300 flex items-center gap-1">
+                            <span>Copy de la Publicación</span>
+                            <span className="text-pink-500">*</span>
+                          </label>
+
+                          {/* Switcher: Editor / Vista Previa Formateada */}
+                          <div className="flex items-center p-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-[10px] font-bold">
+                            <button
+                              type="button"
+                              onClick={() => setCopyViewMode('edit')}
+                              className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                                copyViewMode === 'edit'
+                                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-2xs'
+                                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                              }`}
+                            >
+                              ✏️ Editor
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCopyViewMode('preview')}
+                              className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                                copyViewMode === 'preview'
+                                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-2xs'
+                                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                              }`}
+                            >
+                              👁️ Vista Previa Formateada
+                            </button>
+                          </div>
+                        </div>
 
                         {/* Dropdown Romita IA */}
                         <div className="relative">
@@ -596,6 +801,26 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
                           )}
                         </div>
                       </div>
+
+                      {/* Alerta de detección de HTML */}
+                      {hasHtmlInCopy && (
+                        <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-800 dark:text-amber-200 text-xs">
+                          <div className="flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                            <span className="font-medium text-[11px]">
+                              Detectamos etiquetas HTML en el texto. Puedes limpiarlo con un clic manteniendo emojis y saltos de línea.
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleCleanCopyHtml}
+                            className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] transition shrink-0 flex items-center gap-1.5 cursor-pointer shadow-xs"
+                          >
+                            <Eraser className="w-3.5 h-3.5" />
+                            <span>Limpiar HTML</span>
+                          </button>
+                        </div>
+                      )}
 
                       {/* Mini Toolbar */}
                       <div className="flex items-center gap-1 p-1 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-100 dark:border-slate-800 text-slate-400">
@@ -673,35 +898,98 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
                         >
                           <Smile className="w-3.5 h-3.5" />
                         </button>
+                        <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
+                        <button
+                          type="button"
+                          onClick={handleCleanCopyHtml}
+                          className="p-1.5 hover:text-amber-600 rounded-lg transition"
+                          title="Limpiar etiquetas HTML del copy"
+                        >
+                          <Eraser className="w-3.5 h-3.5" />
+                        </button>
                       </div>
 
-                      <textarea
-                        ref={copyTextareaRef}
-                        rows={6}
-                        placeholder="Escribe el texto de la publicación..."
-                        value={editingPost.copy || ''}
-                        onChange={(e) =>
-                          setEditingPost({ ...editingPost, copy: e.target.value })
-                        }
-                        className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 leading-relaxed focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
-                      />
+                      {copyViewMode === 'edit' ? (
+                        <textarea
+                          ref={copyTextareaRef}
+                          rows={7}
+                          placeholder="Escribe el texto de la publicación..."
+                          value={editingPost.copy || ''}
+                          onPaste={(e) => {
+                            const html = e.clipboardData?.getData('text/html');
+                            if (html && (html.includes('<p') || html.includes('<strong') || html.includes('<div') || html.includes('<span') || html.includes('data-path-to-node'))) {
+                              e.preventDefault();
+                              const cleaned = stripHtmlToCleanText(html);
+                              const el = copyTextareaRef.current;
+                              if (!el) return;
+                              const start = el.selectionStart;
+                              const end = el.selectionEnd;
+                              const cur = editingPost.copy || '';
+                              const next = cur.substring(0, start) + cleaned + cur.substring(end);
+                              setEditingPost({ ...editingPost, copy: next });
+                              toast('Texto pegado y limpiado automáticamente', 'success');
+                            }
+                          }}
+                          onChange={(e) =>
+                            setEditingPost({ ...editingPost, copy: e.target.value })
+                          }
+                          className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 leading-relaxed focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                        />
+                      ) : (
+                        <div className="w-full min-h-[170px] max-h-[320px] overflow-y-auto p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 leading-relaxed whitespace-pre-wrap font-sans">
+                          {editingPost.copy ? (
+                            stripHtmlToCleanText(editingPost.copy)
+                          ) : (
+                            <span className="text-slate-400 italic">Sin texto de copy redactado aún.</span>
+                          )}
+                        </div>
+                      )}
 
-                      <div className="flex items-center justify-between text-[11px] text-slate-400">
-                        <span className="flex items-center gap-1.5 text-indigo-500 font-semibold">
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>Usa Romita IA para estructurar ganchos y CTAs</span>
-                        </span>
-                        <span className="font-mono">
-                          {(editingPost.copy || '').length} caracteres
-                        </span>
-                      </div>
+                      {/* Contador de caracteres inteligente con límite por red */}
+                      {(() => {
+                        const limitInfo = getPlatformCharLimit();
+                        const currentLen = (editingPost.copy || '').length;
+                        const isOverLimit = limitInfo.limit && currentLen > limitInfo.limit;
+                        const percentage = Math.min(100, Math.round((currentLen / limitInfo.limit) * 100));
+
+                        return (
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] pt-1">
+                            <span className="flex items-center gap-1.5 text-indigo-500 font-semibold">
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>Usa Romita IA para estructurar ganchos y CTAs</span>
+                            </span>
+
+                            <div className="flex items-center gap-2">
+                              <div className="w-20 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all ${
+                                    isOverLimit
+                                      ? 'bg-rose-500'
+                                      : percentage > 85
+                                      ? 'bg-amber-500'
+                                      : 'bg-indigo-600'
+                                  }`}
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                              <span
+                                className={`font-mono text-[10px] font-bold ${
+                                  isOverLimit ? 'text-rose-500' : 'text-slate-400'
+                                }`}
+                              >
+                                {currentLen.toLocaleString()} / {limitInfo.limit.toLocaleString()} car. ({limitInfo.name})
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Indicaciones / Brief Creativo para el Diseñador */}
                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs space-y-3">
                       <div className="flex items-center justify-between">
-                        <label className="font-extrabold uppercase tracking-wider text-[11px] text-slate-500 dark:text-slate-400">
-                          INDICACIONES / BRIEF CREATIVO PARA EL DISEÑADOR
+                        <label className="font-extrabold uppercase tracking-wider text-[11px] text-slate-600 dark:text-slate-300">
+                          Indicaciones / Brief Creativo para el Diseñador
                         </label>
                         <span className="text-[10px] text-slate-400">
                           Composición, colores y lineamientos
@@ -756,204 +1044,276 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Columna Derecha: Referencia Visual / Boceto (Sincronizado en Google Drive: /REFERENCIAS) */}
+                  {/* Columna Derecha: Referencia Visual / Boceto O Vista Previa Feed */}
                   <div className="xl:col-span-4 space-y-4">
-                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <label className="font-extrabold uppercase tracking-wider text-[11px] text-slate-700 dark:text-slate-200">
-                              REFERENCIA VISUAL / BOCETO
-                            </label>
-                            <span className="text-[10px] font-black bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-md">
-                              Fase 1: Idea
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
-                            Sube imágenes de inspiración, bocetos o enlaces para orientar al diseñador.
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Card Dropzone de Referencia con Soporte Drag & Drop */}
-                      <div
-                        onClick={() => referenceFileInputRef.current?.click()}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          setIsDraggingRef(true);
-                        }}
-                        onDragLeave={(e) => {
-                          e.preventDefault();
-                          setIsDraggingRef(false);
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          setIsDraggingRef(false);
-                          const file = e.dataTransfer.files?.[0];
-                          if (file) handleUploadMediaFile(file, 'reference');
-                        }}
-                        className={`border-2 border-dashed rounded-2xl p-6 text-center transition cursor-pointer relative group flex flex-col items-center justify-center min-h-[200px] ${
-                          isDraggingRef
-                            ? 'border-amber-500 bg-amber-100/60 dark:bg-amber-900/40 ring-4 ring-amber-400/20 scale-[1.01]'
-                            : 'border-amber-200 dark:border-amber-900/60 hover:border-amber-400 dark:hover:border-amber-600 bg-amber-50/30 dark:bg-amber-950/20'
+                    {/* Switcher Superior entre Referencia y Vista Previa Social */}
+                    <div className="flex items-center justify-between p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+                      <button
+                        type="button"
+                        onClick={() => setRightColumnView('reference')}
+                        className={`flex-1 py-1.5 px-3 rounded-xl font-extrabold text-[11px] transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                          rightColumnView === 'reference'
+                            ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
                         }`}
                       >
-                        <input
-                          type="file"
-                          ref={referenceFileInputRef}
-                          accept="image/*,video/mp4"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
+                        <ImageIcon className="w-3.5 h-3.5" />
+                        <span>Referencia / Boceto</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setRightColumnView('social_preview')}
+                        className={`flex-1 py-1.5 px-3 rounded-xl font-extrabold text-[11px] transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                          rightColumnView === 'social_preview'
+                            ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+                        }`}
+                      >
+                        <Smartphone className="w-3.5 h-3.5" />
+                        <span>Vista Previa Red</span>
+                        <span className="w-2 h-2 rounded-full bg-pink-500 animate-pulse" />
+                      </button>
+                    </div>
+
+                    {/* VISTA 1: REFERENCIA VISUAL */}
+                    {rightColumnView === 'reference' && (
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs space-y-3 animate-fadeIn">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <label className="font-extrabold uppercase tracking-wider text-[11px] text-slate-700 dark:text-slate-200">
+                                REFERENCIA VISUAL / BOCETO
+                              </label>
+                              <span className="text-[10px] font-black bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-md">
+                                Fase 1: Idea
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
+                              Sube imágenes de inspiración, bocetos o enlaces para orientar al diseñador.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Card Dropzone de Referencia con Soporte Drag & Drop */}
+                        <div
+                          onClick={() => referenceFileInputRef.current?.click()}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            setIsDraggingRef(true);
+                          }}
+                          onDragLeave={(e) => {
+                            e.preventDefault();
+                            setIsDraggingRef(false);
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setIsDraggingRef(false);
+                            const file = e.dataTransfer.files?.[0];
                             if (file) handleUploadMediaFile(file, 'reference');
                           }}
-                        />
-
-                        <span className="absolute top-3 left-3 text-[10px] font-black bg-amber-500 text-white px-2.5 py-0.5 rounded-full shadow-xs">
-                          ● Referencia
-                        </span>
-
-                        {isUploadingRef ? (
-                          <div className="space-y-2 py-6">
-                            <RefreshCw className="w-8 h-8 text-amber-500 animate-spin mx-auto" />
-                            <p className="text-xs font-bold text-amber-700 dark:text-amber-300">
-                              Subiendo a Google Drive /REFERENCIAS...
-                            </p>
-                          </div>
-                        ) : editingPost.referenceMediaUrl ? (
-                          <div className="w-full space-y-2">
-                            <div className="relative mx-auto max-w-[200px] max-h-[160px] overflow-hidden rounded-xl border border-amber-300 dark:border-amber-800 shadow-xs">
-                              <img
-                                src={editingPost.referenceMediaUrl}
-                                alt="Referencia"
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                            <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200 truncate max-w-[220px] mx-auto">
-                              {editingPost.referenceMediaName || 'Referencia cargada'}
-                            </p>
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md">
-                              <Check className="w-3 h-3" />
-                              <span>Guardado en /REFERENCIAS</span>
-                            </span>
-                          </div>
-                        ) : (
-                          <div className="space-y-2 py-4">
-                            <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto shadow-xs">
-                              <ImageIcon className="w-6 h-6" />
-                            </div>
-                            <p className="text-xs font-black text-slate-800 dark:text-slate-100">
-                              Arrastra tu referencia o haz clic para subir
-                            </p>
-                            <p className="text-[10px] text-slate-400">
-                              Soporta JPG, PNG, WEBP, MP4 o pega con <strong>Ctrl + V</strong>
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Acciones de Referencia */}
-                      <div className="grid grid-cols-4 gap-1.5 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (editingPost.referenceMediaUrl) {
-                              onOpenLightbox(editingPost.referenceMediaUrl);
-                            } else {
-                              toast('No hay referencia subida para ver', 'info');
-                            }
-                          }}
-                          className="px-2 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[10px] transition flex items-center justify-center gap-1 cursor-pointer"
+                          className={`border-2 border-dashed rounded-2xl p-6 text-center transition cursor-pointer relative group flex flex-col items-center justify-center min-h-[200px] ${
+                            isDraggingRef
+                              ? 'border-amber-500 bg-amber-100/60 dark:bg-amber-900/40 ring-4 ring-amber-400/20 scale-[1.01]'
+                              : 'border-amber-200 dark:border-amber-900/60 hover:border-amber-400 dark:hover:border-amber-600 bg-amber-50/30 dark:bg-amber-950/20'
+                          }`}
                         >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Ver</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => referenceFileInputRef.current?.click()}
-                          className="px-2 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[10px] transition flex items-center justify-center gap-1 cursor-pointer"
-                        >
-                          <UploadCloud className="w-3.5 h-3.5" />
-                          <span>Subir Ref.</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={onOpenPaintModal}
-                          className="px-2 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[10px] transition flex items-center justify-center gap-1 cursor-pointer"
-                          title="Abrir pizarra tipo Paint para dibujar o anotar sobre el boceto"
-                        >
-                          <PenTool className="w-3.5 h-3.5" />
-                          <span>Dibujar</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setEditingPost({
-                              ...editingPost,
-                              referenceMediaUrl: '',
-                              referenceMediaName: '',
-                              referenceMediaDriveId: '',
-                            })
-                          }
-                          className="px-2 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-rose-950/60 text-slate-500 hover:text-rose-600 font-bold text-[10px] transition flex items-center justify-center gap-1 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Eliminar</span>
-                        </button>
-                      </div>
-
-                      {/* Enlace Externo de Referencia */}
-                      <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
-                        <label className="font-extrabold uppercase tracking-wider text-[10px] text-slate-400 flex items-center gap-1">
-                          <LinkIcon className="w-3 h-3" />
-                          <span>ENLACE EXTERNO DE REFERENCIA</span>
-                        </label>
-                        <div className="flex items-center gap-1.5">
                           <input
-                            type="url"
-                            placeholder="Pinterest, TikTok, Instagram, Drive o URL"
-                            value={editingPost.referenceExternalLink || ''}
-                            onChange={(e) =>
-                              setEditingPost({
-                                ...editingPost,
-                                referenceExternalLink: e.target.value,
-                              })
-                            }
-                            className="flex-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              try {
-                                const text = await navigator.clipboard.readText();
-                                if (text) {
-                                  setEditingPost({
-                                    ...editingPost,
-                                    referenceExternalLink: text,
-                                  });
-                                  toast('Enlace pegado del portapapeles', 'success');
-                                }
-                              } catch {
-                                toast('No se pudo acceder al portapapeles', 'info');
+                            type="file"
+                            ref={referenceFileInputRef}
+                            accept="image/*,video/mp4"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                setRefImageError(false);
+                                handleUploadMediaFile(file, 'reference');
                               }
                             }}
-                            className="px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-[10px] transition flex items-center gap-1 cursor-pointer shrink-0"
+                          />
+
+                          <span className="absolute top-3 left-3 text-[10px] font-black bg-amber-500 text-white px-2.5 py-0.5 rounded-full shadow-xs">
+                            ● Referencia
+                          </span>
+
+                          {isUploadingRef ? (
+                            <div className="space-y-2 py-6">
+                              <RefreshCw className="w-8 h-8 text-amber-500 animate-spin mx-auto" />
+                              <p className="text-xs font-bold text-amber-700 dark:text-amber-300">
+                                Subiendo a Google Drive /REFERENCIAS...
+                              </p>
+                            </div>
+                          ) : editingPost.referenceMediaUrl ? (
+                            <div className="w-full space-y-2">
+                              {!refImageError ? (
+                                <div className="relative mx-auto max-w-[200px] max-h-[160px] overflow-hidden rounded-xl border border-amber-300 dark:border-amber-800 shadow-xs">
+                                  <img
+                                    src={editingPost.referenceMediaUrl}
+                                    alt="Referencia"
+                                    onError={() => setRefImageError(true)}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="p-3 rounded-xl bg-amber-100/60 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-center space-y-1">
+                                  <ImageIcon className="w-6 h-6 text-amber-600 mx-auto" />
+                                  <p className="text-[11px] font-bold text-amber-900 dark:text-amber-200">
+                                    No se pudo mostrar la miniatura
+                                  </p>
+                                  <p className="text-[10px] text-slate-500">
+                                    Haz clic en &quot;Ver&quot; para abrir el archivo o vuelve a subirlo
+                                  </p>
+                                </div>
+                              )}
+                              <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200 truncate max-w-[220px] mx-auto">
+                                {editingPost.referenceMediaName || 'Referencia cargada'}
+                              </p>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md">
+                                <Check className="w-3 h-3" />
+                                <span>Guardado en /REFERENCIAS</span>
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="space-y-2 py-4">
+                              <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto shadow-xs">
+                                <ImageIcon className="w-6 h-6" />
+                              </div>
+                              <p className="text-xs font-black text-slate-800 dark:text-slate-100">
+                                Arrastra tu referencia o haz clic para subir
+                              </p>
+                              <p className="text-[10px] text-slate-400">
+                                Soporta JPG, PNG, WEBP, MP4 o pega con <strong>Ctrl + V</strong>
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Acciones de Referencia */}
+                        <div className="grid grid-cols-4 gap-1.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (editingPost.referenceMediaUrl) {
+                                onOpenLightbox(editingPost.referenceMediaUrl);
+                              } else {
+                                toast('No hay referencia subida para ver', 'info');
+                              }
+                            }}
+                            className="px-2 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[10px] transition flex items-center justify-center gap-1 cursor-pointer"
                           >
-                            <ClipboardPaste className="w-3.5 h-3.5" />
-                            <span>Pegar</span>
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Ver</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => referenceFileInputRef.current?.click()}
+                            className="px-2 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[10px] transition flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <UploadCloud className="w-3.5 h-3.5" />
+                            <span>Subir Ref.</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={onOpenPaintModal}
+                            className="px-2 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[10px] transition flex items-center justify-center gap-1 cursor-pointer"
+                            title="Abrir pizarra tipo Paint para dibujar o anotar sobre el boceto"
+                          >
+                            <PenTool className="w-3.5 h-3.5" />
+                            <span>Dibujar</span>
                           </button>
                           <button
                             type="button"
                             onClick={() =>
-                              setEditingPost({ ...editingPost, referenceExternalLink: '' })
+                              setEditingPost({
+                                ...editingPost,
+                                referenceMediaUrl: '',
+                                referenceMediaName: '',
+                                referenceMediaDriveId: '',
+                              })
                             }
-                            className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-rose-50 dark:hover:bg-rose-950/60 text-slate-400 hover:text-rose-600 transition cursor-pointer shrink-0"
+                            className="px-2 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-rose-950/60 text-slate-500 hover:text-rose-600 font-bold text-[10px] transition flex items-center justify-center gap-1 cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
+                            <span>Eliminar</span>
                           </button>
                         </div>
+
+                        {/* Enlace Externo de Referencia */}
+                        <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                          <label className="font-extrabold uppercase tracking-wider text-[10px] text-slate-400 flex items-center gap-1">
+                            <LinkIcon className="w-3 h-3" />
+                            <span>ENLACE EXTERNO DE REFERENCIA</span>
+                          </label>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="url"
+                              placeholder="Pinterest, TikTok, Instagram, Drive o URL"
+                              value={editingPost.referenceExternalLink || ''}
+                              onChange={(e) =>
+                                setEditingPost({
+                                  ...editingPost,
+                                  referenceExternalLink: e.target.value,
+                                })
+                              }
+                              className="flex-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const text = await navigator.clipboard.readText();
+                                  if (text) {
+                                    setEditingPost({
+                                      ...editingPost,
+                                      referenceExternalLink: text,
+                                    });
+                                    toast('Enlace pegado del portapapeles', 'success');
+                                  }
+                                } catch {
+                                  toast('No se pudo acceder al portapapeles', 'info');
+                                }
+                              }}
+                              className="px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-[10px] transition flex items-center gap-1 cursor-pointer shrink-0"
+                            >
+                              <ClipboardPaste className="w-3.5 h-3.5" />
+                              <span>Pegar</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditingPost({ ...editingPost, referenceExternalLink: '' })
+                              }
+                              className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-rose-50 dark:hover:bg-rose-950/60 text-slate-400 hover:text-rose-600 transition cursor-pointer shrink-0"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
+
+                    {/* VISTA 2: VISTA PREVIA DE RED SOCIAL (SIMULADOR EN VIVO) */}
+                    {rightColumnView === 'social_preview' && (
+                      <div className="bg-slate-50/70 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 shadow-xs space-y-3 animate-fadeIn">
+                        <div className="flex items-center justify-between px-1">
+                          <span className="font-extrabold uppercase tracking-wider text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                            <Smartphone className="w-3.5 h-3.5 text-indigo-500" />
+                            <span>Simulador de Feed en Vivo</span>
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">
+                            ● Tiempo Real
+                          </span>
+                        </div>
+
+                        <SocialFeedMockup
+                          post={editingPost}
+                          tenant={tenant}
+                          activePlatform={feedPreviewPlatform}
+                          setActivePlatform={setFeedPreviewPlatform}
+                          onOpenLightbox={onOpenLightbox}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1052,13 +1412,26 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
                           </div>
                         ) : editingPost.finalArtMediaUrl ? (
                           <div className="w-full space-y-2">
-                            <div className="relative mx-auto max-w-[240px] max-h-[180px] overflow-hidden rounded-xl border border-indigo-300 dark:border-indigo-800 shadow-xs">
-                              <img
-                                src={editingPost.finalArtMediaUrl}
-                                alt="Arte Final"
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
+                            {!finalArtImageError ? (
+                              <div className="relative mx-auto max-w-[240px] max-h-[180px] overflow-hidden rounded-xl border border-indigo-300 dark:border-indigo-800 shadow-xs">
+                                <img
+                                  src={editingPost.finalArtMediaUrl}
+                                  alt="Arte Final"
+                                  onError={() => setFinalArtImageError(true)}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            ) : (
+                              <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-center space-y-1">
+                                <ImageIcon className="w-6 h-6 text-indigo-500 mx-auto" />
+                                <p className="text-[11px] font-bold text-indigo-900 dark:text-indigo-200">
+                                  Miniatura no disponible en servidor
+                                </p>
+                                <p className="text-[10px] text-slate-400">
+                                  Haz clic en &quot;Ver&quot; para abrir o sube una nueva versión
+                                </p>
+                              </div>
+                            )}
                             <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200 truncate max-w-[240px] mx-auto">
                               {editingPost.finalArtMediaName || 'Arte Final cargado'}
                             </p>
@@ -1719,6 +2092,9 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
                               <img
                                 src={mediaToShow}
                                 alt="Vista Previa"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = 'none';
+                                }}
                                 className="max-h-[340px] max-w-full object-contain rounded-2xl shadow-xl"
                               />
                               <button

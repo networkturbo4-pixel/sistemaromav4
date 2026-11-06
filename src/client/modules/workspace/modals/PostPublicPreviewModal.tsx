@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Globe,
   Share2,
@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { WorkspacePost } from '../../../../shared/types';
 import { POST_STATUS_MAP } from '../types';
+import { stripHtmlToCleanText } from '../../../utils/textFormat';
 
 interface PostPublicPreviewModalProps {
   post: WorkspacePost | null;
@@ -30,6 +31,12 @@ export const PostPublicPreviewModal: React.FC<PostPublicPreviewModalProps> = ({
   onOpenLightbox,
   toast,
 }) => {
+  const [mediaError, setMediaError] = useState(false);
+
+  useEffect(() => {
+    setMediaError(false);
+  }, [post?.id]);
+
   if (!post) return null;
 
   return (
@@ -88,11 +95,12 @@ export const PostPublicPreviewModal: React.FC<PostPublicPreviewModalProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
             {/* Visual / Arte Final */}
             <div className="md:col-span-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-3 border border-slate-200 dark:border-slate-700/60 flex flex-col items-center justify-center min-h-[300px]">
-              {post.finalArtMediaUrl || post.referenceMediaUrl || post.mediaUrl ? (
+              {(post.finalArtMediaUrl || post.referenceMediaUrl || post.mediaUrl) && !mediaError ? (
                 <div className="w-full relative group">
                   <img
                     src={post.finalArtMediaUrl || post.referenceMediaUrl || post.mediaUrl}
                     alt={post.title}
+                    onError={() => setMediaError(true)}
                     className="w-full max-h-[420px] rounded-xl object-contain mx-auto shadow-sm"
                   />
                   <button
@@ -114,7 +122,9 @@ export const PostPublicPreviewModal: React.FC<PostPublicPreviewModalProps> = ({
               ) : (
                 <div className="text-center py-12 space-y-2">
                   <ImageIcon className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto" />
-                  <p className="font-bold text-slate-400">Sin archivo visual adjunto</p>
+                  <p className="font-bold text-slate-400">
+                    {mediaError ? 'No se pudo cargar la imagen adjunta' : 'Sin archivo visual adjunto'}
+                  </p>
                 </div>
               )}
 
@@ -172,7 +182,7 @@ export const PostPublicPreviewModal: React.FC<PostPublicPreviewModalProps> = ({
                     type="button"
                     onClick={() => {
                       if (post.copy) {
-                        navigator.clipboard.writeText(post.copy);
+                        navigator.clipboard.writeText(stripHtmlToCleanText(post.copy));
                         toast('Copy copiado al portapapeles', 'success');
                       }
                     }}
@@ -183,7 +193,7 @@ export const PostPublicPreviewModal: React.FC<PostPublicPreviewModalProps> = ({
                   </button>
                 </div>
                 <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs whitespace-pre-wrap leading-relaxed max-h-[220px] overflow-y-auto">
-                  {post.copy || 'Sin copy redactado todavía.'}
+                  {stripHtmlToCleanText(post.copy) || 'Sin copy redactado todavía.'}
                 </div>
               </div>
 

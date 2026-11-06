@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import compression from 'compression';
 import path from 'path';
@@ -3136,16 +3136,50 @@ app.get(
 );
 
 // Servir archivos multimedia subidos (imágenes, referencias, logos, comprobantes)
+// Soporta múltiples rutas del hosting (cPanel Passenger, public_html o sistema anterior)
+const candidateUploadDirs = [
+  process.env.UPLOADS_DIR,
+  path.resolve(process.cwd(), 'uploads'),
+  path.resolve(process.cwd(), '../uploads'),
+  path.resolve(process.cwd(), '../../uploads'),
+  path.resolve(process.cwd(), '../public_html/uploads'),
+  path.resolve(process.cwd(), '../../public_html/uploads'),
+  path.resolve(process.cwd(), 'public_html/uploads'),
+  path.resolve(process.cwd(), '../sistema/uploads'),
+  path.resolve(process.cwd(), '../sistema_anterior/uploads'),
+  path.resolve(process.cwd(), '../roma/uploads'),
+].filter(Boolean) as string[];
+
 const uploadsDir = path.resolve(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
-app.use('/uploads', express.static(uploadsDir));
+
+app.use('/uploads', (req: Request, res: Response, next: NextFunction) => {
+  const relativeSubpath = decodeURIComponent(req.path.replace(/^\/+/, ''));
+  if (!relativeSubpath) return next();
+
+  for (const dir of candidateUploadDirs) {
+    try {
+      const fullPath = path.resolve(dir, relativeSubpath);
+      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.sendFile(fullPath);
+      }
+    } catch {
+      // Intentar siguiente directorio candidato
+    }
+  }
+
+  // Si no se encuentra en ningún directorio, responder 404 estricto para evitar
+  // que caiga en app.get('*') y devuelva el HTML de la SPA a una etiqueta <img>
+  res.status(404).send('Archivo multimedia no encontrado');
+});
 
 if (fs.existsSync(clientDistPath)) {
   app.use(express.static(clientDistPath));
   app.get('*', (req: Request, res: Response) => {
-    if (!req.path.startsWith('/api')) {
+    if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
       serveHtmlWithMetadata(req, res);
     }
   });

@@ -2482,15 +2482,47 @@ app.get([
     '/p/servicio/:slug',
 ], serveHtmlWithMetadata);
 // Servir archivos multimedia subidos (imágenes, referencias, logos, comprobantes)
+// Soporta múltiples rutas del hosting (cPanel Passenger, public_html o sistema anterior)
+const candidateUploadDirs = [
+    process.env.UPLOADS_DIR,
+    path_1.default.resolve(process.cwd(), 'uploads'),
+    path_1.default.resolve(process.cwd(), '../uploads'),
+    path_1.default.resolve(process.cwd(), '../../uploads'),
+    path_1.default.resolve(process.cwd(), '../public_html/uploads'),
+    path_1.default.resolve(process.cwd(), '../../public_html/uploads'),
+    path_1.default.resolve(process.cwd(), 'public_html/uploads'),
+    path_1.default.resolve(process.cwd(), '../sistema/uploads'),
+    path_1.default.resolve(process.cwd(), '../sistema_anterior/uploads'),
+    path_1.default.resolve(process.cwd(), '../roma/uploads'),
+].filter(Boolean);
 const uploadsDir = path_1.default.resolve(process.cwd(), 'uploads');
 if (!fs_1.default.existsSync(uploadsDir)) {
     fs_1.default.mkdirSync(uploadsDir, { recursive: true });
 }
-app.use('/uploads', express_1.default.static(uploadsDir));
+app.use('/uploads', (req, res, next) => {
+    const relativeSubpath = decodeURIComponent(req.path.replace(/^\/+/, ''));
+    if (!relativeSubpath)
+        return next();
+    for (const dir of candidateUploadDirs) {
+        try {
+            const fullPath = path_1.default.resolve(dir, relativeSubpath);
+            if (fs_1.default.existsSync(fullPath) && fs_1.default.statSync(fullPath).isFile()) {
+                res.setHeader('Cache-Control', 'public, max-age=86400');
+                return res.sendFile(fullPath);
+            }
+        }
+        catch {
+            // Intentar siguiente directorio candidato
+        }
+    }
+    // Si no se encuentra en ningún directorio, responder 404 estricto para evitar
+    // que caiga en app.get('*') y devuelva el HTML de la SPA a una etiqueta <img>
+    res.status(404).send('Archivo multimedia no encontrado');
+});
 if (fs_1.default.existsSync(clientDistPath)) {
     app.use(express_1.default.static(clientDistPath));
     app.get('*', (req, res) => {
-        if (!req.path.startsWith('/api')) {
+        if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
             serveHtmlWithMetadata(req, res);
         }
     });

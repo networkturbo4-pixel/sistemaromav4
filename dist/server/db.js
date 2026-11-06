@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.db = exports.DatabaseManager = void 0;
+exports.cleanHtmlForServer = cleanHtmlForServer;
 const pg_1 = require("pg");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
@@ -17,6 +18,50 @@ const LOCAL_DB_FILE = path_1.default.join(DATA_DIR, 'roma-saas-db.json');
 const SCHEMA_SQL_FILE = path_1.default.resolve(process.cwd(), 'database', 'schema.sql');
 function generateToken(length = 32) {
     return crypto_1.default.randomBytes(length).toString('hex');
+}
+function cleanHtmlForServer(raw) {
+    if (!raw)
+        return '';
+    let text = String(raw);
+    text = text.replace(/rn(?=<[a-zA-Z\/!]|[\n\r]|$)/g, '\n');
+    text = text.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n');
+    text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    if (/<[a-z!][\s\S]*>/i.test(text) || text.includes('data-path-to-node')) {
+        text = text.replace(/<!--[\s\S]*?-->/g, '');
+        text = text.replace(/<li[^>]*>/gi, '\n• ');
+        text = text.replace(/<\/li>/gi, '');
+        text = text.replace(/<\/p\s*>/gi, '\n\n');
+        text = text.replace(/<\/div\s*>/gi, '\n');
+        text = text.replace(/<br\s*[\/]?>/gi, '\n');
+        text = text.replace(/<hr\s*[\/]?>/gi, '\n---\n');
+        text = text.replace(/<(strong|b)[^>]*>(.*?)<\/(strong|b)>/gi, (_, __, inner) => inner.replace(/<[^>]+>/g, '').trim());
+        text = text.replace(/<(em|i)[^>]*>(.*?)<\/(em|i)>/gi, (_, __, inner) => inner.replace(/<[^>]+>/g, '').trim());
+        text = text.replace(/<[^>]+>/g, '');
+    }
+    text = text
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'")
+        .replace(/&aacute;/gi, 'á')
+        .replace(/&eacute;/gi, 'é')
+        .replace(/&iacute;/gi, 'í')
+        .replace(/&oacute;/gi, 'ó')
+        .replace(/&uacute;/gi, 'ú')
+        .replace(/&ntilde;/gi, 'ñ')
+        .replace(/&Ntilde;/gi, 'Ñ')
+        .replace(/&#(\d+);/g, (_, code) => {
+        try {
+            return String.fromCharCode(Number(code));
+        }
+        catch {
+            return '';
+        }
+    });
+    text = text.split('\n').map((l) => l.trimEnd()).join('\n');
+    return text.replace(/\n{3,}/g, '\n\n').trim();
 }
 class DatabaseManager {
     pool = null;
@@ -72,6 +117,21 @@ class DatabaseManager {
                     parsed.notifications = [];
                 if (!Array.isArray(parsed.pushSubscriptions))
                     parsed.pushSubscriptions = [];
+                // Limpieza automática de artefactos HTML y de IA en copys y briefs existentes
+                let dirtyPostsCleaned = 0;
+                for (const post of parsed.workspacePosts) {
+                    if (post.copy && (/<[a-z!][\s\S]*>/i.test(post.copy) || post.copy.includes('data-path-to-node') || post.copy.includes('rn<'))) {
+                        post.copy = cleanHtmlForServer(post.copy);
+                        dirtyPostsCleaned++;
+                    }
+                    if (post.designerBrief && (/<[a-z!][\s\S]*>/i.test(post.designerBrief) || post.designerBrief.includes('data-path-to-node') || post.designerBrief.includes('rn<'))) {
+                        post.designerBrief = cleanHtmlForServer(post.designerBrief);
+                        dirtyPostsCleaned++;
+                    }
+                }
+                if (dirtyPostsCleaned > 0) {
+                    console.log(`[DB] Se limpiaron y formatearon automáticamente ${dirtyPostsCleaned} copys/briefs con código residual.`);
+                }
                 return parsed;
             }
         }
@@ -1109,7 +1169,8 @@ class DatabaseManager {
             title: data.title || '',
             platforms: data.platforms || ['instagram'],
             format: data.format || 'post',
-            copy: data.copy || '',
+            copy: data.copy ? cleanHtmlForServer(data.copy) : '',
+            designerBrief: data.designerBrief ? cleanHtmlForServer(data.designerBrief) : undefined,
             hashtags: data.hashtags,
             mediaUrl: data.mediaUrl,
             scheduledDate: data.scheduledDate || now.split('T')[0],
@@ -1131,9 +1192,16 @@ class DatabaseManager {
         const idx = this.localState.workspacePosts.findIndex((p) => p.id === id && p.tenantId === tenantId);
         if (idx === -1)
             return null;
+        const cleanedData = { ...data };
+        if (typeof cleanedData.copy === 'string') {
+            cleanedData.copy = cleanHtmlForServer(cleanedData.copy);
+        }
+        if (typeof cleanedData.designerBrief === 'string') {
+            cleanedData.designerBrief = cleanHtmlForServer(cleanedData.designerBrief);
+        }
         this.localState.workspacePosts[idx] = {
             ...this.localState.workspacePosts[idx],
-            ...data,
+            ...cleanedData,
             updatedAt: new Date().toISOString(),
         };
         this.saveLocalState();

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ArrowLeft,
   PlayCircle,
@@ -30,6 +30,43 @@ import {
   calculateCountdown,
   formatMonthDateRange,
 } from '../../types';
+import { formatCopySnippet } from '../../../../utils/textFormat';
+
+interface PostGridCardImageProps {
+  src?: string;
+  alt: string;
+  format: string;
+  status: string;
+}
+
+const PostGridCardImage: React.FC<PostGridCardImageProps> = ({ src, alt, format, status }) => {
+  const [hasError, setHasError] = useState(false);
+
+  if (!src || hasError) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-gradient-to-b from-slate-900 to-slate-950 text-slate-400 select-none">
+        <div className="w-12 h-12 rounded-2xl bg-slate-800/80 border border-slate-700/60 flex items-center justify-center mb-1.5 shadow-inner">
+          <ImageIcon className="w-6 h-6 text-slate-400/80" />
+        </div>
+        <span className="text-[11px] font-bold text-slate-300">
+          {status === 'idea' ? 'Boceto / Idea' : status === 'design' ? 'En diseño' : 'Arte pendiente'}
+        </span>
+        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-extrabold mt-0.5">
+          {format}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      onError={() => setHasError(true)}
+      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+    />
+  );
+};
 
 interface SocialPostsGridViewProps {
   posts: WorkspacePost[];
@@ -376,23 +413,12 @@ export const SocialPostsGridView: React.FC<SocialPostsGridViewProps> = ({
 
                   {/* 2. Área de Imagen / Multimedia */}
                   <div className="relative w-full h-44 rounded-2xl overflow-hidden bg-slate-900 border border-slate-200/60 dark:border-slate-800 shadow-xs my-3 flex items-center justify-center">
-                    {displayImg ? (
-                      <img
-                        src={displayImg}
-                        alt={post.title}
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="text-center p-4 space-y-1.5 text-slate-500">
-                        <ImageIcon className="w-8 h-8 mx-auto opacity-40 text-slate-400" />
-                        <span className="text-[11px] font-bold block text-slate-400">
-                          Sin arte cargado
-                        </span>
-                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">
-                          {post.format}
-                        </span>
-                      </div>
-                    )}
+                    <PostGridCardImage
+                      src={displayImg}
+                      alt={post.title}
+                      format={post.format}
+                      status={post.status}
+                    />
 
                     {/* Badge sobre la imagen en la esquina superior derecha */}
                     <div
@@ -447,9 +473,9 @@ export const SocialPostsGridView: React.FC<SocialPostsGridViewProps> = ({
                     {post.title || 'Sin Título'}
                   </h4>
 
-                  {/* Copy Redactado */}
+                  {/* Copy Redactado Limpio y sin Código */}
                   <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
-                    {post.copy || 'Sin texto de copy redactado.'}
+                    {formatCopySnippet(post.copy) || 'Sin texto de copy redactado.'}
                   </p>
                 </div>
               </div>

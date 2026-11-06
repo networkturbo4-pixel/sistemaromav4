@@ -128,3 +128,101 @@ export function applyUnicodeFormatToTextarea(
     textarea.setSelectionRange(newCursorPos, newCursorPos);
   }, 10);
 }
+
+/**
+ * Limpia y formatea textos de copys y briefs que contengan código HTML,
+ * tags de AI (como data-path-to-node de Gemini), saltos 'rn' o entidades HTML.
+ * Convierte párrafos en saltos limpios y preserva emojis, viñetas y hashtags.
+ */
+export function stripHtmlToCleanText(raw: string): string {
+  if (!raw) return '';
+  let text = String(raw);
+
+  // Arreglar artefactos de 'rn' literales que preceden a tags o saltos
+  text = text.replace(/rn(?=<[a-zA-Z\/!]|[\n\r]|$)/g, '\n');
+  text = text.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n');
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  // Si contiene tags HTML, procesar estructura
+  if (/<[a-z!][\s\S]*>/i.test(text) || text.includes('data-path-to-node')) {
+    // Eliminar comentarios HTML
+    text = text.replace(/<!--[\s\S]*?-->/g, '');
+
+    // Convertir listas <li> a viñetas limpias
+    text = text.replace(/<li[^>]*>/gi, '\n• ');
+    text = text.replace(/<\/li>/gi, '');
+
+    // Convertir párrafos y divs a saltos de línea ordenados
+    text = text.replace(/<\/p\s*>/gi, '\n\n');
+    text = text.replace(/<\/div\s*>/gi, '\n');
+    text = text.replace(/<br\s*[\/]?>/gi, '\n');
+    text = text.replace(/<hr\s*[\/]?>/gi, '\n---\n');
+
+    // Convertir <strong> o <b> a texto limpio legible
+    text = text.replace(/<(strong|b)[^>]*>(.*?)<\/(strong|b)>/gi, (_, __, inner) => {
+      const trimmed = inner.replace(/<[^>]+>/g, '').trim();
+      return trimmed;
+    });
+
+    // Convertir <em> o <i> a texto limpio
+    text = text.replace(/<(em|i)[^>]*>(.*?)<\/(em|i)>/gi, (_, __, inner) => {
+      const trimmed = inner.replace(/<[^>]+>/g, '').trim();
+      return trimmed;
+    });
+
+    // Eliminar todos los tags HTML restantes y atributos como data-path-to-node
+    text = text.replace(/<[^>]+>/g, '');
+  }
+
+  // Decodificar entidades HTML comunes y acentos
+  text = text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&aacute;/gi, 'á')
+    .replace(/&eacute;/gi, 'é')
+    .replace(/&iacute;/gi, 'í')
+    .replace(/&oacute;/gi, 'ó')
+    .replace(/&uacute;/gi, 'ú')
+    .replace(/&ntilde;/gi, 'ñ')
+    .replace(/&Ntilde;/gi, 'Ñ')
+    .replace(/&iquest;/gi, '¿')
+    .replace(/&iexcl;/gi, '¡')
+    .replace(/&#(\d+);/g, (_, code) => {
+      try {
+        return String.fromCharCode(Number(code));
+      } catch {
+        return '';
+      }
+    })
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => {
+      try {
+        return String.fromCharCode(parseInt(hex, 16));
+      } catch {
+        return '';
+      }
+    });
+
+  // Limpiar espacios en blanco al final de cada línea y espaciado excesivo
+  text = text
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .join('\n');
+
+  return text.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
+ * Genera un fragmento limpio de una sola línea para tarjetas y vistas previas en grilla
+ */
+export function formatCopySnippet(raw: string, maxLen = 140): string {
+  if (!raw) return '';
+  const cleaned = stripHtmlToCleanText(raw);
+  const oneLine = cleaned.replace(/\s+/g, ' ').trim();
+  if (oneLine.length <= maxLen) return oneLine;
+  return oneLine.substring(0, maxLen).trim() + '...';
+}
+
