@@ -63,35 +63,8 @@ export const PaletteGeneratorTab: React.FC = () => {
     | 'headings'
   >('cards');
 
-  // Modales
-  const [isContrastMatrixOpen, setIsContrastMatrixOpen] = useState(false);
+  // Solo modal de Color Info
   const [isColorInfoOpen, setIsColorInfoOpen] = useState(false);
-  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isSavedDrawerOpen, setIsSavedDrawerOpen] = useState(false);
-
-  // Paletas guardadas
-  const [savedPalettes, setSavedPalettes] = useState<any[]>([]);
-
-  // Cargar paletas guardadas al montar
-  useEffect(() => {
-    loadSavedPalettes();
-  }, []);
-
-  const loadSavedPalettes = async () => {
-    try {
-      const res = await apiFetch('/api/workspace/palettes');
-      if (Array.isArray(res)) {
-        setSavedPalettes(res);
-      }
-    } catch {
-      // Fallback a localStorage
-      try {
-        const local = localStorage.getItem('roma_saved_palettes');
-        if (local) setSavedPalettes(JSON.parse(local));
-      } catch {}
-    }
-  };
 
   // Actualizar la rampa cuando cambie el baseHex
   const updateBaseColor = (newHex: string, newName?: string) => {
@@ -109,17 +82,12 @@ export const PaletteGeneratorTab: React.FC = () => {
     const rgb = hslToRgb(randomHue, randomSat, randomLum);
     const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
     updateBaseColor(hex);
-    toast({
-      title: 'Nueva Paleta Generada',
-      description: `Color base ${hex} aplicado con armonía.`,
-      variant: 'default',
-    });
+    toast(`Nueva paleta generada con color base ${hex}`, 'success');
   };
 
   // Atajo con barra espaciadora para generar paletas aleatorias
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Solo si el foco no está en un input
       if (
         e.code === 'Space' &&
         document.activeElement?.tagName !== 'INPUT' &&
@@ -137,44 +105,8 @@ export const PaletteGeneratorTab: React.FC = () => {
   const handleCopyHex = (hex: string, label?: string) => {
     navigator.clipboard.writeText(hex);
     setCopiedHex(hex);
-    toast({
-      title: 'Color copiado',
-      description: `${label || hex} guardado en el portapapeles.`,
-      variant: 'default',
-    });
+    toast(`Color ${label || hex} copiado al portapapeles`, 'success');
     setTimeout(() => setCopiedHex(null), 2000);
-  };
-
-  // Guardar paleta actual
-  const handleSavePalette = async () => {
-    const newEntry = {
-      name: paletteName,
-      primaryShade,
-      shades: shades.map((s) => ({ shade: s.shade, hex: s.hex })),
-    };
-    try {
-      await apiFetch('/api/workspace/palettes', {
-        method: 'POST',
-        body: JSON.stringify(newEntry),
-      });
-      loadSavedPalettes();
-      toast({
-        title: 'Paleta guardada',
-        description: `"${paletteName}" se guardó en tu biblioteca de workspace.`,
-        variant: 'default',
-      });
-    } catch {
-      const updated = [newEntry, ...savedPalettes];
-      setSavedPalettes(updated);
-      try {
-        localStorage.setItem('roma_saved_palettes', JSON.stringify(updated));
-      } catch {}
-      toast({
-        title: 'Paleta guardada localmente',
-        description: `"${paletteName}" disponible en este navegador.`,
-        variant: 'default',
-      });
-    }
   };
 
   // Obtener color por shade
@@ -215,14 +147,6 @@ export const PaletteGeneratorTab: React.FC = () => {
                 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white bg-transparent border-b border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-indigo-500 focus:outline-none transition-colors"
                 title="Haz clic para renombrar la paleta"
               />
-              <button
-                type="button"
-                onClick={handleSavePalette}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border border-slate-200 dark:border-slate-700 hover:border-pink-300 dark:hover:border-pink-800 hover:text-pink-600 dark:hover:text-pink-400 bg-slate-50 dark:bg-slate-800/60 transition-colors cursor-pointer"
-              >
-                <Heart className="w-3.5 h-3.5 text-pink-500 fill-pink-500/20" />
-                <span>Guardar</span>
-              </button>
             </div>
 
             <div className="flex items-center gap-2 mt-2">
@@ -235,14 +159,41 @@ export const PaletteGeneratorTab: React.FC = () => {
               >
                 Primary ({primaryShade})
               </span>
-              <span className="text-xs text-slate-400 ml-1">
-                (Presiona <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-[10px] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">Espacio</kbd> para generar)
-              </span>
             </div>
           </div>
 
-          {/* Botones de acción derecha (Contrast matrix, Color info, Export, Edit) */}
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Botones de acción derecha: Campo directo para editar color base, Aleatorio y Color info */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Campo directo para editar color (sin modal) */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/80">
+              <label htmlFor="baseColorInput" className="text-xs font-bold text-slate-500 dark:text-slate-400 cursor-pointer">
+                Color Base:
+              </label>
+              <div className="relative flex items-center">
+                <input
+                  id="baseColorInput"
+                  type="color"
+                  value={baseHex}
+                  onChange={(e) => updateBaseColor(e.target.value)}
+                  className="w-7 h-7 rounded-lg cursor-pointer border-0 p-0 bg-transparent"
+                  title="Seleccionar color"
+                />
+              </div>
+              <input
+                type="text"
+                value={baseHex}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setBaseHex(val);
+                  if (/^#[0-9A-F]{6}$/i.test(val) || /^#[0-9A-F]{3}$/i.test(val)) {
+                    updateBaseColor(val);
+                  }
+                }}
+                className="w-20 px-2 py-1 rounded-lg text-xs font-mono font-bold uppercase bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 text-center"
+                placeholder="#3E49ED"
+              />
+            </div>
+
             <button
               type="button"
               onClick={handleRandomize}
@@ -254,47 +205,11 @@ export const PaletteGeneratorTab: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => setIsContrastMatrixOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer border border-slate-200/80 dark:border-slate-800"
-            >
-              <Eye className="w-3.5 h-3.5 text-slate-400" />
-              <span>Contrast matrix</span>
-            </button>
-
-            <button
-              type="button"
               onClick={() => setIsColorInfoOpen(true)}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer border border-slate-200/80 dark:border-slate-800"
             >
               <Info className="w-3.5 h-3.5 text-slate-400" />
               <span>Color info</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsExportModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer border border-slate-200/80 dark:border-slate-800"
-            >
-              <Download className="w-3.5 h-3.5 text-slate-400" />
-              <span>Export</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsEditModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer border border-slate-200/80 dark:border-slate-800"
-            >
-              <Sliders className="w-3.5 h-3.5 text-slate-400" />
-              <span>Edit</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsSavedDrawerOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
-            >
-              <Bookmark className="w-3.5 h-3.5" />
-              <span>Mis Paletas ({savedPalettes.length})</span>
             </button>
           </div>
         </div>
@@ -1231,73 +1146,8 @@ export const PaletteGeneratorTab: React.FC = () => {
       )}
 
       {/* ===================================================================== */}
-      {/* 5. MODALES: CONTRAST MATRIX, COLOR INFO, EXPORT, EDIT, SAVED DRAWER */}
+      {/* 5. MODAL: COLOR INFO */}
       {/* ===================================================================== */}
-
-      {/* MODAL: CONTRAST MATRIX */}
-      {isContrastMatrixOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                Matriz de Contraste WCAG 2.1
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsContrastMatrixOpen(false)}
-                className="p-1 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <p className="text-xs text-slate-500">
-              Verifica el ratio de contraste entre fondo blanco, fondo negro y el color primario para cumplir los estándares de accesibilidad (AA &gt;= 4.5:1, AAA &gt;= 7:1).
-            </p>
-
-            <div className="space-y-2">
-              {shades.map((s) => {
-                const ratioVsWhite = getContrastRatio(s.hex, '#FFFFFF');
-                const ratioVsBlack = getContrastRatio(s.hex, '#000000');
-                const passesAAWhite = ratioVsWhite >= 4.5;
-                const passesAABlack = ratioVsBlack >= 4.5;
-
-                return (
-                  <div
-                    key={s.shade}
-                    className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 text-xs"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="w-5 h-5 rounded-md shadow-2xs"
-                        style={{ backgroundColor: s.hex }}
-                      />
-                      <span className="font-extrabold w-10">{s.shade}</span>
-                      <span className="font-mono text-slate-400">{s.hex}</span>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <span className="font-mono font-bold">{ratioVsWhite}:1</span>{' '}
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${passesAAWhite ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                          vs Blanco {passesAAWhite ? '✓ AA' : '✗'}
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-mono font-bold">{ratioVsBlack}:1</span>{' '}
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${passesAABlack ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                          vs Negro {passesAABlack ? '✓ AA' : '✗'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: COLOR INFO */}
       {isColorInfoOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fadeIn">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
@@ -1348,213 +1198,6 @@ export const PaletteGeneratorTab: React.FC = () => {
                 </div>
               );
             })()}
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: EXPORT */}
-      {isExportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-xl w-full shadow-2xl space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                Exportar Paleta de Colores
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsExportModalOpen(false)}
-                className="p-1 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <span className="text-xs font-bold text-slate-500 block mb-1">Tailwind CSS (theme.colors)</span>
-                <pre className="p-3 rounded-xl bg-slate-950 text-emerald-400 font-mono text-[11px] overflow-x-auto max-h-40">
-                  {`primary: {\n${shades.map((s) => `  ${s.shade}: '${s.hex}',`).join('\n')}\n}`}
-                </pre>
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleCopyHex(
-                      `primary: {\n${shades.map((s) => `  ${s.shade}: '${s.hex}',`).join('\n')}\n}`,
-                      'Config Tailwind'
-                    )
-                  }
-                  className="mt-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 inline-flex items-center gap-1 cursor-pointer"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copiar configuración Tailwind</span>
-                </button>
-              </div>
-
-              <div>
-                <span className="text-xs font-bold text-slate-500 block mb-1">CSS Custom Properties (:root)</span>
-                <pre className="p-3 rounded-xl bg-slate-950 text-indigo-300 font-mono text-[11px] overflow-x-auto max-h-32">
-                  {shades.map((s) => `--color-primary-${s.shade}: ${s.hex};`).join('\n')}
-                </pre>
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleCopyHex(
-                      shades.map((s) => `--color-primary-${s.shade}: ${s.hex};`).join('\n'),
-                      'Variables CSS'
-                    )
-                  }
-                  className="mt-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 inline-flex items-center gap-1 cursor-pointer"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copiar variables CSS</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: EDIT COLOR */}
-      {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-black text-slate-900 dark:text-white">
-                Editar Color Base
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsEditModalOpen(false)}
-                className="p-1 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1">Color Principal (HEX)</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={baseHex}
-                    onChange={(e) => updateBaseColor(e.target.value)}
-                    className="w-10 h-10 rounded-xl cursor-pointer border-0 p-0"
-                  />
-                  <input
-                    type="text"
-                    value={baseHex}
-                    onChange={(e) => updateBaseColor(e.target.value)}
-                    className="flex-1 px-3 py-2 rounded-xl text-xs font-mono font-bold border border-slate-200 dark:border-slate-800 bg-transparent text-slate-900 dark:text-white"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1">Armonías Rápidas</label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => generateHarmony('complementary')}
-                    className="py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-800 text-[11px] font-bold hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-                  >
-                    Complementario
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => generateHarmony('analogous')}
-                    className="py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-800 text-[11px] font-bold hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-                  >
-                    Análogo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => generateHarmony('triadic')}
-                    className="py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-800 text-[11px] font-bold hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-                  >
-                    Triádico
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setIsEditModalOpen(false)}
-                className="w-full py-2.5 rounded-xl text-white font-extrabold text-xs shadow-xs"
-                style={{ backgroundColor: primaryHex }}
-              >
-                Aplicar Color
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* DRAWER: MIS PALETAS GUARDADAS */}
-      {isSavedDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/60 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 w-full max-w-md h-full p-6 shadow-2xl flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
-                <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                  Paletas Guardadas ({savedPalettes.length})
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setIsSavedDrawerOpen(false)}
-                  className="p-1 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="mt-4 space-y-3 overflow-y-auto max-h-[70vh] pr-1">
-                {savedPalettes.length === 0 ? (
-                  <div className="text-center py-12 text-slate-400 text-xs">
-                    No tienes paletas guardadas todavía. Haz clic en "Guardar" para almacenar tu combinación favorita.
-                  </div>
-                ) : (
-                  savedPalettes.map((p, idx) => (
-                    <div
-                      key={p.id || idx}
-                      className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-indigo-400 transition-all cursor-pointer group"
-                      onClick={() => {
-                        if (p.shades && p.shades.length > 0) {
-                          setShades(p.shades.map((s: any) => ({ ...s, isLight: true })));
-                          setPaletteName(p.name);
-                          if (p.primaryShade) setPrimaryShade(p.primaryShade);
-                          setIsSavedDrawerOpen(false);
-                        }
-                      }}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-extrabold text-xs text-slate-900 dark:text-white">
-                          {p.name}
-                        </span>
-                        <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-1 transition-transform" />
-                      </div>
-                      <div className="grid grid-cols-11 gap-1 h-6 rounded-lg overflow-hidden">
-                        {(p.shades || []).map((s: any) => (
-                          <div
-                            key={s.shade}
-                            style={{ backgroundColor: s.hex }}
-                            className="h-full"
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsSavedDrawerOpen(false)}
-              className="w-full py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-            >
-              Cerrar Biblioteca
-            </button>
           </div>
         </div>
       )}

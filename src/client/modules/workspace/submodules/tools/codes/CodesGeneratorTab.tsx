@@ -221,6 +221,10 @@ export const CodesGeneratorTab: React.FC = () => {
         },
       });
 
+      // Asegurar que el tamaño visual CSS del canvas no desborde el contenedor
+      canvas.style.width = '';
+      canvas.style.height = '';
+
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
@@ -354,11 +358,7 @@ export const CodesGeneratorTab: React.FC = () => {
     const reader = new FileReader();
     reader.onload = (event) => {
       setQrLogoUrl(event.target?.result as string);
-      toast({
-        title: 'Logo cargado',
-        description: 'El logo central se añadió al código QR.',
-        variant: 'default',
-      });
+      toast('Logo central cargado correctamente en el QR', 'success');
     };
     reader.readAsDataURL(file);
   };
@@ -368,11 +368,7 @@ export const CodesGeneratorTab: React.FC = () => {
     const textToCopy = activeMode === 'qr' ? getCompiledQrText() : barcodeValue;
     navigator.clipboard.writeText(textToCopy);
     setCopiedSuccess(true);
-    toast({
-      title: 'Texto copiado',
-      description: 'El contenido del código se copió al portapapeles.',
-      variant: 'default',
-    });
+    toast('Texto del código copiado al portapapeles', 'success');
     setTimeout(() => setCopiedSuccess(false), 2000);
   };
 
@@ -429,7 +425,7 @@ export const CodesGeneratorTab: React.FC = () => {
         a.click();
         URL.revokeObjectURL(url);
       } catch (err) {
-        toast({ title: 'Error', description: 'No se pudo generar el vector SVG', variant: 'destructive' });
+        toast('No se pudo generar el vector SVG', 'error');
       }
     } else {
       const svg = barcodeSvgRef.current;
@@ -503,19 +499,11 @@ export const CodesGeneratorTab: React.FC = () => {
         if (!blob) return;
         const item = new ClipboardItem({ 'image/png': blob });
         navigator.clipboard.write([item]).then(() => {
-          toast({
-            title: 'Imagen copiada',
-            description: 'Código copiado como imagen para pegar en WhatsApp o Canva.',
-            variant: 'default',
-          });
+          toast('Código copiado como imagen al portapapeles', 'success');
         });
       });
     } catch {
-      toast({
-        title: 'Navegador no compatible',
-        description: 'Usa "Descargar PNG" para guardar la imagen.',
-        variant: 'destructive',
-      });
+      toast('Navegador no compatible. Usa "Descargar PNG".', 'warning');
     }
   };
 
@@ -537,11 +525,7 @@ export const CodesGeneratorTab: React.FC = () => {
   const handleGenerateSmartBarcode = () => {
     const generated = generateSmartBarcode(barcodeFormat, barcodePrefix);
     setBarcodeValue(generated);
-    toast({
-      title: 'Código Inteligente Creado',
-      description: `${barcodeFormat}: ${generated} (Checksum verificado)`,
-      variant: 'default',
-    });
+    toast(`Código ${barcodeFormat} generado: ${generated} (Checksum OK)`, 'success');
   };
 
   // Generación Masiva por Lote
@@ -1246,15 +1230,16 @@ export const CodesGeneratorTab: React.FC = () => {
             </div>
 
             {/* Canvas / SVG Render Central con fondo de cuadrícula punteada */}
-            <div className="my-8 flex items-center justify-center p-6 sm:p-10 rounded-2xl bg-slate-50/50 dark:bg-slate-950/40 border border-dashed border-slate-200 dark:border-slate-800 min-h-[340px]">
+            <div className="my-6 flex items-center justify-center p-6 sm:p-8 rounded-2xl bg-slate-50/50 dark:bg-slate-950/40 border border-dashed border-slate-200 dark:border-slate-800 min-h-[300px]">
               {activeMode === 'qr' ? (
-                <canvas
-                  ref={canvasRef}
-                  className="max-w-full h-auto drop-shadow-md rounded-xl transition-all"
-                  style={{ width: '280px', height: '280px' }}
-                />
+                <div className="w-56 h-56 sm:w-64 sm:h-64 flex items-center justify-center p-3 bg-white rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800">
+                  <canvas
+                    ref={canvasRef}
+                    className="max-w-full max-h-full object-contain rounded-xl"
+                  />
+                </div>
               ) : (
-                <div className="bg-white p-6 rounded-2xl shadow-sm max-w-full overflow-x-auto">
+                <div className="bg-white p-6 rounded-2xl shadow-sm max-w-full overflow-x-auto border border-slate-200/80 dark:border-slate-800 flex items-center justify-center">
                   <svg ref={barcodeSvgRef} className="max-w-full" />
                 </div>
               )}

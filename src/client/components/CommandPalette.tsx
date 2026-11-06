@@ -153,6 +153,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const clientSingular = tenant.customization?.clientGlobalNameSingular || 'Cliente';
   const clientPlural = tenant.customization?.clientGlobalNamePlural || 'Clientes';
 
+  // Helper para asegurar que todas las palabras clave sean strings no vacíos y evitar errores de toLowerCase
+  const cleanKeywords = (...args: (string | undefined | null | number | boolean)[]): string[] => {
+    return args
+      .filter((k): k is string | number => k !== undefined && k !== null && typeof k !== 'boolean')
+      .map((k) => String(k).trim())
+      .filter((k) => k.length > 0);
+  };
+
   // Catálogo completo de items: Acciones estáticas + Entidades dinámicas
   const allItems: CommandPaletteItem[] = useMemo(() => {
     const list: CommandPaletteItem[] = [];
@@ -161,14 +169,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     // 1. CLIENTES (Búsqueda en tiempo real)
     // =========================================================================
     entities.clients.forEach((c) => {
-      const brandsText = c.brands?.map((b) => b.name).join(', ') || '';
+      const brandsText = c.brands?.map((b) => b.name).filter(Boolean).join(', ') || '';
       const servicesContracted = c.brands?.map((b) => b.serviceName).filter(Boolean).join(', ') || '';
 
       list.push({
         id: `client-${c.id}`,
         type: 'client',
-        title: `${c.name}${c.brands && c.brands.length > 0 ? ` • ${c.brands.map((b) => b.name).join(', ')}` : ''}`,
-        subtitle: `${c.documentType}: ${c.documentNumber}${c.whatsapp ? ` • WA: ${c.whatsapp}` : ''}${servicesContracted ? ` • ${servicesContracted}` : ''}`,
+        title: `${c.name || 'Cliente sin nombre'}${c.brands && c.brands.length > 0 ? ` • ${c.brands.map((b) => b.name).filter(Boolean).join(', ')}` : ''}`,
+        subtitle: `${c.documentType || 'DOC'}: ${c.documentNumber || '-'}${c.whatsapp ? ` • WA: ${c.whatsapp}` : ''}${servicesContracted ? ` • ${servicesContracted}` : ''}`,
         category: 'clients',
         categoryLabel: clientPlural,
         icon: <Users className="w-4 h-4 text-emerald-500" />,
@@ -177,16 +185,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           c.status === 'active'
             ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400'
             : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400',
-        keywords: [
+        keywords: cleanKeywords(
           c.name,
           c.documentNumber,
           c.whatsapp,
-          c.email || '',
+          c.email,
           brandsText,
           servicesContracted,
           'cliente',
-          'marca',
-        ],
+          'marca'
+        ),
         perform: () => {
           navigateToEntity(
             { module: 'clients', entityType: 'client', entityId: c.id, code: c.name, action: 'edit' },
@@ -211,13 +219,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           ? 'Borrador'
           : q.status === 'rejected'
           ? 'Rechazada'
-          : q.status;
+          : q.status || 'Cotización';
 
       list.push({
         id: `quote-${q.id}`,
         type: 'quote',
-        title: `${q.code} • ${q.clientName || q.companyName}`,
-        subtitle: `Cotización • ${q.currencySymbol || 'S/'} ${Number(q.total).toLocaleString('es-PE', { minimumFractionDigits: 2 })}${q.items?.length ? ` • ${q.items.length} partidas` : ''}`,
+        title: `${q.code || 'COT'} • ${q.clientName || q.companyName || 'Sin cliente'}`,
+        subtitle: `Cotización • ${q.currencySymbol || 'S/'} ${Number(q.total || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}${q.items?.length ? ` • ${q.items.length} partidas` : ''}`,
         category: 'quotes',
         categoryLabel: 'Cotizaciones',
         icon: <FileText className="w-4 h-4 text-blue-500" />,
@@ -230,7 +238,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400',
         publicUrl,
         publicUrlLabel: 'Vista Pública',
-        keywords: [
+        keywords: cleanKeywords(
           q.code,
           q.clientName,
           q.companyName,
@@ -239,8 +247,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           q.email,
           'cotizacion',
           'propuesta',
-          'proforma',
-        ],
+          'proforma'
+        ),
         perform: () => {
           navigateToEntity(
             { module: 'quotes', entityType: 'quote', entityId: q.id, code: q.code, action: 'edit' },
@@ -278,7 +286,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       list.push({
         id: `note-${n.id}`,
         type: 'payment_note',
-        title: `${n.code} • ${n.clientName || n.companyName}`,
+        title: `${n.code || 'NP'} • ${n.clientName || n.companyName || 'Sin cliente'}`,
         subtitle: `Nota de Pago • Total: ${n.currencySymbol || 'S/'} ${Number(effectiveTotal).toLocaleString('es-PE', { minimumFractionDigits: 2 })}${isPaid ? ' • 100% Pagado' : ` • Saldo: ${n.currencySymbol || 'S/'} ${pendingBalance.toLocaleString('es-PE', { minimumFractionDigits: 2 })}`}`,
         category: 'payments',
         categoryLabel: 'Notas de Pago',
@@ -291,18 +299,18 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400',
         publicUrl,
         publicUrlLabel: 'Comprobante',
-        keywords: [
+        keywords: cleanKeywords(
           n.code,
           n.clientName,
           n.companyName,
-          n.brandName || '',
+          n.brandName,
           n.documentNumber,
           'pago',
           'nota de pago',
           'comprobante',
           'recibo',
-          'cobranza',
-        ],
+          'cobranza'
+        ),
         perform: () => {
           navigateToEntity(
             { module: 'payments', entityType: 'payment_note', entityId: n.id, code: n.code, action: 'edit' },
@@ -332,8 +340,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       list.push({
         id: `order-${o.id}`,
         type: 'service_order',
-        title: `${o.code} • ${o.title}`,
-        subtitle: `Orden de Servicio • Cliente: ${o.clientName || o.companyName}${o.deliverables?.length ? ` • ${o.deliverables.length} entregables` : ''}`,
+        title: `${o.code || 'OS'} • ${o.title || 'Orden de Servicio'}`,
+        subtitle: `Orden de Servicio • Cliente: ${o.clientName || o.companyName || '-'}${o.deliverables?.length ? ` • ${o.deliverables.length} entregables` : ''}`,
         category: 'service_orders',
         categoryLabel: 'Órdenes de Servicio',
         icon: <ClipboardList className="w-4 h-4 text-amber-500" />,
@@ -344,7 +352,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400',
         publicUrl,
         publicUrlLabel: 'Hoja de Ruta',
-        keywords: [
+        keywords: cleanKeywords(
           o.code,
           o.title,
           o.clientName,
@@ -353,8 +361,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           'os',
           'orden de servicio',
           'entregables',
-          'roadmap',
-        ],
+          'roadmap'
+        ),
         perform: () => {
           navigateToEntity(
             { module: 'service_orders', entityType: 'service_order', entityId: o.id, code: o.code, action: 'edit' },
@@ -378,7 +386,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       list.push({
         id: `service-${s.id}`,
         type: 'service',
-        title: `${s.title}${s.code ? ` (${s.code})` : ''}`,
+        title: `${s.title || 'Servicio'}${s.code ? ` (${s.code})` : ''}`,
         subtitle: `Servicio • ${tenant.customization?.currencySymbol || 'S/'} ${Number(s.price || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })} • ${s.pricingType === 'monthly' ? 'Mensual' : 'Pago Único'}`,
         category: 'services',
         categoryLabel: 'Servicios',
@@ -387,7 +395,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         badgeClass: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-400',
         publicUrl,
         publicUrlLabel: 'Ver Detalle',
-        keywords: [s.title, s.code, s.shortDescription || '', s.categoryName || '', 'servicio', 'catalogo', 'paquete'],
+        keywords: cleanKeywords(
+          s.title,
+          s.code,
+          s.shortDescription,
+          s.categoryName,
+          'servicio',
+          'catalogo',
+          'paquete'
+        ),
         perform: () => {
           onSelectModule('services');
           onClose();
@@ -688,9 +704,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   // Filtrado según búsqueda y pestaña seleccionada
   const filteredItems = useMemo(() => {
-    const q = query.toLowerCase().trim();
+    const q = (query || '').toLowerCase().trim();
 
     return allItems.filter((item) => {
+      if (!item) return false;
+
       // Filtro de pestaña superior
       if (selectedFilter === 'clients' && item.type !== 'client') return false;
       if (selectedFilter === 'quotes' && item.type !== 'quote') return false;
@@ -702,10 +720,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       // Filtro de texto
       if (!q) return true;
 
-      const inTitle = item.title.toLowerCase().includes(q);
-      const inSubtitle = item.subtitle ? item.subtitle.toLowerCase().includes(q) : false;
-      const inKeywords = item.keywords ? item.keywords.some((k) => k.toLowerCase().includes(q)) : false;
-      const inCategory = item.categoryLabel.toLowerCase().includes(q);
+      const inTitle = typeof item.title === 'string' && item.title.toLowerCase().includes(q);
+      const inSubtitle = typeof item.subtitle === 'string' && item.subtitle.toLowerCase().includes(q);
+      const inKeywords =
+        Array.isArray(item.keywords) &&
+        item.keywords.some((k) => typeof k === 'string' && k.toLowerCase().includes(q));
+      const inCategory = typeof item.categoryLabel === 'string' && item.categoryLabel.toLowerCase().includes(q);
 
       return inTitle || inSubtitle || inKeywords || inCategory;
     });

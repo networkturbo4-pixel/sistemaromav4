@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import { SettingsTab } from '../modules/SettingsModule';
 import { CommandPalette } from './CommandPalette';
+import { ErrorBoundary } from './ErrorBoundary';
 import { QuickOnboardingCreatorModal } from './QuickOnboardingCreatorModal';
 import { NotificationCenterModal } from './NotificationCenterModal';
 
@@ -1463,15 +1464,17 @@ export const AppShell: React.FC<AppShellProps> = ({
       </nav>
 
       {/* 5. COMMAND PALETTE (CTRL + K / CMD + K) */}
-      <CommandPalette
-        isOpen={commandPaletteOpen}
-        onClose={() => setCommandPaletteOpen(false)}
-        onOpenCreator={() => setCreatorModalOpen(true)}
-        onSelectModule={onSelectModule}
-        onSelectSettingsTab={onSelectSettingsTab}
-        onCycleTheme={cycleTheme}
-        onLogout={handleLogoutClick}
-      />
+      <ErrorBoundary fallbackTitle="Error en Command Palette">
+        <CommandPalette
+          isOpen={commandPaletteOpen}
+          onClose={() => setCommandPaletteOpen(false)}
+          onOpenCreator={() => setCreatorModalOpen(true)}
+          onSelectModule={onSelectModule}
+          onSelectSettingsTab={onSelectSettingsTab}
+          onCycleTheme={cycleTheme}
+          onLogout={handleLogoutClick}
+        />
+      </ErrorBoundary>
 
       {/* 6. CREADOR INTEGRAL RÁPIDO (CLIENTE + MEMBRESÍA/SERVICIO + OS Y PAGO) */}
       <QuickOnboardingCreatorModal
