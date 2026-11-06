@@ -1117,6 +1117,45 @@ export const ClientsModule: React.FC = () => {
     clientDialogRef.current?.showModal();
   };
 
+  // Escuchar navegación dirigida desde Command Palette
+  useEffect(() => {
+    if (clients.length === 0) return;
+
+    const handleTarget = (target: { entityId?: string; id?: string; code?: string; query?: string }) => {
+      const targetId = target.entityId || target.id;
+      const found = clients.find(
+        (c) =>
+          (targetId && c.id === targetId) ||
+          (target.code && (c.name.toLowerCase() === target.code.toLowerCase() || c.documentNumber === target.code))
+      );
+      if (found) {
+        openEditClientModal(found);
+      } else if (target.query) {
+        setSearchQuery(target.query);
+      }
+    };
+
+    try {
+      const raw = sessionStorage.getItem('roma_open_target');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.module === 'clients') {
+          sessionStorage.removeItem('roma_open_target');
+          handleTarget(parsed);
+        }
+      }
+    } catch {}
+
+    const listener = (e: any) => {
+      if (e.detail?.module === 'clients') {
+        sessionStorage.removeItem('roma_open_target');
+        handleTarget(e.detail);
+      }
+    };
+    window.addEventListener('roma:open-target', listener);
+    return () => window.removeEventListener('roma:open-target', listener);
+  }, [clients]);
+
   const handleSaveClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientForm.name.trim() || !clientForm.documentNumber.trim() || !clientForm.whatsapp.trim()) {

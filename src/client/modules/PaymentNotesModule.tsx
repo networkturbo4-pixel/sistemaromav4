@@ -801,6 +801,45 @@ export const PaymentNotesModule: React.FC = () => {
     setIsEditorOpen(true);
   };
 
+  // Escuchar navegación dirigida desde Command Palette
+  useEffect(() => {
+    if (paymentNotes.length === 0) return;
+
+    const handleTarget = (target: { entityId?: string; id?: string; code?: string; query?: string }) => {
+      const targetId = target.entityId || target.id;
+      const found = paymentNotes.find(
+        (p) =>
+          (targetId && p.id === targetId) ||
+          (target.code && p.code?.toLowerCase() === target.code.toLowerCase())
+      );
+      if (found) {
+        handleOpenEdit(found);
+      } else if (target.query) {
+        setSearchQuery(target.query);
+      }
+    };
+
+    try {
+      const raw = sessionStorage.getItem('roma_open_target');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.module === 'payments') {
+          sessionStorage.removeItem('roma_open_target');
+          handleTarget(parsed);
+        }
+      }
+    } catch {}
+
+    const listener = (e: any) => {
+      if (e.detail?.module === 'payments') {
+        sessionStorage.removeItem('roma_open_target');
+        handleTarget(e.detail);
+      }
+    };
+    window.addEventListener('roma:open-target', listener);
+    return () => window.removeEventListener('roma:open-target', listener);
+  }, [paymentNotes]);
+
   // Aplicar servicio de marca a partidas
   const applyBrandServiceToItems = (brand: ClientBrand) => {
     if (!brand.serviceName) {

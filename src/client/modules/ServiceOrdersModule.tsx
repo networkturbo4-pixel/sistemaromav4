@@ -195,6 +195,45 @@ export const ServiceOrdersModule: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  // Escuchar navegación dirigida desde Command Palette
+  useEffect(() => {
+    if (orders.length === 0) return;
+
+    const handleTarget = (target: { entityId?: string; id?: string; code?: string; query?: string }) => {
+      const targetId = target.entityId || target.id;
+      const found = orders.find(
+        (o) =>
+          (targetId && o.id === targetId) ||
+          (target.code && o.code?.toLowerCase() === target.code.toLowerCase())
+      );
+      if (found) {
+        handleOpenEditOrder(found);
+      } else if (target.query) {
+        setSearch(target.query);
+      }
+    };
+
+    try {
+      const raw = sessionStorage.getItem('roma_open_target');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.module === 'service_orders') {
+          sessionStorage.removeItem('roma_open_target');
+          handleTarget(parsed);
+        }
+      }
+    } catch {}
+
+    const listener = (e: any) => {
+      if (e.detail?.module === 'service_orders') {
+        sessionStorage.removeItem('roma_open_target');
+        handleTarget(e.detail);
+      }
+    };
+    window.addEventListener('roma:open-target', listener);
+    return () => window.removeEventListener('roma:open-target', listener);
+  }, [orders]);
+
   const handleSaveOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingOrder || !editingOrder.title?.trim() || !editingOrder.clientId) {

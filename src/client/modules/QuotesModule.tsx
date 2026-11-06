@@ -347,6 +347,45 @@ export const QuotesModule: React.FC = () => {
     });
   };
 
+  // Escuchar navegación dirigida desde Command Palette
+  useEffect(() => {
+    if (quotes.length === 0) return;
+
+    const handleTarget = (target: { entityId?: string; id?: string; code?: string; query?: string }) => {
+      const targetId = target.entityId || target.id;
+      const found = quotes.find(
+        (q) =>
+          (targetId && q.id === targetId) ||
+          (target.code && q.code?.toLowerCase() === target.code.toLowerCase())
+      );
+      if (found) {
+        handleOpenEdit(found);
+      } else if (target.query) {
+        setSearchQuery(target.query);
+      }
+    };
+
+    try {
+      const raw = sessionStorage.getItem('roma_open_target');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.module === 'quotes') {
+          sessionStorage.removeItem('roma_open_target');
+          handleTarget(parsed);
+        }
+      }
+    } catch {}
+
+    const listener = (e: any) => {
+      if (e.detail?.module === 'quotes') {
+        sessionStorage.removeItem('roma_open_target');
+        handleTarget(e.detail);
+      }
+    };
+    window.addEventListener('roma:open-target', listener);
+    return () => window.removeEventListener('roma:open-target', listener);
+  }, [quotes]);
+
   // Al seleccionar un cliente existente, rellenar los datos
   const handleSelectClient = (clientId: string) => {
     if (!clientId) {
