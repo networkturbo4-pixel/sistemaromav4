@@ -11,6 +11,7 @@ const fs_1 = __importDefault(require("fs"));
 const child_process_1 = require("child_process");
 const util_1 = require("util");
 const dotenv_1 = __importDefault(require("dotenv"));
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const db_1 = require("./db");
 const execAsync = (0, util_1.promisify)(child_process_1.exec);
 const auth_1 = require("./middleware/auth");
@@ -2067,7 +2068,17 @@ app.get('/api/public/tenants', async (_req, res) => {
 // Endpoint dinámico para servir el icono o logo del tenant (compatible con PWA y Open Graph)
 app.get('/api/public/tenant-icon', async (req, res) => {
     try {
-        const slug = req.query.tenant;
+        let slug = req.query.tenant;
+        if (!slug) {
+            const referer = req.get('referer');
+            if (referer) {
+                try {
+                    const refUrl = new URL(referer);
+                    slug = refUrl.searchParams.get('tenant') || undefined;
+                }
+                catch { }
+            }
+        }
         const size = req.query.size;
         const format = req.query.format;
         const tenant = await db_1.db.getPublicTenantBranding(slug);
@@ -2097,6 +2108,24 @@ app.get('/api/public/tenant-icon', async (req, res) => {
                 res.sendFile(filePath);
                 return;
             }
+        }
+        // Si el tenant no tiene logo propio subido y NO es Roma Agencia:
+        // Generar un icono SVG vectorial con el color de marca del tenant y la inicial de su empresa
+        if (tenant && tenant.slug !== 'roma-agencia') {
+            const brandColor = tenant.customization?.lightPalette?.primary || '#6366f1';
+            const companyName = tenant.companyInfo?.commercialName || tenant.name || 'A';
+            const initial = companyName.trim().charAt(0).toUpperCase();
+            const numSize = size === '512' ? 512 : size === '180' ? 180 : 192;
+            const fontSize = Math.round(numSize * 0.52);
+            const rx = Math.round(numSize * 0.22);
+            const dynamicSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${numSize}" height="${numSize}" viewBox="0 0 ${numSize} ${numSize}">
+        <rect width="${numSize}" height="${numSize}" rx="${rx}" fill="${brandColor}" />
+        <text x="50%" y="54%" font-family="system-ui, -apple-system, sans-serif" font-size="${fontSize}" font-weight="900" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">${initial}</text>
+      </svg>`;
+            res.setHeader('Content-Type', 'image/svg+xml');
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            res.send(dynamicSvg);
+            return;
         }
         // Servir PNG para PWA icons o solicitudes explícitas de PNG
         if (size || format === 'png') {
@@ -2184,14 +2213,38 @@ app.get(['/api/public/tenant-og-image.png', '/api/public/tenant-og-image'], asyn
 // Manifiesto PWA Dinámico por Tenant (compatible con /manifest.json y /api/public/manifest.webmanifest)
 app.get(['/manifest.json', '/api/public/manifest.webmanifest'], async (req, res) => {
     try {
-        const slug = req.query.tenant;
+        let slug = req.query.tenant;
+        // Si no viene en query, intentar extraer del Referer del navegador
+        if (!slug) {
+            const referer = req.get('referer');
+            if (referer) {
+                try {
+                    const refUrl = new URL(referer);
+                    slug = refUrl.searchParams.get('tenant') || undefined;
+                }
+                catch { }
+            }
+        }
+        // Si aún no viene, intentar extraer de la cabecera x-tenant-slug o cookie
+        if (!slug) {
+            slug = req.headers['x-tenant-slug'];
+        }
+        if (!slug && req.cookies?.auth_token) {
+            try {
+                const decoded = jsonwebtoken_1.default.decode(req.cookies.auth_token);
+                if (decoded?.tenant?.slug) {
+                    slug = decoded.tenant.slug;
+                }
+            }
+            catch { }
+        }
         const tenant = await db_1.db.getPublicTenantBranding(slug);
         const name = tenant?.companyInfo?.commercialName || tenant?.name || 'ROMA SaaS — Sistema de Agencia';
         const shortName = (tenant?.companyInfo?.commercialName || tenant?.name || 'ROMA SaaS').slice(0, 15);
         const desc = `Sistema SaaS de Gestión para Agencia de Publicidad y Diseño — ${name}`;
         const tenantSlug = tenant?.slug || slug || 'roma-agencia';
         res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
-        res.setHeader('Cache-Control', 'public, max-age=300');
+        res.setHeader('Cache-Control', 'public, max-age=180');
         return res.json({
             name,
             short_name: shortName,
@@ -2205,19 +2258,31 @@ app.get(['/manifest.json', '/api/public/manifest.webmanifest'], async (req, res)
             theme_color: tenant?.customization?.lightPalette?.primary || '#0055ff',
             icons: [
                 {
-                    src: '/icon-192.png',
+                    src: `/api/public/tenant-icon?tenant=${encodeURIComponent(tenantSlug)}&size=192`,
                     sizes: '192x192',
                     type: 'image/png',
-                    purpose: 'any maskable'
+                    purpose: 'any'
                 },
                 {
-                    src: '/icon-512.png',
+                    src: `/api/public/tenant-icon?tenant=${encodeURIComponent(tenantSlug)}&size=512`,
                     sizes: '512x512',
                     type: 'image/png',
-                    purpose: 'any maskable'
+                    purpose: 'any'
                 },
                 {
-                    src: '/apple-touch-icon.png',
+                    src: `/api/public/tenant-icon?tenant=${encodeURIComponent(tenantSlug)}&size=192&maskable=1`,
+                    sizes: '192x192',
+                    type: 'image/png',
+                    purpose: 'maskable'
+                },
+                {
+                    src: `/api/public/tenant-icon?tenant=${encodeURIComponent(tenantSlug)}&size=512&maskable=1`,
+                    sizes: '512x512',
+                    type: 'image/png',
+                    purpose: 'maskable'
+                },
+                {
+                    src: `/api/public/tenant-icon?tenant=${encodeURIComponent(tenantSlug)}&size=180`,
                     sizes: '180x180',
                     type: 'image/png'
                 }
@@ -2242,15 +2307,15 @@ app.get(['/manifest.json', '/api/public/manifest.webmanifest'], async (req, res)
                     src: '/icon-192.png',
                     sizes: '192x192',
                     type: 'image/png',
-                    purpose: 'any maskable'
+                    purpose: 'any'
                 },
                 {
                     src: '/icon-512.png',
                     sizes: '512x512',
                     type: 'image/png',
-                    purpose: 'any maskable'
+                    purpose: 'any'
                 }
-            ],
+            ]
         });
     }
 });
