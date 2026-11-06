@@ -357,21 +357,27 @@ export const AppShell: React.FC<AppShellProps> = ({
   ];
 
   const renderWorkspaceMenu = (onClose: () => void) => (
-    <>
-      <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <Layers className="w-3.5 h-3.5 text-indigo-500" />
-          <span>Espacios de Trabajo</span>
+    <div className="p-1 space-y-1">
+      {/* Cabecera limpia con contador numérico sin desbordes */}
+      <div className="px-2.5 py-1.5 flex items-center justify-between text-slate-400 dark:text-slate-500">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Layers className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+          <span className="text-[10px] font-black uppercase tracking-wider truncate">
+            Espacios de Trabajo
+          </span>
         </div>
-        <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10">
-          {tenantsList.length} disponibles
+        <span className="text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 shrink-0">
+          {tenantsList.length}
         </span>
       </div>
 
-      <div className="max-h-60 overflow-y-auto space-y-1 p-0.5 pr-1">
+      {/* Lista de Tenants */}
+      <div className="max-h-56 overflow-y-auto space-y-1 p-0.5">
         {tenantsList.map((t) => {
           const isCurrent = t.id === tenant.id;
           const tFavicon = t.customization?.faviconUrl;
+          const currency = t.customization?.currencySymbol || (t as any).currencySymbol || 'S/';
+
           return (
             <button
               key={t.id}
@@ -383,22 +389,22 @@ export const AppShell: React.FC<AppShellProps> = ({
                   await switchTenant(t.id);
                 }
               }}
-              className={`w-full p-2.5 rounded-xl flex items-center justify-between gap-2.5 text-left text-xs transition cursor-pointer border ${
+              className={`w-full p-2 rounded-xl flex items-center justify-between gap-2.5 text-left text-xs transition cursor-pointer border ${
                 isCurrent
-                  ? 'bg-indigo-50/80 dark:bg-indigo-500/15 border-indigo-200 dark:border-indigo-500/30 font-bold text-indigo-600 dark:text-indigo-400 shadow-2xs'
+                  ? 'bg-indigo-50/90 dark:bg-indigo-500/15 border-indigo-200 dark:border-indigo-500/30 text-indigo-950 dark:text-indigo-200 font-bold shadow-2xs'
                   : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
               }`}
             >
-              <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 {tFavicon ? (
                   <img
                     src={tFavicon}
                     alt={t.name}
-                    className="w-7 h-7 rounded-lg object-contain p-0.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs shrink-0"
+                    className="w-8 h-8 rounded-lg object-contain p-0.5 border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs shrink-0"
                   />
                 ) : (
                   <div
-                    className={`w-7 h-7 rounded-lg text-[11px] font-black flex items-center justify-center shrink-0 ${
+                    className={`w-8 h-8 rounded-lg text-xs font-black flex items-center justify-center shrink-0 ${
                       isCurrent
                         ? 'bg-indigo-600 text-white shadow-2xs'
                         : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
@@ -407,24 +413,33 @@ export const AppShell: React.FC<AppShellProps> = ({
                     {t.name.charAt(0).toUpperCase()}
                   </div>
                 )}
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-bold leading-tight">{t.name}</p>
-                  <p className="text-[10px] opacity-70 font-mono truncate">/{t.slug}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-extrabold text-slate-900 dark:text-slate-100 leading-tight">
+                    {t.companyInfo?.commercialName || t.name}
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-mono truncate">
+                    /{t.slug}
+                  </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-[10px] font-semibold opacity-70">
-                  {t.customization?.currencySymbol || (t as any).currencySymbol || 'S/'}
+              <div className="flex items-center gap-1.5 shrink-0 pl-1">
+                <span className="text-[10px] font-mono font-semibold text-slate-400 dark:text-slate-500">
+                  {currency}
                 </span>
-                {isCurrent && <Check className="w-3.5 h-3.5 text-emerald-500" />}
+                {isCurrent && (
+                  <span className="w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <Check className="w-3 h-3 stroke-[3]" />
+                  </span>
+                )}
               </div>
             </button>
           );
         })}
       </div>
 
-      <div className="pt-2 mt-1 border-t border-slate-100 dark:border-slate-800 space-y-1">
+      {/* Acciones inferiores */}
+      <div className="pt-2 mt-1 border-t border-slate-100 dark:border-slate-800/80 space-y-1">
         {can('settings.tenants.manage') && (
           <button
             type="button"
@@ -436,9 +451,9 @@ export const AppShell: React.FC<AppShellProps> = ({
                 window.dispatchEvent(new CustomEvent('roma-open-new-tenant-modal'));
               }, 100);
             }}
-            className="w-full px-3 py-2 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition flex items-center gap-2 cursor-pointer border border-dashed border-indigo-200 dark:border-indigo-500/30"
+            className="w-full px-3 py-2 rounded-xl text-xs font-extrabold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition flex items-center justify-center gap-1.5 cursor-pointer border border-dashed border-indigo-200 dark:border-indigo-800/80"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-3.5 h-3.5 stroke-[3]" />
             <span>Nueva Agencia / Tenant</span>
           </button>
         )}
@@ -450,13 +465,13 @@ export const AppShell: React.FC<AppShellProps> = ({
             onSelectModule('settings');
             onSelectSettingsTab?.('tenants');
           }}
-          className="w-full px-3 py-1.5 rounded-xl text-[11px] font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-2 cursor-pointer"
+          className="w-full px-3 py-1.5 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center justify-center gap-1.5 cursor-pointer"
         >
-          <Building2 className="w-3.5 h-3.5" />
-          <span>Gestionar todos los workspaces</span>
+          <Settings className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <span>Gestionar Workspaces</span>
         </button>
       </div>
-    </>
+    </div>
   );
 
   const renderSidebarContent = () => (
@@ -512,7 +527,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           {/* Menú Flotante de Espacios de Trabajo */}
           {sidebarWorkspaceOpen && (
             <div
-              className="absolute left-0 right-0 top-full mt-1.5 z-50 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-2 space-y-1 backdrop-blur-xl bg-white/95 dark:bg-slate-900/95"
+              className="absolute left-0 right-0 top-full mt-1.5 z-50 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-xl p-1.5 backdrop-blur-xl bg-white/98 dark:bg-slate-900/98 animate-in fade-in zoom-in-95 duration-150"
             >
               {renderWorkspaceMenu(() => setSidebarWorkspaceOpen(false))}
             </div>
@@ -764,84 +779,43 @@ export const AppShell: React.FC<AppShellProps> = ({
             borderColor: 'var(--app-border)',
           }}
         >
-          <div className="px-3.5 sm:px-4 h-14 sm:h-15 flex items-center justify-between gap-3">
-            {/* LADO IZQUIERDO: DISPARADOR MÓVIL + LOGO (SIN TEXTO REDUNDANTE) */}
-            <div className="flex items-center gap-3 min-w-0">
-              {/* Botón Hamburguesa en Móvil */}
-              <button
-                type="button"
-                onClick={() => setMobileMenuOpen(true)}
-                className="p-2 rounded-xl border hover:bg-slate-500/10 active:scale-95 transition cursor-pointer flex items-center justify-center shrink-0 shadow-2xs"
-                style={{
-                  borderColor: 'var(--app-border)',
-                  backgroundColor: 'color-mix(in srgb, var(--app-bg) 60%, transparent)',
-                }}
-                title="Abrir menú de navegación"
-                aria-label="Abrir menú de navegación"
-              >
-                <Menu className="w-5 h-5" style={{ color: 'var(--app-text)' }} />
-              </button>
+          <div className="px-3 sm:px-4 h-14 sm:h-15 flex items-center justify-between gap-2.5">
+            {/* LADO IZQUIERDO: DISPARADOR MÓVIL */}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="p-2 rounded-xl border hover:bg-slate-500/10 active:scale-95 transition cursor-pointer flex items-center justify-center shrink-0 shadow-2xs"
+              style={{
+                borderColor: 'var(--app-border)',
+                backgroundColor: 'color-mix(in srgb, var(--app-bg) 60%, transparent)',
+              }}
+              title="Abrir menú de navegación"
+              aria-label="Abrir menú de navegación"
+            >
+              <Menu className="w-5 h-5" style={{ color: 'var(--app-text)' }} />
+            </button>
 
-              {/* Logo de la Agencia */}
-              <button
-                type="button"
-                onClick={() => onSelectModule('dashboard')}
-                className="flex items-center gap-2 text-left focus:outline-none min-w-0 cursor-pointer"
-              >
-                {activeLogo ? (
-                  <img
-                    src={activeLogo}
-                    alt={tenant.name}
-                    className="h-7 w-auto max-w-[140px] object-contain"
-                  />
-                ) : (
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div
-                      className="w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs text-white shadow-xs shrink-0"
-                      style={{ backgroundColor: 'var(--app-primary)' }}
-                    >
-                      {tenant.name.charAt(0)}
-                    </div>
-                    <span className="font-extrabold text-xs block truncate text-slate-900 dark:text-slate-100 max-w-[140px]">
-                      {tenant.companyInfo.commercialName || tenant.name}
-                    </span>
-                  </div>
-                )}
-              </button>
-            </div>
-
-            {/* CENTRO: TRIGGER COMMAND PALETTE (CTRL + K) Y ACCESO DIRECTO AL CREADOR */}
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCommandPaletteOpen(true)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition cursor-pointer hover:border-indigo-500/40 shadow-2xs group"
-                style={{
-                  backgroundColor: 'var(--app-bg)',
-                  borderColor: 'var(--app-border)',
-                }}
-                title="Abrir Command Palette (Ctrl + K)"
-              >
+            {/* CENTRO: TRIGGER COMMAND PALETTE EXPANDIDO (MÁS ESPACIO PARA EL BUSCADOR) */}
+            <button
+              type="button"
+              onClick={() => setCommandPaletteOpen(true)}
+              className="flex-1 min-w-0 flex items-center justify-between px-3 py-2 rounded-xl border text-xs text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition cursor-pointer hover:border-indigo-500/40 shadow-2xs group"
+              style={{
+                backgroundColor: 'var(--app-bg)',
+                borderColor: 'var(--app-border)',
+              }}
+              title="Abrir Command Palette (Ctrl + K)"
+            >
+              <div className="flex items-center gap-2 min-w-0">
                 <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-500 transition shrink-0" />
-                <span className="hidden sm:inline font-medium">Buscar o comando...</span>
-                <span className="sm:hidden font-medium">Buscar...</span>
-                <kbd
-                  className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-500/10 text-slate-500 dark:text-slate-400 border border-slate-500/15"
-                >
-                  Ctrl K
-                </kbd>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setCreatorModalOpen(true)}
-                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/15 to-indigo-500/15 border border-amber-500/30 hover:border-amber-500/60 text-slate-800 dark:text-slate-200 text-xs font-bold transition cursor-pointer shadow-2xs hover:scale-[1.02] active:scale-95"
-                title="Abrir el Creador Integral (Cliente + Membresía/Servicio + OS y Pago)"
-              >
-                <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                <span>El Creador</span>
-              </button>
-            </div>
+                <span className="font-medium truncate text-slate-400 dark:text-slate-500">
+                  Buscar clientes, servicios o comandos...
+                </span>
+              </div>
+              <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-500/10 text-slate-500 dark:text-slate-400 border border-slate-500/15 shrink-0 ml-1">
+                Ctrl K
+              </kbd>
+            </button>
 
             {/* LADO DERECHO: NOTIFICACIONES + PERFIL DE USUARIO */}
             <div className="flex items-center gap-2">
