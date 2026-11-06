@@ -39,6 +39,7 @@ import {
   Zap,
   RefreshCw,
   Bell,
+  Video,
 } from 'lucide-react';
 import { SettingsTab } from '../modules/SettingsModule';
 import { CommandPalette } from './CommandPalette';
@@ -1230,6 +1231,39 @@ export const AppShell: React.FC<AppShellProps> = ({
                   </div>
                 </div>
                 <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 shrink-0">
+                  <span>Abrir</span>
+                  <ArrowRight className="w-3 h-3" />
+                </div>
+              </button>
+
+              {/* Botón Salas & Reuniones */}
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileWorkspaceSheetOpen(false);
+                  onSelectModule('workspace');
+                  setTimeout(() => {
+                    window.dispatchEvent(
+                      new CustomEvent('roma-open-workspace-subview', { detail: 'meetings' })
+                    );
+                  }, 50);
+                }}
+                className="col-span-2 p-3 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-left hover:border-blue-500/60 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition cursor-pointer flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                    <Video className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-xs text-slate-900 dark:text-white">
+                      Salas & Reuniones
+                    </h4>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      Salas virtuales Bento, Google Meet flotante y acuerdos.
+                    </p>
+                  </div>
+                </div>
+                <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1 shrink-0">
                   <span>Abrir</span>
                   <ArrowRight className="w-3 h-3" />
                 </div>

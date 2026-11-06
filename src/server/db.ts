@@ -59,6 +59,10 @@ import {
   FormSubmission,
   FormSubmissionFile,
   FormField,
+  WorkspaceMeetingRoom,
+  WorkspaceMeeting,
+  WorkspaceMeetingAgreement,
+  WorkspaceMeetingRecording,
 } from '../shared/types';
 import { ALL_PERMISSION_KEYS, PermissionKey } from '../shared/permissions';
 
@@ -94,6 +98,8 @@ export interface DatabaseState {
   accountingEntries: AccountingEntry[];
   workspaceForms: WorkspaceForm[];
   formSubmissions: FormSubmission[];
+  workspaceMeetingRooms: WorkspaceMeetingRoom[];
+  workspaceMeetings: WorkspaceMeeting[];
 }
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -244,6 +250,8 @@ export class DatabaseManager {
       accountingEntries: [],
       workspaceForms: [],
       formSubmissions: [],
+      workspaceMeetingRooms: [],
+      workspaceMeetings: [],
     };
     return defaultState;
   }
@@ -3453,6 +3461,369 @@ export class DatabaseManager {
     const deleted = this.localState.accountingEntries.length < before;
     if (deleted) this.saveLocalState();
     return deleted;
+  }
+
+
+  // =============================================================================
+  // SUBMÓDULO: SALAS DE REUNIONES & ACTAS DE WORKSPACE
+  // =============================================================================
+
+  public async getMeetingRooms(tenantId: string): Promise<WorkspaceMeetingRoom[]> {
+    if (!this.localState.workspaceMeetingRooms) {
+      this.localState.workspaceMeetingRooms = [];
+    }
+    let rooms = this.localState.workspaceMeetingRooms.filter((r) => r.tenantId === tenantId);
+
+    // Inicializar salas preestablecidas fijas si el tenant es nuevo o no tiene ninguna
+    if (rooms.length === 0) {
+      const now = new Date().toISOString();
+      const presets: WorkspaceMeetingRoom[] = [
+        {
+          id: `room-${Date.now()}-01`,
+          tenantId,
+          code: 'SALA-01',
+          name: 'Sala Principal Google Meet',
+          description: 'Sala de conferencias general para presentaciones, briefs y coordinación de proyectos.',
+          color: '#0055ff',
+          icon: 'Video',
+          meetUrl: 'https://meet.google.com/new',
+          isPreset: true,
+          status: 'available',
+          recordingsCount: 0,
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `room-${Date.now()}-02`,
+          tenantId,
+          code: 'SALA-02',
+          name: 'Sala Creativa & Diseño',
+          description: 'Espacio dedicado para revisiones de identidad, branding, layouts y copys de campañas.',
+          color: '#8b5cf6',
+          icon: 'Sparkles',
+          meetUrl: 'https://meet.google.com/new',
+          isPreset: true,
+          status: 'available',
+          recordingsCount: 0,
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `room-${Date.now()}-03`,
+          tenantId,
+          code: 'SALA-03',
+          name: 'Sala Comercial & Clientes',
+          description: 'Reuniones de cierre comercial, presentación de cotizaciones y kick-off de cuentas.',
+          color: '#10b981',
+          icon: 'Users',
+          meetUrl: 'https://meet.google.com/new',
+          isPreset: true,
+          status: 'available',
+          recordingsCount: 0,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ];
+      this.localState.workspaceMeetingRooms.push(...presets);
+      this.saveLocalState();
+      rooms = presets;
+    }
+
+    // Calcular conteo dinámico de grabaciones asociadas a cada sala
+    const meetings = this.localState.workspaceMeetings || [];
+    return rooms.map((room) => {
+      const roomMeetings = meetings.filter((m) => m.tenantId === tenantId && m.roomId === room.id);
+      let count = 0;
+      roomMeetings.forEach((m) => {
+        count += (m.recordings?.length || 0);
+      });
+      return {
+        ...room,
+        recordingsCount: count,
+      };
+    });
+  }
+
+  public async getMeetingRoomById(id: string, tenantId: string): Promise<WorkspaceMeetingRoom | null> {
+    const rooms = await this.getMeetingRooms(tenantId);
+    return rooms.find((r) => r.id === id && r.tenantId === tenantId) || null;
+  }
+
+  public async createMeetingRoom(
+    tenantId: string,
+    data: Partial<WorkspaceMeetingRoom>
+  ): Promise<WorkspaceMeetingRoom> {
+    if (!this.localState.workspaceMeetingRooms) {
+      this.localState.workspaceMeetingRooms = [];
+    }
+    const now = new Date().toISOString();
+    const count = this.localState.workspaceMeetingRooms.filter((r) => r.tenantId === tenantId).length + 1;
+    const room: WorkspaceMeetingRoom = {
+      id: `room-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      tenantId,
+      code: (data.code || `SALA-${String(count).padStart(2, '0')}`).toUpperCase().trim(),
+      name: data.name?.trim() || `Sala Virtual ${count}`,
+      description: data.description?.trim() || '',
+      color: data.color || '#0055ff',
+      icon: data.icon || 'Video',
+      meetUrl: data.meetUrl?.trim() || 'https://meet.google.com/new',
+      isPreset: false,
+      status: data.status || 'available',
+      recordingsCount: 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.localState.workspaceMeetingRooms.unshift(room);
+    this.saveLocalState();
+    return room;
+  }
+
+  public async updateMeetingRoom(
+    id: string,
+    tenantId: string,
+    data: Partial<WorkspaceMeetingRoom>
+  ): Promise<WorkspaceMeetingRoom | null> {
+    if (!this.localState.workspaceMeetingRooms) return null;
+    const idx = this.localState.workspaceMeetingRooms.findIndex(
+      (r) => r.id === id && r.tenantId === tenantId
+    );
+    if (idx === -1) return null;
+
+    const current = this.localState.workspaceMeetingRooms[idx];
+    const updated: WorkspaceMeetingRoom = {
+      ...current,
+      ...data,
+      id: current.id,
+      tenantId: current.tenantId,
+      isPreset: current.isPreset,
+      updatedAt: new Date().toISOString(),
+    };
+    this.localState.workspaceMeetingRooms[idx] = updated;
+    this.saveLocalState();
+    return updated;
+  }
+
+  public async deleteMeetingRoom(id: string, tenantId: string): Promise<boolean> {
+    if (!this.localState.workspaceMeetingRooms) return false;
+    const before = this.localState.workspaceMeetingRooms.length;
+    this.localState.workspaceMeetingRooms = this.localState.workspaceMeetingRooms.filter(
+      (r) => !(r.id === id && r.tenantId === tenantId)
+    );
+    const deleted = this.localState.workspaceMeetingRooms.length < before;
+    if (deleted) this.saveLocalState();
+    return deleted;
+  }
+
+  // --- REUNIONES & ACTAS ---
+
+  public async getMeetings(
+    tenantId: string,
+    filters?: { roomId?: string; brandId?: string; clientId?: string; status?: string; search?: string }
+  ): Promise<WorkspaceMeeting[]> {
+    if (!this.localState.workspaceMeetings) {
+      this.localState.workspaceMeetings = [];
+    }
+    let list = this.localState.workspaceMeetings.filter((m) => m.tenantId === tenantId);
+
+    if (filters?.roomId) {
+      list = list.filter((m) => m.roomId === filters.roomId);
+    }
+    if (filters?.brandId) {
+      list = list.filter((m) => m.brandId === filters.brandId);
+    }
+    if (filters?.clientId) {
+      list = list.filter((m) => m.clientId === filters.clientId);
+    }
+    if (filters?.status && filters.status !== 'all') {
+      list = list.filter((m) => m.status === filters.status);
+    }
+    if (filters?.search) {
+      const q = filters.search.toLowerCase().trim();
+      list = list.filter(
+        (m) =>
+          m.title.toLowerCase().includes(q) ||
+          m.clientName?.toLowerCase().includes(q) ||
+          m.brandName?.toLowerCase().includes(q) ||
+          m.summary?.toLowerCase().includes(q)
+      );
+    }
+
+    return list.sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime());
+  }
+
+  public async getMeetingById(id: string, tenantId: string): Promise<WorkspaceMeeting | null> {
+    if (!this.localState.workspaceMeetings) return null;
+    return this.localState.workspaceMeetings.find((m) => m.id === id && m.tenantId === tenantId) || null;
+  }
+
+  public async createMeeting(
+    tenantId: string,
+    data: Partial<WorkspaceMeeting>,
+    userId?: string
+  ): Promise<WorkspaceMeeting> {
+    if (!this.localState.workspaceMeetings) {
+      this.localState.workspaceMeetings = [];
+    }
+    const now = new Date().toISOString();
+    
+    // Si viene vinculado a una sala, actualizar el nombre de la sala
+    let roomName = data.roomName;
+    if (data.roomId && !roomName) {
+      const room = this.localState.workspaceMeetingRooms?.find((r) => r.id === data.roomId);
+      if (room) roomName = room.name;
+    }
+
+    // Resolver datos de marca y cliente si están disponibles
+    let brandName = data.brandName;
+    let brandLogo = data.brandLogo;
+    let clientName = data.clientName;
+    if (data.brandId && !brandName) {
+      const b = this.localState.clientBrands?.find((item) => item.id === data.brandId);
+      if (b) {
+        brandName = b.name;
+        brandLogo = b.logoUrl;
+        if (!data.clientId && b.clientId) {
+          data.clientId = b.clientId;
+        }
+      }
+    }
+    if (data.clientId && !clientName) {
+      const c = this.localState.clients?.find((item) => item.id === data.clientId);
+      if (c) clientName = c.name;
+    }
+
+    const meeting: WorkspaceMeeting = {
+      id: `meet-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      tenantId,
+      roomId: data.roomId,
+      roomName,
+      title: data.title?.trim() || 'Nueva Reunión de Trabajo',
+      clientId: data.clientId,
+      clientName,
+      brandId: data.brandId,
+      brandName,
+      brandLogo,
+      scheduledAt: data.scheduledAt || now,
+      durationMinutes: data.durationMinutes || 45,
+      status: data.status || 'scheduled',
+      meetUrl: data.meetUrl?.trim() || '',
+      googleCalendarEventId: data.googleCalendarEventId,
+      attendeeUserIds: data.attendeeUserIds || (userId ? [userId] : []),
+      attendeeClientEmails: data.attendeeClientEmails || [],
+      agenda: data.agenda || '',
+      summary: data.summary || '',
+      agreements: (data.agreements || []).map((ag: any) => ({
+        id: ag.id || `agr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        title: ag.title || '',
+        description: ag.description || '',
+        assignedUserId: ag.assignedUserId,
+        assignedUserName: ag.assignedUserName,
+        dueDate: ag.dueDate,
+        completed: !!ag.completed,
+        createdTaskId: ag.createdTaskId,
+      })),
+      recordings: (data.recordings || []).map((rec: any) => ({
+        id: rec.id || `rec-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        title: rec.title || 'Grabación de la sesión',
+        url: rec.url || '',
+        type: rec.type || 'drive',
+        recordedAt: rec.recordedAt || now,
+        durationMinutes: rec.durationMinutes,
+        notes: rec.notes,
+      })),
+      attachments: data.attachments || [],
+      createdBy: userId || 'admin',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.localState.workspaceMeetings.unshift(meeting);
+    this.saveLocalState();
+    return meeting;
+  }
+
+  public async updateMeeting(
+    id: string,
+    tenantId: string,
+    data: Partial<WorkspaceMeeting>
+  ): Promise<WorkspaceMeeting | null> {
+    if (!this.localState.workspaceMeetings) return null;
+    const idx = this.localState.workspaceMeetings.findIndex(
+      (m) => m.id === id && m.tenantId === tenantId
+    );
+    if (idx === -1) return null;
+
+    const current = this.localState.workspaceMeetings[idx];
+    const updated: WorkspaceMeeting = {
+      ...current,
+      ...data,
+      id: current.id,
+      tenantId: current.tenantId,
+      updatedAt: new Date().toISOString(),
+    };
+    this.localState.workspaceMeetings[idx] = updated;
+    this.saveLocalState();
+    return updated;
+  }
+
+  public async deleteMeeting(id: string, tenantId: string): Promise<boolean> {
+    if (!this.localState.workspaceMeetings) return false;
+    const before = this.localState.workspaceMeetings.length;
+    this.localState.workspaceMeetings = this.localState.workspaceMeetings.filter(
+      (m) => !(m.id === id && m.tenantId === tenantId)
+    );
+    const deleted = this.localState.workspaceMeetings.length < before;
+    if (deleted) this.saveLocalState();
+    return deleted;
+  }
+
+  /**
+   * Convierte un acuerdo específico de un acta en una tarea real en WorkspaceTasks
+   */
+  public async convertMeetingAgreementToTask(
+    meetingId: string,
+    agreementId: string,
+    tenantId: string,
+    taskData: any,
+    userId?: string
+  ): Promise<{ task: any; agreement: WorkspaceMeetingAgreement } | null> {
+    const meeting = await this.getMeetingById(meetingId, tenantId);
+    if (!meeting) return null;
+
+    const agreement = meeting.agreements.find((a) => a.id === agreementId);
+    if (!agreement) return null;
+
+    // Crear la tarea en workspaceTasks
+    if (!this.localState.workspaceTasks) {
+      this.localState.workspaceTasks = [];
+    }
+
+    const now = new Date().toISOString();
+    const newTask: any = {
+      id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      tenantId,
+      title: taskData.title || agreement.title,
+      description: taskData.description || `Acuerdo originado en la reunión: "${meeting.title}"`,
+      status: 'pending',
+      priority: taskData.priority || 'medium',
+      brandId: meeting.brandId,
+      brandName: meeting.brandName,
+      assignedUserId: taskData.assignedUserId || agreement.assignedUserId,
+      dueDate: taskData.dueDate || agreement.dueDate,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.localState.workspaceTasks.unshift(newTask);
+
+    // Marcar el acuerdo con el ID de la tarea creada
+    agreement.createdTaskId = newTask.id;
+    await this.updateMeeting(meetingId, tenantId, {
+      agreements: meeting.agreements,
+    });
+
+    this.saveLocalState();
+    return { task: newTask, agreement };
   }
 
 }

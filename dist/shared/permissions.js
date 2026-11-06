@@ -233,6 +233,20 @@ exports.PERMISSIONS_CATALOG = [
         module: 'workspace',
         moduleLabel: 'Workspace Operativo',
     },
+    {
+        key: 'workspace.meetings.view',
+        label: 'Ver Salas y Reuniones',
+        description: 'Consultar salas virtuales, actas de reuniones y grabaciones del equipo.',
+        module: 'workspace',
+        moduleLabel: 'Workspace Operativo',
+    },
+    {
+        key: 'workspace.meetings.manage',
+        label: 'Gestionar Salas, Actas y Acuerdos',
+        description: 'Crear salas de reunión, registrar actas con Google Meet y convertir acuerdos en tareas operativas.',
+        module: 'workspace',
+        moduleLabel: 'Workspace Operativo',
+    },
     // ÓRDENES DE SERVICIO (OS)
     {
         key: 'service_orders.view',

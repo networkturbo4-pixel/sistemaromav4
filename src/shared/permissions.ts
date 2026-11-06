@@ -45,6 +45,8 @@ export type PermissionKey =
   | 'workspace.tasks.manage'
   | 'workspace.tools.manage'
   | 'workspace.forms.manage'
+  | 'workspace.meetings.view'
+  | 'workspace.meetings.manage'
   // Módulo: Orden de Servicio (OS)
   | 'service_orders.view'
   | 'service_orders.create'
@@ -313,6 +315,20 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     key: 'workspace.forms.manage',
     label: 'Gestionar Formularios Interactivos',
     description: 'Crear, editar, publicar y recolectar respuestas de formularios modernos personalizados.',
+    module: 'workspace',
+    moduleLabel: 'Workspace Operativo',
+  },
+  {
+    key: 'workspace.meetings.view',
+    label: 'Ver Salas y Reuniones',
+    description: 'Consultar salas virtuales, actas de reuniones y grabaciones del equipo.',
+    module: 'workspace',
+    moduleLabel: 'Workspace Operativo',
+  },
+  {
+    key: 'workspace.meetings.manage',
+    label: 'Gestionar Salas, Actas y Acuerdos',
+    description: 'Crear salas de reunión, registrar actas con Google Meet y convertir acuerdos en tareas operativas.',
     module: 'workspace',
     moduleLabel: 'Workspace Operativo',
   },

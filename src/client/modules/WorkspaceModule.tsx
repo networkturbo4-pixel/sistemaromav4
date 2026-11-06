@@ -13,6 +13,7 @@ import {
   Client,
   User as UserType,
   WorkspaceForm,
+  WorkspaceMeeting,
 } from '../../shared/types';
 import { DriveFolderPickerModal } from '../components/DriveFolderPickerModal';
 import { PaintCanvasModal } from '../components/PaintCanvasModal';
@@ -35,6 +36,7 @@ import { TasksView } from './workspace/submodules/tasks/TasksView';
 import { DriveModule } from './DriveModule';
 import { ToolsModuleView } from './workspace/submodules/tools/ToolsModuleView';
 import { FormsSubmoduleView } from './workspace/submodules/forms/FormsSubmoduleView';
+import { MeetingsSubmoduleView } from './workspace/submodules/meetings/MeetingsSubmoduleView';
 
 // Modales
 import { ProjectModal } from './workspace/modals/ProjectModal';
@@ -49,9 +51,10 @@ import { X } from 'lucide-react';
 export const WorkspaceModule: React.FC = () => {
   const { tenant, user, toast, confirmAction, apiFetch } = useApp();
 
-  // Nivel 0: Navegación de Submódulos ('hub', 'social', 'tasks', 'drive', 'tools', 'forms')
-  const [currentView, setCurrentView] = useState<'hub' | 'social' | 'tasks' | 'drive' | 'tools' | 'forms'>('hub');
+  // Nivel 0: Navegación de Submódulos ('hub', 'social', 'tasks', 'drive', 'tools', 'forms', 'meetings')
+  const [currentView, setCurrentView] = useState<'hub' | 'social' | 'tasks' | 'drive' | 'tools' | 'forms' | 'meetings'>('hub');
   const [forms, setForms] = useState<WorkspaceForm[]>([]);
+  const [meetings, setMeetings] = useState<WorkspaceMeeting[]>([]);
 
   // Nivel 1: Fases de Redes Sociales
   // 1 = Proyectos de Redes Sociales
@@ -135,6 +138,7 @@ export const WorkspaceModule: React.FC = () => {
         osRes,
         monthsRes,
         formsRes,
+        meetingsRes,
       ] = await Promise.all([
         apiFetch<{ clients: Client[] }>('/api/clients').catch(() => ({ clients: [] })),
         apiFetch<{ users: UserType[] }>('/api/settings/users').catch(() => ({ users: [] })),
@@ -144,6 +148,7 @@ export const WorkspaceModule: React.FC = () => {
         apiFetch<{ serviceOrders?: ServiceOrder[]; orders?: ServiceOrder[] }>('/api/service-orders').catch(() => ({ serviceOrders: [], orders: [] })),
         apiFetch<{ months: WorkspaceMonth[] }>('/api/workspace/months').catch(() => ({ months: [] })),
         apiFetch<{ forms: WorkspaceForm[] }>('/api/workspace/forms').catch(() => ({ forms: [] })),
+        apiFetch<{ meetings: WorkspaceMeeting[] }>('/api/workspace/meetings').catch(() => ({ meetings: [] })),
       ]);
       setClients(clientsRes.clients || []);
       setTeamUsers(usersRes.users || []);
@@ -153,6 +158,7 @@ export const WorkspaceModule: React.FC = () => {
       setServiceOrders(osRes.serviceOrders || osRes.orders || []);
       setMonths(monthsRes.months || []);
       setForms(formsRes.forms || []);
+      setMeetings(meetingsRes.meetings || []);
     } catch {
       toast('Error al sincronizar datos del Workspace', 'error');
     } finally {
@@ -168,7 +174,7 @@ export const WorkspaceModule: React.FC = () => {
   useEffect(() => {
     const handleOpenWorkspaceSubview = (e: any) => {
       const detail = e.detail;
-      if (detail === 'social' || detail === 'tasks' || detail === 'drive' || detail === 'hub' || detail === 'tools' || detail === 'forms') {
+      if (detail === 'social' || detail === 'tasks' || detail === 'drive' || detail === 'hub' || detail === 'tools' || detail === 'forms' || detail === 'meetings') {
         setCurrentView(detail);
         if (detail === 'social') {
           setSocialPhase(1);
@@ -963,6 +969,7 @@ export const WorkspaceModule: React.FC = () => {
           projects={projects}
           tasks={tasks}
           formsCount={forms.length}
+          meetingsCount={meetings.length}
           onSelectSubmodule={(view) => {
             setCurrentView(view);
             if (view === 'social') setSocialPhase(1);
@@ -1122,6 +1129,18 @@ export const WorkspaceModule: React.FC = () => {
       {currentView === 'forms' && (
         <div className="space-y-4 animate-fadeIn">
           <FormsSubmoduleView onBackToHub={() => {
+            setCurrentView('hub');
+            loadInitialData();
+          }} />
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* SUBMÓDULO: SALAS Y REUNIONES VIRTUALES (GOOGLE MEET) */}
+      {/* ===================================================================== */}
+      {currentView === 'meetings' && (
+        <div className="space-y-4 animate-fadeIn">
+          <MeetingsSubmoduleView onBackToHub={() => {
             setCurrentView('hub');
             loadInitialData();
           }} />

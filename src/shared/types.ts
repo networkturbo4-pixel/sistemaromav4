@@ -1515,3 +1515,77 @@ export interface FormSubmission {
   ip?: string;
   userAgent?: string;
 }
+
+// =============================================================================
+// SUBMÓDULO DE WORKSPACE: SALAS DE REUNIONES & ACTAS
+// =============================================================================
+
+export type MeetingRoomStatus = 'available' | 'in_meeting' | 'reserved';
+export type MeetingStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+export type MeetingRecordingType = 'drive' | 'loom' | 'youtube' | 'file' | 'other';
+
+export interface WorkspaceMeetingRoom {
+  id: string;
+  tenantId: string;
+  code: string; // ej: "SALA-01", "CREATIVA"
+  name: string;
+  description?: string;
+  color: string; // Hex color o preset de acento
+  icon: string; // Nombre del icono de Lucide (Video, Users, Sparkles, etc.)
+  meetUrl?: string; // Enlace permanente de Google Meet
+  isPreset?: boolean; // Si es una de las salas predeterminadas fijas
+  status: MeetingRoomStatus;
+  currentMeetingId?: string;
+  recordingsCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkspaceMeetingAgreement {
+  id: string;
+  title: string;
+  description?: string;
+  assignedUserId?: string;
+  assignedUserName?: string;
+  dueDate?: string; // YYYY-MM-DD
+  completed: boolean;
+  createdTaskId?: string; // ID de la WorkspaceTask si fue convertida a tarea
+}
+
+export interface WorkspaceMeetingRecording {
+  id: string;
+  title: string;
+  url: string;
+  type: MeetingRecordingType;
+  recordedAt?: string;
+  durationMinutes?: number;
+  notes?: string;
+}
+
+export interface WorkspaceMeeting {
+  id: string;
+  tenantId: string;
+  roomId?: string;
+  roomName?: string;
+  title: string; // Motivo de la reunión
+  clientId?: string;
+  clientName?: string;
+  brandId?: string;
+  brandName?: string;
+  brandLogo?: string;
+  scheduledAt: string; // ISO DateTime
+  durationMinutes?: number;
+  status: MeetingStatus;
+  meetUrl?: string;
+  googleCalendarEventId?: string;
+  attendeeUserIds: string[];
+  attendeeClientEmails?: string[];
+  agenda?: string;
+  summary?: string;
+  agreements: WorkspaceMeetingAgreement[];
+  recordings: WorkspaceMeetingRecording[];
+  attachments?: Array<{ name: string; url: string; size?: number }>;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}

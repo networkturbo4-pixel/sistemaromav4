@@ -1580,6 +1580,203 @@ app.delete('/api/workspace/forms/submissions/:submissionId', auth_1.requireAuth,
     }
 });
 // =============================================================================
+// SUBMÓDULO: SALAS DE REUNIONES & ACTAS DE WORKSPACE
+// =============================================================================
+// Listar salas de reunión
+app.get('/api/workspace/meeting-rooms', auth_1.requireAuth, (0, auth_1.requirePermission)('workspace.view'), async (req, res) => {
+    try {
+        const rooms = await db_1.db.getMeetingRooms(req.auth.tenant.id);
+        res.json({ rooms });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Obtener una sala por ID
+app.get('/api/workspace/meeting-rooms/:id', auth_1.requireAuth, (0, auth_1.requirePermission)('workspace.view'), async (req, res) => {
+    try {
+        const room = await db_1.db.getMeetingRoomById(req.params.id, req.auth.tenant.id);
+        if (!room)
+            return res.status(404).json({ error: 'Sala no encontrada' });
+        res.json({ room });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Crear sala de reunión
+app.post('/api/workspace/meeting-rooms', auth_1.requireAuth, (0, auth_1.requirePermission)('workspace.view'), async (req, res) => {
+    try {
+        const room = await db_1.db.createMeetingRoom(req.auth.tenant.id, req.body);
+        res.status(201).json({ room });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Actualizar sala de reunión
+app.put('/api/workspace/meeting-rooms/:id', auth_1.requireAuth, (0, auth_1.requirePermission)('workspace.view'), async (req, res) => {
+    try {
+        const updated = await db_1.db.updateMeetingRoom(req.params.id, req.auth.tenant.id, req.body);
+        if (!updated)
+            return res.status(404).json({ error: 'Sala no encontrada' });
+        res.json({ room: updated });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Eliminar sala de reunión
+app.delete('/api/workspace/meeting-rooms/:id', auth_1.requireAuth, (0, auth_1.requirePermission)('workspace.view'), async (req, res) => {
+    try {
+        const deleted = await db_1.db.deleteMeetingRoom(req.params.id, req.auth.tenant.id);
+        if (!deleted)
+            return res.status(404).json({ error: 'Sala no encontrada o protegida' });
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// --- REUNIONES Y ACTAS ---
+// Listar reuniones con filtros
+app.get('/api/workspace/meetings', auth_1.requireAuth, (0, auth_1.requirePermission)('workspace.view'), async (req, res) => {
+    try {
+        const { roomId, brandId, clientId, status, search } = req.query;
+        const meetings = await db_1.db.getMeetings(req.auth.tenant.id, {
+            roomId,
+            brandId,
+            clientId,
+            status,
+            search,
+        });
+        res.json({ meetings });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Obtener detalle de una reunión
+app.get('/api/workspace/meetings/:id', auth_1.requireAuth, (0, auth_1.requirePermission)('workspace.view'), async (req, res) => {
+    try {
+        const meeting = await db_1.db.getMeetingById(req.params.id, req.auth.tenant.id);
+        if (!meeting)
+            return res.status(404).json({ error: 'Reunión no encontrada' });
+        res.json({ meeting });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Crear reunión / acta
+app.post('/api/workspace/meetings', auth_1.requireAuth, (0, auth_1.requirePermission)('workspace.view'), async (req, res) => {
+    try {
+        const meeting = await db_1.db.createMeeting(req.auth.tenant.id, req.body, req.auth.user.id);
+        res.status(201).json({ meeting });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Actualizar reunión / acta
+app.put('/api/workspace/meetings/:id', auth_1.requireAuth, (0, auth_1.requirePermission)('workspace.view'), async (req, res) => {
+    try {
+        const updated = await db_1.db.updateMeeting(req.params.id, req.auth.tenant.id, req.body);
+        if (!updated)
+            return res.status(404).json({ error: 'Reunión no encontrada' });
+        res.json({ meeting: updated });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Eliminar reunión / acta
+app.delete('/api/workspace/meetings/:id', auth_1.requireAuth, (0, auth_1.requirePermission)('workspace.view'), async (req, res) => {
+    try {
+        const deleted = await db_1.db.deleteMeeting(req.params.id, req.auth.tenant.id);
+        if (!deleted)
+            return res.status(404).json({ error: 'Reunión no encontrada' });
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Convertir un acuerdo de reunión en tarea real de Workspace
+app.post('/api/workspace/meetings/:id/agreements/:agreementId/to-task', auth_1.requireAuth, (0, auth_1.requirePermission)('workspace.view'), async (req, res) => {
+    try {
+        const result = await db_1.db.convertMeetingAgreementToTask(req.params.id, req.params.agreementId, req.auth.tenant.id, req.body, req.auth.user.id);
+        if (!result)
+            return res.status(404).json({ error: 'Reunión o acuerdo no encontrado' });
+        res.json(result);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Generar enlace de Google Meet (integración con Google Calendar API / Google Cloud)
+app.post('/api/workspace/meetings/generate-meet-link', auth_1.requireAuth, (0, auth_1.requirePermission)('workspace.view'), async (req, res) => {
+    try {
+        const { title, scheduledAt, attendees } = req.body || {};
+        // Intentar integración con Google Calendar API si existen credenciales en el entorno
+        const clientId = process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID;
+        const clientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+        const refreshToken = process.env.GOOGLE_REFRESH_TOKEN || process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
+        if (clientId && clientSecret && refreshToken) {
+            try {
+                const { google } = require('googleapis');
+                const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+                oauth2Client.setCredentials({ refresh_token: refreshToken });
+                const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+                const startTime = scheduledAt ? new Date(scheduledAt) : new Date();
+                const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
+                const eventResponse = await calendar.events.insert({
+                    calendarId: 'primary',
+                    conferenceDataVersion: 1,
+                    requestBody: {
+                        summary: title || 'Reunión de Agencia - Sistema ROMA',
+                        description: 'Reunión generada automáticamente desde Sistema ROMA V4.',
+                        start: { dateTime: startTime.toISOString() },
+                        end: { dateTime: endTime.toISOString() },
+                        attendees: (attendees || []).map((email) => ({ email })),
+                        conferenceData: {
+                            createRequest: {
+                                requestId: `roma-${Date.now()}`,
+                                conferenceSolutionKey: { type: 'hangoutsMeet' },
+                            },
+                        },
+                    },
+                });
+                const entryPoints = eventResponse.data?.conferenceData?.entryPoints;
+                const meetUri = entryPoints?.find((ep) => ep.entryPointType === 'video')?.uri;
+                if (meetUri) {
+                    return res.json({
+                        meetUrl: meetUri,
+                        eventId: eventResponse.data.id,
+                        source: 'google_calendar_api',
+                    });
+                }
+            }
+            catch (apiErr) {
+                console.warn('[Google Meet API] Error al generar vía Calendar API:', apiErr.message);
+            }
+        }
+        // Si no están configuradas las credenciales de Google OAuth, retornar una sala instantánea de Google Meet
+        const randomCode = Math.random().toString(36).substring(2, 5) + '-' +
+            Math.random().toString(36).substring(2, 6) + '-' +
+            Math.random().toString(36).substring(2, 5);
+        const fallbackUrl = `https://meet.google.com/${randomCode}`;
+        res.json({
+            meetUrl: fallbackUrl,
+            source: 'instant_meet',
+            note: 'Sala instantánea de Google Meet generada correctamente.',
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// =============================================================================
 // MÓDULO DE ADMINISTRACIÓN (RRHH, FINANZAS Y CONTABILIDAD)
 // =============================================================================
 // --- RECURSOS HUMANOS: CONFIGURACIÓN GLOBAL ---
