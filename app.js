@@ -5,6 +5,23 @@
  * - Application startup file: app.js
  */
 
+const fs = require('fs');
+const path = require('path');
+
+// En cPanel/Apache, si existe index.html de desarrollo en la raíz, Apache lo sirve directamente
+// como archivo estático en lugar de pasárselo a Phusion Passenger / Express, causando error 403.
+// Eliminamos automáticamente el index.html de desarrollo de la raíz en entornos de producción:
+try {
+  const rootIndexHtml = path.join(__dirname, 'index.html');
+  if (fs.existsSync(rootIndexHtml)) {
+    const raw = fs.readFileSync(rootIndexHtml, 'utf8');
+    if (raw.includes('/src/client/main.tsx')) {
+      fs.unlinkSync(rootIndexHtml);
+      console.log('✓ [cPanel] index.html de desarrollo eliminado de la raíz.');
+    }
+  }
+} catch (e) {}
+
 process.on('uncaughtException', (err) => {
   const fs = require('fs');
   const path = require('path');
