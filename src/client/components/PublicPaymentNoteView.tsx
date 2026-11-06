@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { PaymentNote, Tenant, QuotePaymentMethod } from '../../shared/types';
 import {
   Receipt,

@@ -376,10 +376,11 @@ export const PaymentNotesModule: React.FC = () => {
     unitPrice: number,
     monthsCount: number,
     baseIssueDate: string,
-    paymentDateStr?: string
+    paymentDateStr?: string,
+    paymentDayOverride?: number
   ): MembershipMonthItem[] => {
     let baseDate: Date;
-    let paymentDay = 15;
+    let paymentDay = paymentDayOverride || 15;
 
     if (paymentDateStr && paymentDateStr.includes('-')) {
       const parts = paymentDateStr.split('-');
@@ -388,7 +389,9 @@ export const PaymentNotesModule: React.FC = () => {
       const d = parseInt(parts[2], 10);
       if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
         baseDate = new Date(y, m - 1, 1);
-        paymentDay = d;
+        if (!paymentDayOverride) {
+          paymentDay = d;
+        }
       } else {
         baseDate = baseIssueDate ? new Date(baseIssueDate + 'T00:00:00') : new Date();
       }
@@ -569,7 +572,12 @@ export const PaymentNotesModule: React.FC = () => {
       const updatedSubs = [...cur.subInstallments];
       if (!updatedSubs[subIdx]) return prev;
 
-      updatedSubs[subIdx] = { ...updatedSubs[subIdx], ...patch };
+      let nextSub = { ...updatedSubs[subIdx], ...patch };
+      if (patch.dueDate && nextSub.status !== 'paid') {
+        const comp = computeInstallmentStatus(nextSub.status, patch.dueDate);
+        nextSub.status = comp.status as any;
+      }
+      updatedSubs[subIdx] = nextSub;
       const newMonthTotal = updatedSubs.reduce((acc, s) => acc + (Number(s.amount) || 0), 0);
 
       list[monthIdx] = {
@@ -774,7 +782,8 @@ export const PaymentNotesModule: React.FC = () => {
         unitPrice,
         monthsCount,
         formData.issueDate,
-        brand.servicePaymentDate
+        brand.servicePaymentDate,
+        brand.servicePaymentDay
       );
       setFormData((prev) => ({
         ...prev,
@@ -901,7 +910,13 @@ export const PaymentNotesModule: React.FC = () => {
     setFormData((prev) => {
       const list = [...(prev.membershipInstallments || [])];
       if (!list[idx]) return prev;
-      list[idx] = { ...list[idx], ...patch };
+      let nextItem = { ...list[idx], ...patch };
+      // Sincronizar estado automáticamente si cambia la fecha de vencimiento y no está marcado como pagado
+      if (patch.dueDate && nextItem.status !== 'paid') {
+        const comp = computeInstallmentStatus(nextItem.status, patch.dueDate);
+        nextItem.status = comp.status as any;
+      }
+      list[idx] = nextItem;
       const syncedItems = syncAllItems(list, prev.extraItems || []);
       return {
         ...prev,
@@ -917,7 +932,9 @@ export const PaymentNotesModule: React.FC = () => {
       const list = [...(prev.membershipInstallments || [])];
       const nextNum = list.length + 1;
       const baseDate = prev.issueDate ? new Date(prev.issueDate + 'T00:00:00') : new Date();
-      const d = new Date(baseDate.getFullYear(), baseDate.getMonth() + list.length, 1);
+      const targetYear = baseDate.getFullYear();
+      const targetMonth = baseDate.getMonth() + list.length;
+      const d = new Date(targetYear, targetMonth, 1);
       const monthName = d.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
       const formattedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
       const lastAmount =
@@ -925,14 +942,20 @@ export const PaymentNotesModule: React.FC = () => {
       const lastPlan =
         list.length > 0 ? list[list.length - 1].planName : selectedBrand?.serviceName || 'Plan Membresía';
 
+      const paymentDay = selectedBrand?.servicePaymentDay || (list.length > 0 && list[0].dueDate && list[0].dueDate.includes('-') ? parseInt(list[0].dueDate.split('-')[2], 10) : 15);
+      const lastDayOfMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+      const actualDay = Math.min(paymentDay, lastDayOfMonth);
+      const calculatedDueDate = new Date(targetYear, targetMonth, actualDay).toISOString().split('T')[0];
+      const initialComputed = computeInstallmentStatus('in_process', calculatedDueDate);
+
       const newItem: MembershipMonthItem = {
         id: `inst-${Date.now()}-${nextNum}`,
         monthNumber: nextNum,
         planName: lastPlan,
         periodName: `Mes ${nextNum}: ${formattedMonth}`,
         amount: lastAmount,
-        status: 'in_process',
-        dueDate: new Date(baseDate.getFullYear(), baseDate.getMonth() + list.length, 15).toISOString().split('T')[0],
+        status: initialComputed.status as any,
+        dueDate: calculatedDueDate,
       };
       const updatedList = [...list, newItem];
       return {

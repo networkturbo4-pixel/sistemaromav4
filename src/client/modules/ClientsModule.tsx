@@ -33,6 +33,10 @@ import {
   CheckCircle2,
   Layers,
 } from 'lucide-react';
+import {
+  computeInstallmentStatus,
+  formatDueDate,
+} from '../utils/paymentNoteUtils';
 
 const BRAND_COLORS = [
   '#2563eb',
@@ -96,6 +100,7 @@ export interface ClientBrandDraft {
   servicePrice?: number;
   serviceMonths?: number;
   servicePaymentDate?: string;
+  servicePaymentDay?: number;
   includedServices?: string[];
 }
 
@@ -106,6 +111,7 @@ export interface BrandServiceContractSectionProps {
   serviceDescription?: string;
   serviceMonths?: number;
   servicePaymentDate?: string;
+  servicePaymentDay?: number;
   includedServices?: string[];
   services: Service[];
   currencySymbol: string;
@@ -116,6 +122,7 @@ export interface BrandServiceContractSectionProps {
     serviceDescription?: string;
     serviceMonths?: number;
     servicePaymentDate?: string;
+    servicePaymentDay?: number;
     includedServices?: string[];
   }) => void;
   toast: (msg: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
@@ -128,6 +135,7 @@ export const BrandServiceContractSection: React.FC<BrandServiceContractSectionPr
   serviceDescription = '',
   serviceMonths = 1,
   servicePaymentDate = '',
+  servicePaymentDay,
   includedServices = [],
   services,
   currencySymbol,
@@ -151,6 +159,54 @@ export const BrandServiceContractSection: React.FC<BrandServiceContractSectionPr
   }, []);
 
   const currentType = serviceType === 'membership' ? 'membership' : 'service';
+
+  // Día de cobro acordado del mes (ej. 15, 7, 5, 18...)
+  const currentBillingDay = servicePaymentDay || (servicePaymentDate && servicePaymentDate.includes('-') ? parseInt(servicePaymentDate.split('-')[2], 10) : 15);
+
+  // Fecha representativa para calcular el estado en tiempo real con las reglas del sistema
+  const currentDueDateCalculated = React.useMemo(() => {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth();
+    const lastDayThisMonth = new Date(curYear, curMonth + 1, 0).getDate();
+    const actualDay = Math.min(currentBillingDay, lastDayThisMonth);
+    return new Date(curYear, curMonth, actualDay).toISOString().split('T')[0];
+  }, [currentBillingDay]);
+
+  const computedCurrentStatus = React.useMemo(() => {
+    return computeInstallmentStatus('in_process', currentDueDateCalculated);
+  }, [currentDueDateCalculated]);
+
+  const handleSelectBillingDay = (day: number) => {
+    const validDay = Math.max(1, Math.min(31, day));
+    const now = new Date();
+    const baseDate = servicePaymentDate && servicePaymentDate.includes('-')
+      ? new Date(servicePaymentDate + 'T00:00:00')
+      : now;
+    const y = baseDate.getFullYear();
+    const m = baseDate.getMonth();
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    const actualDay = Math.min(validDay, lastDay);
+    const newDateStr = new Date(y, m, actualDay).toISOString().split('T')[0];
+
+    onChange({
+      servicePaymentDay: validDay,
+      servicePaymentDate: newDateStr,
+    });
+  };
+
+  const handleDateChange = (val: string) => {
+    if (val && val.includes('-')) {
+      const parts = val.split('-');
+      const d = parseInt(parts[2], 10);
+      onChange({
+        servicePaymentDate: val,
+        servicePaymentDay: !isNaN(d) ? d : currentBillingDay,
+      });
+    } else {
+      onChange({ servicePaymentDate: val });
+    }
+  };
 
   const filteredServices = searchQuery.trim()
     ? services.filter(
@@ -481,31 +537,136 @@ export const BrandServiceContractSection: React.FC<BrandServiceContractSectionPr
               </div>
             </div>
 
-            {/* Fecha de Pago Recurrente */}
-            <div className="sm:col-span-12">
-              <label className="block text-[11px] font-bold mb-1 text-slate-600 dark:text-slate-300">
-                Fecha de Pago Acordada / Vencimiento Recurrente
-              </label>
-              <div
-                className="flex items-center rounded-xl border px-3 py-1.5 transition focus-within:ring-2 focus-within:ring-purple-500/20"
-                style={{
-                  backgroundColor: 'var(--app-surface)',
-                  borderColor: 'var(--app-border)',
-                }}
-              >
-                <Calendar className="w-3.5 h-3.5 text-purple-500 mr-2 shrink-0" />
-                <input
-                  type="date"
-                  value={servicePaymentDate || ''}
-                  onChange={(e) => onChange({ servicePaymentDate: e.target.value })}
-                  className="w-full bg-transparent text-xs font-semibold outline-none"
-                  style={{ color: 'var(--app-text)' }}
-                />
+            {/* Si es Membresía: Día de Cobro Mensual Acordado y Reglas de Estado */}
+            {currentType === 'membership' ? (
+              <div className="sm:col-span-12 p-3 sm:p-4 rounded-2xl border border-purple-200 dark:border-purple-800/80 bg-purple-50/40 dark:bg-purple-950/20 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                    <span className="text-xs font-black text-purple-950 dark:text-purple-200 uppercase tracking-tight">
+                      Día de Cobro Acordado (Membresía Mensual)
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300">
+                    Se cobra los {currentBillingDay} de cada mes
+                  </span>
+                </div>
+
+                {/* Selector rápido de días de cobro comunes */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1.5">
+                    Seleccionar día de cobro pactado:
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[5, 7, 10, 15, 18, 20, 25, 30].map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => handleSelectBillingDay(d)}
+                        className={`px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer border ${
+                          currentBillingDay === d
+                            ? 'bg-purple-600 text-white border-purple-600 shadow-2xs'
+                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-purple-300'
+                        }`}
+                      >
+                        Los {d} de c/mes
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-purple-100 dark:border-purple-900/40">
+                  {/* Input numérico personalizado de día */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                      Día exacto del mes (1 al 31)
+                    </label>
+                    <div
+                      className="flex items-center rounded-xl border px-3 py-1.5 bg-white dark:bg-slate-900"
+                      style={{ borderColor: 'var(--app-border)' }}
+                    >
+                      <span className="text-xs text-purple-600 font-bold mr-1.5">Día</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="31"
+                        value={currentBillingDay}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          if (!isNaN(val) && val >= 1 && val <= 31) {
+                            handleSelectBillingDay(val);
+                          }
+                        }}
+                        className="w-full bg-transparent text-xs font-mono font-bold outline-none"
+                        style={{ color: 'var(--app-text)' }}
+                      />
+                      <span className="text-[10px] text-slate-400 shrink-0">de cada mes</span>
+                    </div>
+                  </div>
+
+                  {/* Fecha de Inicio / Primer Cobro */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                      Fecha del 1er Cobro / Inicio
+                    </label>
+                    <div
+                      className="flex items-center rounded-xl border px-3 py-1.5 bg-white dark:bg-slate-900"
+                      style={{ borderColor: 'var(--app-border)' }}
+                    >
+                      <Calendar className="w-3.5 h-3.5 text-purple-500 mr-2 shrink-0" />
+                      <input
+                        type="date"
+                        value={servicePaymentDate || ''}
+                        onChange={(e) => handleDateChange(e.target.value)}
+                        className="w-full bg-transparent text-xs font-semibold outline-none"
+                        style={{ color: 'var(--app-text)' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Explicación y Estado en Tiempo Real según reglas del sistema */}
+                <div className="p-2.5 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-purple-100 dark:border-purple-900/40 text-[11px] space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                      Sincronización de Reglas de Estado Roma:
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase border ${computedCurrentStatus.badgeClass}`}>
+                      {computedCurrentStatus.label}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 leading-relaxed">
+                    • <strong>No Activo</strong>: Si faltan más de 7 días para el día {currentBillingDay} (no suma en el total del comprobante).<br />
+                    • <strong>En Proceso</strong>: Si faltan entre 5 a 7 días de vencer (periodo activo de cobranza).<br />
+                    • <strong>Retrasado</strong>: Si han pasado más de 5 días de la fecha pactada sin haber registrado pago.<br />
+                    • <strong>Pagado</strong>: Al registrar el voucher de pago o número de operación.
+                  </p>
+                </div>
               </div>
-              <p className="text-[10px] text-slate-400 mt-1">
-                Define el día de pago pactado (ej. día 15 de cada mes). El sistema aplicará las reglas de estado: No Activo (a futuro), En Proceso (a 5-7 días de vencer), Retrasado (vencido +5 días) o Pagado.
-              </p>
-            </div>
+            ) : (
+              /* Si es Servicio Estándar: Fecha de Vencimiento de Entrega */
+              <div className="sm:col-span-12">
+                <label className="block text-[11px] font-bold mb-1 text-slate-600 dark:text-slate-300">
+                  Fecha Acordada de Pago / Entrega
+                </label>
+                <div
+                  className="flex items-center rounded-xl border px-3 py-1.5 transition focus-within:ring-2 focus-within:ring-purple-500/20"
+                  style={{
+                    backgroundColor: 'var(--app-surface)',
+                    borderColor: 'var(--app-border)',
+                  }}
+                >
+                  <Calendar className="w-3.5 h-3.5 text-purple-500 mr-2 shrink-0" />
+                  <input
+                    type="date"
+                    value={servicePaymentDate || ''}
+                    onChange={(e) => onChange({ servicePaymentDate: e.target.value })}
+                    className="w-full bg-transparent text-xs font-semibold outline-none"
+                    style={{ color: 'var(--app-text)' }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Descripción / Condiciones del Paquete */}
@@ -794,6 +955,7 @@ export const ClientsModule: React.FC = () => {
     servicePrice: 0,
     serviceMonths: 1,
     servicePaymentDate: '',
+    servicePaymentDay: 15,
     includedServices: [],
   });
 
@@ -856,6 +1018,7 @@ export const ClientsModule: React.FC = () => {
     servicePrice: 0,
     serviceMonths: 1,
     servicePaymentDate: '',
+    servicePaymentDay: 15,
     includedServices: [] as string[],
   });
   const [savingBrand, setSavingBrand] = useState<boolean>(false);
@@ -1067,6 +1230,7 @@ export const ClientsModule: React.FC = () => {
       servicePrice: 0,
       serviceMonths: 1,
       servicePaymentDate: '',
+      servicePaymentDay: 15,
       includedServices: [],
     });
     brandDialogRef.current?.showModal();
@@ -1089,6 +1253,7 @@ export const ClientsModule: React.FC = () => {
       servicePrice: brand.servicePrice || 0,
       serviceMonths: brand.serviceMonths || 1,
       servicePaymentDate: brand.servicePaymentDate || '',
+      servicePaymentDay: brand.servicePaymentDay || (brand.servicePaymentDate && brand.servicePaymentDate.includes('-') ? parseInt(brand.servicePaymentDate.split('-')[2], 10) : 15),
       includedServices: brand.includedServices || [],
     });
     brandDialogRef.current?.showModal();
@@ -2306,6 +2471,7 @@ export const ClientsModule: React.FC = () => {
                       serviceDescription={brand.serviceDescription}
                       serviceMonths={brand.serviceMonths}
                       servicePaymentDate={brand.servicePaymentDate}
+                      servicePaymentDay={brand.servicePaymentDay}
                       includedServices={brand.includedServices}
                       services={services}
                       currencySymbol={tenant.customization?.currencySymbol || 'S/'}
@@ -2691,6 +2857,7 @@ export const ClientsModule: React.FC = () => {
                 serviceDescription={brandForm.serviceDescription}
                 serviceMonths={brandForm.serviceMonths}
                 servicePaymentDate={brandForm.servicePaymentDate}
+                servicePaymentDay={brandForm.servicePaymentDay}
                 includedServices={brandForm.includedServices}
                 services={services}
                 currencySymbol={tenant.customization?.currencySymbol || 'S/'}
