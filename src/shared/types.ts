@@ -2,6 +2,7 @@ import { PermissionKey } from './permissions';
 
 export type TypographyScale = 'compact' | 'normal' | 'comfortable' | 'large';
 export type ToastStyleVariant = 'glass' | 'minimal' | 'solid' | 'pill';
+export type ToastAudioTheme = 'chime' | 'pop' | 'beep' | 'glass' | 'silent';
 export type ToastPosition =
   | 'top-right'
   | 'top-center'
@@ -50,6 +51,10 @@ export interface TenantCustomization {
   /** Estilo de Toast */
   toastStyle: ToastStyleVariant;
   toastPosition: ToastPosition;
+  /** Tema sonoro de alertas toast */
+  toastAudioTheme?: ToastAudioTheme;
+  /** Apilar notificaciones múltiples en 3D para no saturar la vista */
+  toastStacking?: boolean;
   /** Posiciones personalizadas de Toast por dispositivo (PC, Tablet, Móvil) */
   toastPositions?: {
     desktop: ToastPosition;
@@ -230,6 +235,8 @@ export const DEFAULT_CUSTOMIZATION: TenantCustomization = {
   fontFamily: 'Inter',
   toastStyle: 'glass',
   toastPosition: 'top-right',
+  toastAudioTheme: 'chime',
+  toastStacking: true,
   toastPositions: {
     desktop: 'top-right',
     tablet: 'top-center',

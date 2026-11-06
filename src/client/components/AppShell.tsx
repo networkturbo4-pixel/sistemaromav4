@@ -469,66 +469,54 @@ export const AppShell: React.FC<AppShellProps> = ({
       {/* 1. SECCIÓN SUPERIOR: WORKSPACE / TENANT SWITCHER PROFESIONAL */}
       <div className="space-y-4">
         {/* Cabecera Principal con Switcher de Tenant */}
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1 min-w-0" ref={sidebarWorkspaceRef}>
-            <button
-              type="button"
-              onClick={() => setSidebarWorkspaceOpen((prev) => !prev)}
-              className="w-full p-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-slate-50/70 dark:bg-slate-900/60 hover:bg-white dark:hover:bg-slate-800/80 hover:border-indigo-500/40 transition-all duration-200 text-left cursor-pointer group flex items-center justify-between gap-2.5 shadow-2xs hover:shadow-xs"
-              title="Cambiar de Agencia / Tenant"
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                {tenant.customization?.faviconUrl ? (
-                  <img
-                    src={tenant.customization.faviconUrl}
-                    alt={tenant.name}
-                    className="w-9 h-9 rounded-xl object-contain p-1 border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs shrink-0"
-                  />
-                ) : (
-                  <div
-                    className="w-9 h-9 rounded-xl font-black text-sm flex items-center justify-center shrink-0 shadow-2xs text-white bg-gradient-to-br from-indigo-500 to-violet-600"
-                  >
-                    {tenant.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <span className="font-extrabold text-xs block truncate text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">
-                    {tenant.companyInfo.commercialName || tenant.name}
-                  </span>
-                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                    <span className="font-mono font-bold truncate">/{tenant.slug}</span>
-                    <span>•</span>
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                      {tenant.customization.currencySymbol}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition shrink-0">
-                <ChevronsUpDown className="w-3.5 h-3.5" />
-              </div>
-            </button>
-
-            {/* Menú Flotante de Espacios de Trabajo */}
-            {sidebarWorkspaceOpen && (
-              <div
-                className="absolute left-0 right-0 top-full mt-1.5 z-50 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-2 space-y-1 backdrop-blur-xl bg-white/95 dark:bg-slate-900/95"
-              >
-                {renderWorkspaceMenu(() => setSidebarWorkspaceOpen(false))}
-              </div>
-            )}
-          </div>
-
-          {/* Botón de Cierre en Móvil */}
+        <div className="relative" ref={sidebarWorkspaceRef}>
           <button
             type="button"
-            onClick={() => setMobileMenuOpen(false)}
-            className="md:hidden p-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 cursor-pointer shrink-0"
-            aria-label="Cerrar menú móvil"
+            onClick={() => setSidebarWorkspaceOpen((prev) => !prev)}
+            className="w-full p-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-slate-50/70 dark:bg-slate-900/60 hover:bg-white dark:hover:bg-slate-800/80 hover:border-indigo-500/40 transition-all duration-200 text-left cursor-pointer group flex items-center justify-between gap-2.5 shadow-2xs hover:shadow-xs"
+            title="Cambiar de Agencia / Tenant"
           >
-            <X className="w-5 h-5" />
+            <div className="flex items-center gap-2.5 min-w-0">
+              {tenant.customization?.faviconUrl ? (
+                <img
+                  src={tenant.customization.faviconUrl}
+                  alt={tenant.name}
+                  className="w-9 h-9 rounded-xl object-contain p-1 border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs shrink-0"
+                />
+              ) : (
+                <div
+                  className="w-9 h-9 rounded-xl font-black text-sm flex items-center justify-center shrink-0 shadow-2xs text-white bg-gradient-to-br from-indigo-500 to-violet-600"
+                >
+                  {tenant.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <span className="font-extrabold text-xs block truncate text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">
+                  {tenant.companyInfo.commercialName || tenant.name}
+                </span>
+                <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                  <span className="font-mono font-bold truncate">/{tenant.slug}</span>
+                  <span>•</span>
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                    {tenant.customization.currencySymbol}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition shrink-0">
+              <ChevronsUpDown className="w-3.5 h-3.5" />
+            </div>
           </button>
+
+          {/* Menú Flotante de Espacios de Trabajo */}
+          {sidebarWorkspaceOpen && (
+            <div
+              className="absolute left-0 right-0 top-full mt-1.5 z-50 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-2 space-y-1 backdrop-blur-xl bg-white/95 dark:bg-slate-900/95"
+            >
+              {renderWorkspaceMenu(() => setSidebarWorkspaceOpen(false))}
+            </div>
+          )}
         </div>
 
         {/* 2. MENÚ DE NAVEGACIÓN */}
@@ -749,6 +737,19 @@ export const AppShell: React.FC<AppShellProps> = ({
             }}
           >
             {renderSidebarContent()}
+          </div>
+
+          {/* Botón de Cierre fuera del sidebar */}
+          <div className="relative z-20 p-3 self-start">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(false)}
+              className="p-2.5 rounded-2xl bg-slate-900/80 hover:bg-slate-900 text-white border border-white/20 backdrop-blur-md shadow-xl flex items-center justify-center cursor-pointer transition-all active:scale-95"
+              aria-label="Cerrar menú móvil"
+              title="Cerrar menú"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
         </div>
       )}

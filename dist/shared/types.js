@@ -30,6 +30,8 @@ exports.DEFAULT_CUSTOMIZATION = {
     fontFamily: 'Inter',
     toastStyle: 'glass',
     toastPosition: 'top-right',
+    toastAudioTheme: 'chime',
+    toastStacking: true,
     toastPositions: {
         desktop: 'top-right',
         tablet: 'top-center',

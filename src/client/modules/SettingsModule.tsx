@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp, PermissionGate } from '../context/AppContext';
-import { playNotificationChime } from '../utils/notificationSound';
+import { playNotificationChime, playNotificationSound } from '../utils/notificationSound';
 import {
   Tenant,
   TenantSummary,
@@ -11,6 +11,7 @@ import {
   Role,
   ToastStyleVariant,
   ToastPosition,
+  ToastAudioTheme,
   ConfirmModalStyleVariant,
   TypographyScale,
   UserThemePreference,
@@ -48,6 +49,7 @@ import {
   Tablet,
   CheckCircle2,
   Smartphone,
+  Send,
   Sliders,
   Shield,
   Layers,
@@ -2731,6 +2733,215 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                       Cápsula oscura flotante
                     </p>
                   </button>
+                </div>
+
+                {/* OPCIONES AVANZADAS DE TOAST: PILA 3D, AUDIO THEMES & SIMULADOR */}
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-4">
+                  {/* Selector de Audio Themes */}
+                  <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                      <div>
+                        <h4 className="text-xs font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                          <Volume2 className="w-4 h-4 text-indigo-500" />
+                          <span>Timbre Sonoro de Alertas (Web Audio Sintético)</span>
+                        </h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          Tono acústico reproducido al mostrar toasts y alertas operativas (0 KB red, 0 latencia).
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                      {[
+                        { id: 'chime', label: 'Modern Chime', desc: 'Doble nota suave' },
+                        { id: 'pop', label: 'Minimal Pop', desc: 'Burbuja percusiva' },
+                        { id: 'beep', label: 'Digital Beep', desc: 'Pulso tecnológico' },
+                        { id: 'glass', label: 'Luxury Glass', desc: 'Cristal armónico' },
+                        { id: 'silent', label: 'Silencioso', desc: 'Sin audio' },
+                      ].map((snd) => {
+                        const isSelected = (custForm.toastAudioTheme || 'chime') === snd.id;
+                        return (
+                          <div
+                            key={snd.id}
+                            className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between ${
+                              isSelected
+                                ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/30'
+                                : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleCustChange({
+                                  ...custForm,
+                                  toastAudioTheme: snd.id as ToastAudioTheme,
+                                });
+                                playNotificationSound(snd.id as ToastAudioTheme);
+                              }}
+                              className="text-left w-full cursor-pointer"
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                                  {snd.label}
+                                </span>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+                              </div>
+                              <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                                {snd.desc}
+                              </p>
+                            </button>
+
+                            {snd.id !== 'silent' && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  playNotificationSound(snd.id as ToastAudioTheme);
+                                }}
+                                className="mt-2 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
+                              >
+                                <Volume2 className="w-3 h-3" />
+                                <span>Escuchar</span>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Interruptor de Pila Agrupada 3D */}
+                  <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                        <Layers className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-extrabold text-slate-900 dark:text-slate-100">
+                          Pila Agrupada Inteligente 3D (Toast Stacking)
+                        </h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          Si ocurren varias alertas consecutivas, se apilan con profundidad visual y contador expandible para no saturar la pantalla.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleCustChange({
+                          ...custForm,
+                          toastStacking: custForm.toastStacking === false ? true : false,
+                        })
+                      }
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        custForm.toastStacking !== false ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          custForm.toastStacking !== false ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Simulador Interactivo de Toasts */}
+                  <div className="p-4 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-extrabold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>Simulador y Pruebas en Vivo de Funciones Toast:</span>
+                      </span>
+                      <span className="text-[10px] text-slate-500">Haz clic para probar en vivo</span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          toast('Notificación estándar completada con éxito', 'success')
+                        }
+                        className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold hover:border-slate-400 transition cursor-pointer"
+                      >
+                        ✓ Alerta Normal
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          toast('Desliza este toast hacia la derecha o arriba en tu celular o pantalla táctil', 'info', {
+                            title: 'Gesto Swipe-to-Dismiss',
+                          })
+                        }
+                        className="px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 text-xs font-semibold hover:bg-indigo-100/50 transition cursor-pointer"
+                      >
+                        👆 Probar Swipe
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          toast('1/3 Foto de portada sincronizada con Drive', 'info');
+                          setTimeout(() => toast('2/3 Copy generado y validado con IA', 'success'), 200);
+                          setTimeout(
+                            () =>
+                              toast('3/3 Estado del post cambiado a En Revisión', 'warning', {
+                                title: 'Pila 3D Agrupada',
+                              }),
+                            400
+                          );
+                        }}
+                        className="px-3 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 text-xs font-semibold hover:bg-purple-100/50 transition cursor-pointer"
+                      >
+                        📚 Probar Pila 3D (x3)
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          toast('El cliente rechazó la publicación #178. Requiere atención urgente.', 'error', {
+                            title: 'ALERTA CRÍTICA FIJADA',
+                            priority: 'critical',
+                            actions: [
+                              {
+                                label: 'Ver Publicación',
+                                onClick: () => alert('Abriendo publicación rechazada'),
+                                variant: 'primary',
+                              },
+                              {
+                                label: 'Contactar Cliente',
+                                onClick: () => alert('Abriendo chat con cliente'),
+                                variant: 'secondary',
+                              },
+                            ],
+                          })
+                        }
+                        className="px-3 py-1.5 rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50/50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 text-xs font-bold hover:bg-rose-100/50 transition cursor-pointer shadow-2xs"
+                      >
+                        🔥 Probar Alerta Crítica (Fijada)
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          toast('Se archivó el proyecto Kachi Restaurante.', 'warning', {
+                            title: 'Acción rápida',
+                            actions: [
+                              {
+                                label: 'Deshacer cambio',
+                                onClick: () => toast('Acción deshecha correctamente', 'success'),
+                                variant: 'primary',
+                              },
+                            ],
+                          })
+                        }
+                        className="px-3 py-1.5 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 text-xs font-semibold hover:bg-emerald-100/50 transition cursor-pointer"
+                      >
+                        ⚡ Botones de Acción Directa
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 

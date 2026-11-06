@@ -14,13 +14,14 @@ import {
   DEFAULT_CUSTOMIZATION,
   DEFAULT_COMPANY_INFO,
   ToastStyleVariant,
+  ToastAudioTheme,
   ConfirmModalStyleVariant,
   TypographyScale,
   UserThemePreference,
   AppNotification,
   NotificationType,
 } from '../../shared/types';
-import { playNotificationChime } from '../utils/notificationSound';
+import { playNotificationChime, playNotificationSound } from '../utils/notificationSound';
 import {
   PermissionKey,
   hasPermission,
@@ -34,15 +35,40 @@ import {
   X,
   ShieldAlert,
   Sparkles,
+  Layers,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 
-interface ToastItem {
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+  variant?: 'primary' | 'secondary' | 'danger';
+}
+
+export type ToastPriority = 'normal' | 'urgent' | 'critical';
+
+export interface ToastOptions {
+  styleOverride?: ToastStyleVariant;
+  priority?: ToastPriority;
+  actions?: ToastAction[];
+  duration?: number;
+  title?: string;
+  soundTheme?: ToastAudioTheme;
+}
+
+export interface ToastItem {
   id: string;
   message: string;
   type: 'success' | 'error' | 'info' | 'warning';
+  title?: string;
   styleOverride?: ToastStyleVariant;
+  priority?: ToastPriority;
+  actions?: ToastAction[];
+  duration?: number;
+  createdAt: number;
 }
 
 interface ConfirmDialogOptions {
@@ -84,12 +110,12 @@ interface AppContextValue {
   toast: (
     message: string,
     type?: 'success' | 'error' | 'info' | 'warning',
-    styleOverride?: ToastStyleVariant
+    optionsOrStyle?: ToastStyleVariant | ToastOptions
   ) => void;
   showToast: (
     message: string,
     type?: 'success' | 'error' | 'info' | 'warning',
-    styleOverride?: ToastStyleVariant
+    optionsOrStyle?: ToastStyleVariant | ToastOptions
   ) => void;
   confirmAction: (options: ConfirmDialogOptions) => Promise<boolean>;
   apiFetch: <T = any>(url: string, options?: RequestInit) => Promise<T>;
@@ -143,6 +169,205 @@ const FONT_FAMILY_MAP: Record<string, string> = {
   'Plus Jakarta Sans': "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
   'Outfit': "'Outfit', system-ui, -apple-system, sans-serif",
   'Poppins': "'Poppins', system-ui, -apple-system, sans-serif",
+};
+
+interface InteractiveToastCardProps {
+  item: ToastItem;
+  styleVariant: ToastStyleVariant;
+  index: number;
+  total: number;
+  isStackedMode: boolean;
+  isStackExpanded: boolean;
+  onDismiss: () => void;
+  onToggleExpand: () => void;
+}
+
+const InteractiveToastCard: React.FC<InteractiveToastCardProps> = ({
+  item,
+  styleVariant,
+  index,
+  total,
+  isStackedMode,
+  isStackExpanded,
+  onDismiss,
+  onToggleExpand,
+}) => {
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      setIsDragging(true);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartRef.current || e.touches.length !== 1) return;
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const dx = currentX - touchStartRef.current.x;
+    const dy = currentY - touchStartRef.current.y;
+    // Gesto Swipe: deslizar a la derecha o hacia arriba
+    setDragOffset({
+      x: Math.max(0, dx),
+      y: Math.min(0, dy),
+    });
+  };
+
+  const handleTouchEnd = () => {
+    if (dragOffset.x > 75 || dragOffset.y < -55) {
+      onDismiss();
+    }
+    setDragOffset({ x: 0, y: 0 });
+    setIsDragging(false);
+    touchStartRef.current = null;
+  };
+
+  const icon =
+    item.type === 'success' ? (
+      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+    ) : item.type === 'error' ? (
+      <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
+    ) : item.type === 'warning' ? (
+      <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+    ) : (
+      <Info className="w-5 h-5 text-sky-400 shrink-0" />
+    );
+
+  let variantClass = '';
+  if (styleVariant === 'glass') {
+    variantClass =
+      'backdrop-blur-xl bg-slate-900/90 text-white border border-white/15 rounded-2xl shadow-2xl p-3.5';
+  } else if (styleVariant === 'minimal') {
+    variantClass =
+      'tenant-surface tenant-text border-l-4 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg p-3.5';
+  } else if (styleVariant === 'solid') {
+    variantClass =
+      item.type === 'error'
+        ? 'bg-rose-600 text-white rounded-xl shadow-xl p-3.5 font-medium'
+        : 'tenant-btn-primary text-white rounded-xl shadow-xl p-3.5 font-medium';
+  } else {
+    // pill
+    variantClass =
+      'backdrop-blur-md bg-slate-950/95 text-white border border-purple-500/40 rounded-3xl shadow-2xl p-3';
+  }
+
+  // Estilos de Prioridad Urgente / Crítica
+  let priorityRing = '';
+  if (item.priority === 'critical') {
+    priorityRing =
+      'ring-2 ring-rose-500 shadow-[0_0_25px_rgba(244,63,94,0.5)] border-rose-500/80 animate-pulse';
+  } else if (item.priority === 'urgent') {
+    priorityRing = 'ring-2 ring-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.35)]';
+  }
+
+  // Estilo de Apilado 3D
+  const isStackedHidden = isStackedMode && !isStackExpanded && index > 2;
+  const isStackedLayer = isStackedMode && !isStackExpanded && index > 0;
+
+  if (isStackedHidden) return null;
+
+  const stackStyle: React.CSSProperties = isStackedLayer
+    ? {
+        transform: `scale(${1 - index * 0.05}) translateY(${index * -8}px)`,
+        opacity: 1 - index * 0.28,
+        zIndex: 40 - index,
+        pointerEvents: 'none',
+      }
+    : {
+        transform: isDragging
+          ? `translateX(${dragOffset.x}px) translateY(${dragOffset.y}px)`
+          : undefined,
+        opacity: isDragging ? Math.max(0.2, 1 - dragOffset.x / 200) : 1,
+        transition: isDragging ? 'none' : 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+        zIndex: 50,
+      };
+
+  return (
+    <div
+      style={{
+        ...stackStyle,
+        ...(styleVariant === 'minimal' ? { borderLeftColor: 'var(--app-primary)' } : {}),
+      }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      className={`pointer-events-auto select-none transition-all duration-200 relative ${variantClass} ${priorityRing}`}
+    >
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5">{icon}</div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            {item.title && (
+              <span className="text-xs font-bold leading-tight line-clamp-1">{item.title}</span>
+            )}
+            {item.priority === 'critical' && (
+              <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-rose-500 text-white tracking-wider">
+                Crítico
+              </span>
+            )}
+            {item.priority === 'urgent' && (
+              <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase bg-amber-500 text-white tracking-wider">
+                Urgente
+              </span>
+            )}
+            {isStackedMode && !isStackExpanded && total > 1 && index === 0 && (
+              <button
+                type="button"
+                onClick={onToggleExpand}
+                className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                title="Desplegar todas las alertas agrupadas"
+              >
+                <Layers className="w-3 h-3" />
+                <span>+{total - 1}</span>
+                <ChevronDown className="w-2.5 h-2.5" />
+              </button>
+            )}
+          </div>
+
+          <p className="text-sm leading-snug">{item.message}</p>
+
+          {/* Botones de Acción Rápida (Quick Actions) */}
+          {item.actions && item.actions.length > 0 && (
+            <div className="flex items-center gap-2 mt-2.5 pt-2 border-t border-white/10 dark:border-white/10 flex-wrap">
+              {item.actions.map((act, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    act.onClick();
+                    onDismiss();
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    act.variant === 'primary'
+                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs'
+                      : act.variant === 'danger'
+                      ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-xs'
+                      : 'bg-white/15 hover:bg-white/25 text-white'
+                  }`}
+                >
+                  {act.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="opacity-60 hover:opacity-100 p-1 transition cursor-pointer shrink-0 -mr-1 -mt-1"
+          aria-label="Cerrar notificación"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -388,21 +613,67 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     document.title = `${tenant.companyInfo.commercialName || tenant.name} — Sistema SaaS`;
   }, [tenant, userThemePreference, resolvedTheme, applyLiveCustomizationPreview]);
 
-  // Sistema de Toasts Configurables
+  // Sistema de Toasts Configurables e Interactivos (Swipe, Pila 3D, Prioridades, Audio)
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [isStackExpanded, setIsStackExpanded] = useState<boolean>(false);
+
   const toast = useCallback(
     (
       message: string,
       type: 'success' | 'error' | 'info' | 'warning' = 'success',
-      styleOverride?: ToastStyleVariant
+      optionsOrStyle?: ToastStyleVariant | ToastOptions
     ) => {
       const id = `${Date.now()}-${Math.random()}`;
-      setToasts((prev) => [...prev, { id, message, type, styleOverride }]);
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-      }, 3800);
+      let styleOverride: ToastStyleVariant | undefined;
+      let priority: ToastPriority = 'normal';
+      let actions: ToastAction[] | undefined;
+      let duration = 3800;
+      let title: string | undefined;
+      let soundTheme: ToastAudioTheme | undefined;
+
+      if (typeof optionsOrStyle === 'string') {
+        styleOverride = optionsOrStyle;
+      } else if (optionsOrStyle && typeof optionsOrStyle === 'object') {
+        styleOverride = optionsOrStyle.styleOverride;
+        priority = optionsOrStyle.priority || 'normal';
+        actions = optionsOrStyle.actions;
+        title = optionsOrStyle.title;
+        soundTheme = optionsOrStyle.soundTheme;
+        if (optionsOrStyle.duration !== undefined) {
+          duration = optionsOrStyle.duration;
+        } else if (priority === 'urgent') {
+          duration = 7500;
+        } else if (priority === 'critical') {
+          duration = 0; // 0 = fijo indefinido hasta descarte manual
+        }
+      }
+
+      // Reproducción sonora sintética según tema configurado
+      const activeAudioTheme = soundTheme || tenant.customization.toastAudioTheme || 'chime';
+      playNotificationSound(activeAudioTheme);
+
+      setToasts((prev) => [
+        {
+          id,
+          message,
+          type,
+          title,
+          styleOverride,
+          priority,
+          actions,
+          duration,
+          createdAt: Date.now(),
+        },
+        ...prev,
+      ]);
+
+      if (duration > 0) {
+        setTimeout(() => {
+          setToasts((prev) => prev.filter((t) => t.id !== id));
+        }, duration);
+      }
     },
-    []
+    [tenant.customization.toastAudioTheme]
   );
 
   // Sistema de Modal de Confirmación Nativo (<dialog closedby="any"> + fallback)
@@ -1106,63 +1377,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     >
       {children}
 
-      {/* CONTENEDOR GLOBAL DE TOASTS PERSONALIZABLES POR TENANT */}
+      {/* CONTENEDOR GLOBAL DE TOASTS PERSONALIZABLES POR TENANT (SWIPE, PILA 3D, ACCIONES) */}
       <div
         className={`fixed z-50 flex flex-col gap-2.5 pointer-events-none max-w-sm w-full px-4 sm:px-0 ${toastPosClass}`}
       >
-        {toasts.map((item) => {
-          const styleVariant = item.styleOverride || tenant.customization.toastStyle;
-          const icon =
-            item.type === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-            ) : item.type === 'error' ? (
-              <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
-            ) : item.type === 'warning' ? (
-              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
-            ) : (
-              <Info className="w-5 h-5 text-sky-400 shrink-0" />
-            );
+        {isStackExpanded && toasts.length > 1 && (
+          <div className="pointer-events-auto flex items-center justify-between px-3 py-1.5 rounded-xl backdrop-blur-md bg-slate-900/80 text-white text-xs font-bold border border-white/10 shadow-lg">
+            <span className="flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-indigo-400" />
+              <span>{toasts.length} alertas en pila</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsStackExpanded(false)}
+              className="text-indigo-300 hover:text-white flex items-center gap-1 cursor-pointer transition"
+            >
+              <span>Contraer</span>
+              <ChevronUp className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
-          let variantClass = '';
-          if (styleVariant === 'glass') {
-            variantClass =
-              'backdrop-blur-xl bg-slate-900/85 dark:bg-slate-900/90 text-white border border-white/15 rounded-2xl shadow-2xl px-4 py-3.5';
-          } else if (styleVariant === 'minimal') {
-            variantClass =
-              'tenant-surface tenant-text border-l-4 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg px-4 py-3';
-          } else if (styleVariant === 'solid') {
-            variantClass =
-              item.type === 'error'
-                ? 'bg-rose-600 text-white rounded-xl shadow-xl px-4 py-3.5 font-medium'
-                : 'tenant-btn-primary text-white rounded-xl shadow-xl px-4 py-3.5 font-medium';
-          } else {
-            // 'pill'
-            variantClass =
-              'backdrop-blur-md bg-slate-950/90 text-white border border-purple-500/30 rounded-full shadow-2xl px-5 py-2.5';
-          }
+        {toasts.map((item, index) => {
+          const styleVariant = item.styleOverride || tenant.customization.toastStyle;
+          const isStackedMode = tenant.customization.toastStacking !== false;
 
           return (
-            <div
+            <InteractiveToastCard
               key={item.id}
-              style={
-                styleVariant === 'minimal'
-                  ? { borderLeftColor: 'var(--app-primary)' }
-                  : undefined
+              item={item}
+              styleVariant={styleVariant}
+              index={index}
+              total={toasts.length}
+              isStackedMode={isStackedMode}
+              isStackExpanded={isStackExpanded}
+              onDismiss={() =>
+                setToasts((prev) => prev.filter((t) => t.id !== item.id))
               }
-              className={`pointer-events-auto flex items-center gap-3 transition-all duration-200 ${variantClass}`}
-            >
-              {icon}
-              <p className="text-sm leading-snug flex-1">{item.message}</p>
-              <button
-                type="button"
-                onClick={() =>
-                  setToasts((prev) => prev.filter((t) => t.id !== item.id))
-                }
-                className="opacity-70 hover:opacity-100 p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+              onToggleExpand={() => setIsStackExpanded((prev) => !prev)}
+            />
           );
         })}
       </div>
