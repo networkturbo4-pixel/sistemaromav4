@@ -461,6 +461,33 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     }
   };
 
+  const handleAutoSaveToastPositions = async (
+    nextPositions: { desktop: ToastPosition; tablet: ToastPosition; mobile: ToastPosition },
+    primaryPos: ToastPosition
+  ) => {
+    const nextCust: TenantCustomization = {
+      ...custForm,
+      toastPosition: primaryPos,
+      toastPositions: nextPositions,
+    };
+    handleCustChange(nextCust);
+
+    try {
+      const res = await apiFetch<{ tenant: typeof tenant }>('/api/settings/customization', {
+        method: 'PUT',
+        body: JSON.stringify({ customization: nextCust }),
+      });
+      if (res?.tenant) {
+        updateTenantState(res.tenant);
+        toast(`Posición de notificaciones guardada (${primaryPos})`, 'success', {
+          duration: 2500,
+        });
+      }
+    } catch (e) {
+      console.warn('Error guardando posición de toast:', e);
+    }
+  };
+
   // ===========================================================================
   // ESTADO DE DATOS DE LA EMPRESA & CUENTAS BANCARIAS GLOBALES
   // ===========================================================================
@@ -2466,7 +2493,21 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2.5 shrink-0">
+                <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                  <button
+                    type="button"
+                    disabled={savingCust}
+                    onClick={() => handleSaveCustomization()}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {savingCust ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Save className="w-3.5 h-3.5" />
+                    )}
+                    <span>{savingCust ? 'Guardando...' : 'Guardar Ajustes'}</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() =>
@@ -2476,7 +2517,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                         custForm.toastStyle
                       )
                     }
-                    className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md transition flex items-center gap-1.5"
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition flex items-center gap-1.5 cursor-pointer"
                   >
                     <Bell className="w-3.5 h-3.5" />
                     <span>Probar Toast</span>
@@ -2493,7 +2534,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                         styleOverride: custForm.confirmModalStyle,
                       })
                     }
-                    className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md transition flex items-center gap-1.5"
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition flex items-center gap-1.5 cursor-pointer"
                   >
                     <MessageSquareWarning className="w-3.5 h-3.5" />
                     <span>Probar Modal</span>
@@ -2558,11 +2599,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                             tablet: custForm.toastPositions?.tablet || custForm.toastPosition || 'top-center',
                             mobile: custForm.toastPositions?.mobile || 'top-center',
                           };
-                          handleCustChange({
-                            ...custForm,
-                            toastPosition: val,
-                            toastPositions: nextPositions,
-                          });
+                          handleAutoSaveToastPositions(nextPositions, val);
                         }}
                         className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none"
                       >
@@ -2594,10 +2631,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                             tablet: val,
                             mobile: custForm.toastPositions?.mobile || 'top-center',
                           };
-                          handleCustChange({
-                            ...custForm,
-                            toastPositions: nextPositions,
-                          });
+                          handleAutoSaveToastPositions(nextPositions, nextPositions.desktop);
                         }}
                         className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none"
                       >
@@ -2629,10 +2663,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                             tablet: custForm.toastPositions?.tablet || custForm.toastPosition || 'top-center',
                             mobile: val,
                           };
-                          handleCustChange({
-                            ...custForm,
-                            toastPositions: nextPositions,
-                          });
+                          handleAutoSaveToastPositions(nextPositions, nextPositions.desktop);
                         }}
                         className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none"
                       >
@@ -3208,6 +3239,26 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                         <span className="font-bold text-indigo-600 dark:text-indigo-400">Módulos Futuros (Auto)</span>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Botón de guardado inferior */}
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-5 border-t border-slate-200/80 dark:border-slate-800/80">
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      💡 La posición y estilo de alertas se guardan automáticamente y aplican a todos los módulos.
+                    </span>
+                    <button
+                      type="button"
+                      disabled={savingCust}
+                      onClick={() => handleSaveCustomization()}
+                      className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-xs text-white bg-indigo-600 hover:bg-indigo-500 shadow-md cursor-pointer transition flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {savingCust ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Save className="w-3.5 h-3.5" />
+                      )}
+                      <span>{savingCust ? 'Guardando...' : 'Guardar Ajustes de Toasts & Modales'}</span>
+                    </button>
                   </div>
                 </div>
               </div>

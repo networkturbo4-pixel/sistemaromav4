@@ -505,8 +505,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [user?.id, user?.themePreference]);
 
   // Inyección dinámica de variables CSS, tipografía, favicon y título del Tenant
+  const [liveCustomizationPreview, setLiveCustomizationPreview] = useState<Tenant['customization'] | null>(null);
+
   const applyLiveCustomizationPreview = useCallback(
     (cust: Tenant['customization'], prefOverride?: UserThemePreference | null) => {
+      setLiveCustomizationPreview(cust);
       const root = document.documentElement;
       const pref = prefOverride !== undefined ? prefOverride : userThemePreference;
 
@@ -916,6 +919,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateTenantState = (updatedTenant: Tenant) => {
     setTenant(updatedTenant);
+    setLiveCustomizationPreview(null);
     loadTenantsList();
   };
 
@@ -1271,16 +1275,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const unreadNotificationsCount = notifications.filter((n) => !n.isRead).length;
 
   // Posición dinámica y responsive del contenedor de Toasts por dispositivo (PC, Tablet, Celular)
+  const effectiveCust = liveCustomizationPreview || tenant.customization;
+
   const desktopToastPos =
-    tenant.customization.toastPositions?.desktop ||
-    tenant.customization.toastPosition ||
+    effectiveCust.toastPositions?.desktop ||
+    effectiveCust.toastPosition ||
     'top-right';
   const tabletToastPos =
-    tenant.customization.toastPositions?.tablet ||
-    tenant.customization.toastPosition ||
+    effectiveCust.toastPositions?.tablet ||
+    effectiveCust.toastPosition ||
     'top-center';
   const mobileToastPos =
-    tenant.customization.toastPositions?.mobile ||
+    effectiveCust.toastPositions?.mobile ||
     'top-center';
 
   const getResponsiveToastClasses = (
@@ -1348,7 +1354,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const toastPosClass = getResponsiveToastClasses(mobileToastPos, tabletToastPos, desktopToastPos);
 
   const activeModalStyle =
-    confirmState.styleOverride || tenant.customization.confirmModalStyle;
+    confirmState.styleOverride || effectiveCust.confirmModalStyle;
 
   return (
     <AppContext.Provider
@@ -1422,8 +1428,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         )}
 
         {toasts.map((item, index) => {
-          const styleVariant = item.styleOverride || tenant.customization.toastStyle;
-          const isStackedMode = tenant.customization.toastStacking !== false;
+          const styleVariant = item.styleOverride || effectiveCust.toastStyle;
+          const isStackedMode = effectiveCust.toastStacking !== false;
 
           return (
             <InteractiveToastCard
