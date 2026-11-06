@@ -3137,29 +3137,111 @@ app.get(
 
 // Servir archivos multimedia subidos (imágenes, referencias, logos, comprobantes)
 // Soporta múltiples rutas del hosting (cPanel Passenger, public_html o sistema anterior)
-const candidateUploadDirs = [
-  process.env.UPLOADS_DIR,
-  path.resolve(process.cwd(), 'uploads'),
-  path.resolve(process.cwd(), '../uploads'),
-  path.resolve(process.cwd(), '../../uploads'),
-  path.resolve(process.cwd(), '../public_html/uploads'),
-  path.resolve(process.cwd(), '../../public_html/uploads'),
-  path.resolve(process.cwd(), 'public_html/uploads'),
-  path.resolve(process.cwd(), '../sistema/uploads'),
-  path.resolve(process.cwd(), '../sistema_anterior/uploads'),
-  path.resolve(process.cwd(), '../roma/uploads'),
-].filter(Boolean) as string[];
+function getDynamicUploadDirs(): string[] {
+  const dirs = new Set<string>();
+  const cwd = process.cwd();
+
+  if (process.env.UPLOADS_DIR) {
+    try {
+      if (fs.existsSync(process.env.UPLOADS_DIR)) {
+        dirs.add(path.resolve(process.env.UPLOADS_DIR));
+      }
+    } catch {}
+  }
+
+  // Rutas estándar relativas a la app actual en cPanel
+  const standardPaths = [
+    path.resolve(cwd, 'uploads'),
+    path.resolve(cwd, '../uploads'),
+    path.resolve(cwd, '../../uploads'),
+    path.resolve(cwd, '../public_html/uploads'),
+    path.resolve(cwd, '../../public_html/uploads'),
+    path.resolve(cwd, 'public_html/uploads'),
+    path.resolve(cwd, '../sistema/uploads'),
+    path.resolve(cwd, '../sistema_anterior/uploads'),
+    path.resolve(cwd, '../roma/uploads'),
+    '/home/theromaagency/public_html/uploads',
+    '/home/theromaagency/uploads',
+  ];
+
+  for (const p of standardPaths) {
+    try {
+      if (fs.existsSync(p) && fs.statSync(p).isDirectory()) {
+        dirs.add(p);
+      }
+    } catch {}
+  }
+
+  // Explorar carpetas hermanas del directorio padre (ej: carpetas vecinas en cPanel)
+  try {
+    const parent = path.resolve(cwd, '..');
+    const entries = fs.readdirSync(parent, { withFileTypes: true });
+    for (const ent of entries) {
+      if (ent.isDirectory()) {
+        const u1 = path.resolve(parent, ent.name, 'uploads');
+        if (fs.existsSync(u1)) dirs.add(u1);
+        const u2 = path.resolve(parent, ent.name, 'public_html', 'uploads');
+        if (fs.existsSync(u2)) dirs.add(u2);
+      }
+    }
+  } catch {}
+
+  // Explorar carpetas del usuario de cPanel (abuelo)
+  try {
+    const grandParent = path.resolve(cwd, '../..');
+    const entries = fs.readdirSync(grandParent, { withFileTypes: true });
+    for (const ent of entries) {
+      if (ent.isDirectory()) {
+        const u1 = path.resolve(grandParent, ent.name, 'uploads');
+        if (fs.existsSync(u1)) dirs.add(u1);
+        const u2 = path.resolve(grandParent, ent.name, 'public_html', 'uploads');
+        if (fs.existsSync(u2)) dirs.add(u2);
+      }
+    }
+  } catch {}
+
+  return Array.from(dirs);
+}
 
 const uploadsDir = path.resolve(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+// Endpoint de diagnóstico para verificar rutas de subidas en cPanel
+app.get('/api/system/uploads-diagnostic', (req: Request, res: Response) => {
+  const cwd = process.cwd();
+  const dirs = getDynamicUploadDirs();
+  const details = dirs.map((d) => {
+    let subdirs: string[] = [];
+    let referencesCount = 0;
+    let brandsCount = 0;
+    try {
+      subdirs = fs.readdirSync(d);
+      if (fs.existsSync(path.join(d, 'references'))) {
+        referencesCount = fs.readdirSync(path.join(d, 'references')).length;
+      }
+      if (fs.existsSync(path.join(d, 'brands'))) {
+        brandsCount = fs.readdirSync(path.join(d, 'brands')).length;
+      }
+    } catch {}
+    return { dir: d, subdirs, referencesCount, brandsCount };
+  });
+
+  res.json({
+    cwd,
+    env_UPLOADS_DIR: process.env.UPLOADS_DIR || null,
+    scannedDirsCount: dirs.length,
+    directories: details,
+  });
+});
+
 app.use('/uploads', (req: Request, res: Response, next: NextFunction) => {
   const relativeSubpath = decodeURIComponent(req.path.replace(/^\/+/, ''));
   if (!relativeSubpath) return next();
 
-  for (const dir of candidateUploadDirs) {
+  const candidateDirs = getDynamicUploadDirs();
+  for (const dir of candidateDirs) {
     try {
       const fullPath = path.resolve(dir, relativeSubpath);
       if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {

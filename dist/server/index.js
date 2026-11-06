@@ -2483,27 +2483,110 @@ app.get([
 ], serveHtmlWithMetadata);
 // Servir archivos multimedia subidos (imágenes, referencias, logos, comprobantes)
 // Soporta múltiples rutas del hosting (cPanel Passenger, public_html o sistema anterior)
-const candidateUploadDirs = [
-    process.env.UPLOADS_DIR,
-    path_1.default.resolve(process.cwd(), 'uploads'),
-    path_1.default.resolve(process.cwd(), '../uploads'),
-    path_1.default.resolve(process.cwd(), '../../uploads'),
-    path_1.default.resolve(process.cwd(), '../public_html/uploads'),
-    path_1.default.resolve(process.cwd(), '../../public_html/uploads'),
-    path_1.default.resolve(process.cwd(), 'public_html/uploads'),
-    path_1.default.resolve(process.cwd(), '../sistema/uploads'),
-    path_1.default.resolve(process.cwd(), '../sistema_anterior/uploads'),
-    path_1.default.resolve(process.cwd(), '../roma/uploads'),
-].filter(Boolean);
+function getDynamicUploadDirs() {
+    const dirs = new Set();
+    const cwd = process.cwd();
+    if (process.env.UPLOADS_DIR) {
+        try {
+            if (fs_1.default.existsSync(process.env.UPLOADS_DIR)) {
+                dirs.add(path_1.default.resolve(process.env.UPLOADS_DIR));
+            }
+        }
+        catch { }
+    }
+    // Rutas estándar relativas a la app actual en cPanel
+    const standardPaths = [
+        path_1.default.resolve(cwd, 'uploads'),
+        path_1.default.resolve(cwd, '../uploads'),
+        path_1.default.resolve(cwd, '../../uploads'),
+        path_1.default.resolve(cwd, '../public_html/uploads'),
+        path_1.default.resolve(cwd, '../../public_html/uploads'),
+        path_1.default.resolve(cwd, 'public_html/uploads'),
+        path_1.default.resolve(cwd, '../sistema/uploads'),
+        path_1.default.resolve(cwd, '../sistema_anterior/uploads'),
+        path_1.default.resolve(cwd, '../roma/uploads'),
+        '/home/theromaagency/public_html/uploads',
+        '/home/theromaagency/uploads',
+    ];
+    for (const p of standardPaths) {
+        try {
+            if (fs_1.default.existsSync(p) && fs_1.default.statSync(p).isDirectory()) {
+                dirs.add(p);
+            }
+        }
+        catch { }
+    }
+    // Explorar carpetas hermanas del directorio padre (ej: carpetas vecinas en cPanel)
+    try {
+        const parent = path_1.default.resolve(cwd, '..');
+        const entries = fs_1.default.readdirSync(parent, { withFileTypes: true });
+        for (const ent of entries) {
+            if (ent.isDirectory()) {
+                const u1 = path_1.default.resolve(parent, ent.name, 'uploads');
+                if (fs_1.default.existsSync(u1))
+                    dirs.add(u1);
+                const u2 = path_1.default.resolve(parent, ent.name, 'public_html', 'uploads');
+                if (fs_1.default.existsSync(u2))
+                    dirs.add(u2);
+            }
+        }
+    }
+    catch { }
+    // Explorar carpetas del usuario de cPanel (abuelo)
+    try {
+        const grandParent = path_1.default.resolve(cwd, '../..');
+        const entries = fs_1.default.readdirSync(grandParent, { withFileTypes: true });
+        for (const ent of entries) {
+            if (ent.isDirectory()) {
+                const u1 = path_1.default.resolve(grandParent, ent.name, 'uploads');
+                if (fs_1.default.existsSync(u1))
+                    dirs.add(u1);
+                const u2 = path_1.default.resolve(grandParent, ent.name, 'public_html', 'uploads');
+                if (fs_1.default.existsSync(u2))
+                    dirs.add(u2);
+            }
+        }
+    }
+    catch { }
+    return Array.from(dirs);
+}
 const uploadsDir = path_1.default.resolve(process.cwd(), 'uploads');
 if (!fs_1.default.existsSync(uploadsDir)) {
     fs_1.default.mkdirSync(uploadsDir, { recursive: true });
 }
+// Endpoint de diagnóstico para verificar rutas de subidas en cPanel
+app.get('/api/system/uploads-diagnostic', (req, res) => {
+    const cwd = process.cwd();
+    const dirs = getDynamicUploadDirs();
+    const details = dirs.map((d) => {
+        let subdirs = [];
+        let referencesCount = 0;
+        let brandsCount = 0;
+        try {
+            subdirs = fs_1.default.readdirSync(d);
+            if (fs_1.default.existsSync(path_1.default.join(d, 'references'))) {
+                referencesCount = fs_1.default.readdirSync(path_1.default.join(d, 'references')).length;
+            }
+            if (fs_1.default.existsSync(path_1.default.join(d, 'brands'))) {
+                brandsCount = fs_1.default.readdirSync(path_1.default.join(d, 'brands')).length;
+            }
+        }
+        catch { }
+        return { dir: d, subdirs, referencesCount, brandsCount };
+    });
+    res.json({
+        cwd,
+        env_UPLOADS_DIR: process.env.UPLOADS_DIR || null,
+        scannedDirsCount: dirs.length,
+        directories: details,
+    });
+});
 app.use('/uploads', (req, res, next) => {
     const relativeSubpath = decodeURIComponent(req.path.replace(/^\/+/, ''));
     if (!relativeSubpath)
         return next();
-    for (const dir of candidateUploadDirs) {
+    const candidateDirs = getDynamicUploadDirs();
+    for (const dir of candidateDirs) {
         try {
             const fullPath = path_1.default.resolve(dir, relativeSubpath);
             if (fs_1.default.existsSync(fullPath) && fs_1.default.statSync(fullPath).isFile()) {
