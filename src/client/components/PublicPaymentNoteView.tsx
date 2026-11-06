@@ -22,7 +22,11 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { copyTextToClipboard } from '../utils/clipboard';
-import { computeInstallmentStatus, formatDueDate } from '../utils/paymentNoteUtils';
+import {
+  computeInstallmentStatus,
+  formatDueDate,
+  calculatePaymentNoteActiveTotals,
+} from '../utils/paymentNoteUtils';
 
 interface PublicPaymentNoteData {
   paymentNote: PaymentNote;
@@ -207,10 +211,24 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
   const agencyRuc = company.ruc || company.taxId || '';
   const agencyPhone = company.whatsapp || company.phone || '';
 
-  const isPaid = paymentNote.status === 'paid';
-  const isPartial = paymentNote.status === 'partial';
-  const isPending = paymentNote.status === 'pending';
-  const isCancelled = paymentNote.status === 'cancelled';
+  const activeTotals = useMemo(() => {
+    return calculatePaymentNoteActiveTotals({
+      isMembership: paymentNote.isMembership,
+      membershipInstallments: paymentNote.membershipInstallments,
+      extraItems: paymentNote.extraItems,
+      items: paymentNote.items,
+      includeTax: paymentNote.includeTax,
+      taxRate: paymentNote.taxRate || 18,
+      discountAmount: Number(paymentNote.discountAmount) || 0,
+      manualPaidAmount: paymentNote.paidAmount,
+    });
+  }, [paymentNote]);
+
+  const effectiveStatus = paymentNote.status === 'cancelled' ? 'cancelled' : activeTotals.status;
+  const isPaid = effectiveStatus === 'paid';
+  const isPartial = effectiveStatus === 'partial';
+  const isPending = effectiveStatus === 'pending';
+  const isCancelled = effectiveStatus === 'cancelled';
 
   // Regla global: priorizar cuentas activas de Datos de Empresa
   const accountsToDisplay: QuotePaymentMethod[] = (
@@ -629,6 +647,115 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
                       const isVisible = matches && (showAllInstallments || visibleIndices.has(idx) || installmentFilter !== 'all');
                       if (!isVisible) return null;
 
+                      // Si el mes está fraccionado en sub-abonos
+                      if (inst.isSplit && inst.subInstallments && inst.subInstallments.length > 0) {
+                        return (
+                          <div
+                            key={inst.id || idx}
+                            className="p-4 rounded-2xl border border-purple-200 bg-purple-50/30 space-y-3 animate-in fade-in duration-200"
+                          >
+                            <div className="flex items-center justify-between border-b border-purple-100 pb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-lg bg-purple-600 text-white font-black text-xs flex items-center justify-center shrink-0">
+                                  {inst.monthNumber || idx + 1}
+                                </span>
+                                <div>
+                                  <h4 className="font-extrabold text-slate-900 text-xs">
+                                    {inst.planName || paymentNote.membershipPlanName || 'Plan Recurrente'}
+                                  </h4>
+                                  <p className="text-[11px] font-bold text-slate-600">
+                                    {inst.periodName}
+                                  </p>
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                                {inst.subInstallments.length} Abonos
+                              </span>
+                            </div>
+
+                            <div className="space-y-2 pl-1">
+                              {inst.subInstallments.map((sub, sIdx) => {
+                                const subComp = computeInstallmentStatus(sub.status, sub.dueDate);
+                                return (
+                                  <div
+                                    key={sub.id || sIdx}
+                                    className="p-3 rounded-xl border border-slate-200 bg-white space-y-2 text-xs"
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-bold text-[10px]">
+                                            #{inst.monthNumber || idx + 1}.{sIdx + 1}
+                                          </span>
+                                          <strong className="text-slate-800 text-xs truncate">
+                                            {sub.title}
+                                          </strong>
+                                        </div>
+                                        {sub.notes && (
+                                          <p className="text-[10px] text-slate-400 italic mt-0.5">
+                                            {sub.notes}
+                                          </p>
+                                        )}
+                                      </div>
+
+                                      <span className="font-mono font-black text-xs text-slate-900 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-200 shrink-0">
+                                        {paymentNote.currencySymbol}{' '}
+                                        {Number(sub.amount).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                      </span>
+                                    </div>
+
+                                    <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] text-slate-500">
+                                          Vence: <strong>{formatDueDate(sub.dueDate || inst.dueDate)}</strong>
+                                        </span>
+                                        {sub.operationNumber && (
+                                          <span className="text-[10px] font-mono text-slate-500">
+                                            Op: <strong>{sub.operationNumber}</strong>
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      <div className="flex items-center gap-1.5">
+                                        {sub.voucherUrl && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setViewingVoucher({
+                                                url: sub.voucherUrl!,
+                                                name: sub.voucherName || `Voucher_Mes_${idx + 1}_Sub_${sIdx + 1}`,
+                                              })
+                                            }
+                                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-[10px] font-bold cursor-pointer transition"
+                                          >
+                                            <Paperclip className="w-3 h-3 text-purple-600" />
+                                            <span>Voucher</span>
+                                          </button>
+                                        )}
+
+                                        <span
+                                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-black uppercase tracking-wider border ${
+                                            subComp.status === 'paid'
+                                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                              : subComp.status === 'delayed'
+                                              ? 'bg-rose-50 text-rose-700 border-rose-300'
+                                              : subComp.status === 'in_process'
+                                              ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                              : 'bg-slate-100 text-slate-500 border-slate-300'
+                                          }`}
+                                        >
+                                          {subComp.label}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      }
+
                       return (
                         <div
                           key={inst.id || idx}
@@ -748,6 +875,121 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
                         {computedList.map(({ inst, comp }, idx) => {
                           const matches = isMatchFilter(comp.status);
                           const isVisible = matches && (showAllInstallments || visibleIndices.has(idx) || installmentFilter !== 'all');
+
+                          // Si el mes está fraccionado
+                          if (inst.isSplit && inst.subInstallments && inst.subInstallments.length > 0) {
+                            return inst.subInstallments.map((sub, sIdx) => {
+                              const subComp = computeInstallmentStatus(sub.status, sub.dueDate);
+                              const subMatches = isMatchFilter(subComp.status);
+                              const isSubVisible = subMatches && (showAllInstallments || visibleIndices.has(idx) || installmentFilter !== 'all');
+
+                              return (
+                                <tr
+                                  key={`${inst.id || idx}-sub-${sub.id || sIdx}`}
+                                  className={`hover:bg-slate-50/50 transition-colors ${
+                                    isSubVisible ? '' : 'hidden print:table-row'
+                                  }`}
+                                >
+                                  <td className="py-4 px-4 text-center font-bold text-purple-600">
+                                    {inst.monthNumber || idx + 1}.{sIdx + 1}
+                                  </td>
+                                  <td className="py-4 px-4">
+                                    <p className="font-extrabold text-slate-900 text-xs">
+                                      {inst.planName || paymentNote.membershipPlanName || 'Plan Recurrente'}
+                                    </p>
+                                    <p className="text-[11px] font-bold text-slate-700 mt-0.5">
+                                      {inst.periodName} • <span className="font-black text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">{sub.title}</span>
+                                    </p>
+                                    {sub.notes && (
+                                      <p className="text-[11px] text-slate-400 italic mt-0.5">
+                                        {sub.notes}
+                                      </p>
+                                    )}
+                                  </td>
+                                  <td className="py-4 px-4 font-semibold text-slate-600">
+                                    {formatDueDate(sub.dueDate || inst.dueDate)}
+                                  </td>
+                                  <td className="py-4 px-4 text-right font-black text-slate-900 font-mono">
+                                    {paymentNote.currencySymbol}{' '}
+                                    {Number(sub.amount).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                  </td>
+                                  <td className="py-4 px-4 text-center">
+                                    {sub.operationNumber ? (
+                                      <div className="inline-flex items-center justify-center gap-1.5 font-mono font-bold text-slate-700 text-xs">
+                                        <span>{sub.operationNumber}</span>
+                                        {sub.voucherUrl && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setViewingVoucher({
+                                                url: sub.voucherUrl!,
+                                                name: sub.voucherName || `Voucher_Mes_${idx + 1}_Sub_${sIdx + 1}`,
+                                              })
+                                            }
+                                            className="text-purple-600 hover:text-purple-800 p-0.5 hover:bg-purple-100 rounded transition cursor-pointer"
+                                            title="Ver comprobante adjunto"
+                                          >
+                                            <Paperclip className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    ) : sub.voucherUrl ? (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setViewingVoucher({
+                                            url: sub.voucherUrl!,
+                                            name: sub.voucherName || `Voucher_Mes_${idx + 1}_Sub_${sIdx + 1}`,
+                                          })
+                                        }
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-[11px] font-bold cursor-pointer transition shadow-2xs"
+                                      >
+                                        <Paperclip className="w-3 h-3 text-purple-600" />
+                                        <span>Ver Voucher</span>
+                                      </button>
+                                    ) : (
+                                      <span className="text-slate-400 font-medium">—</span>
+                                    )}
+                                  </td>
+                                  <td className="py-4 px-4 text-center">
+                                    <span
+                                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
+                                        subComp.status === 'paid'
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                          : subComp.status === 'delayed'
+                                          ? 'bg-rose-50 text-rose-700 border-rose-300'
+                                          : subComp.status === 'in_process'
+                                          ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                          : 'bg-slate-100 text-slate-500 border-slate-300'
+                                      }`}
+                                    >
+                                      {subComp.status === 'paid' ? (
+                                        <>
+                                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                          <span>PAGADO</span>
+                                        </>
+                                      ) : subComp.status === 'delayed' ? (
+                                        <>
+                                          <AlertCircle className="w-3 h-3 text-rose-600" />
+                                          <span>RETRASADO</span>
+                                        </>
+                                      ) : subComp.status === 'in_process' ? (
+                                        <>
+                                          <Clock className="w-3 h-3 text-amber-600" />
+                                          <span>EN PROCESO</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Clock className="w-3 h-3 text-slate-400" />
+                                          <span>NO ACTIVO</span>
+                                        </>
+                                      )}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            });
+                          }
 
                           return (
                             <tr
@@ -1181,7 +1423,7 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
                   <span>Subtotal:</span>
                   <span className="font-bold font-mono">
                     {paymentNote.currencySymbol}{' '}
-                    {Number(paymentNote.subtotal).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                    {Number(activeTotals.subtotal).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
 
@@ -1202,7 +1444,7 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
                     <span>IGV ({paymentNote.taxRate || 18}%):</span>
                     <span className="font-bold font-mono">
                       {paymentNote.currencySymbol}{' '}
-                      {Number(paymentNote.taxAmount || 0).toLocaleString('es-PE', {
+                      {Number(activeTotals.taxAmount).toLocaleString('es-PE', {
                         minimumFractionDigits: 2,
                       })}
                     </span>
@@ -1215,27 +1457,27 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
                   </span>
                   <span className="text-lg sm:text-xl font-black text-emerald-600 font-mono">
                     {paymentNote.currencySymbol}{' '}
-                    {Number(paymentNote.total).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                    {Number(activeTotals.total).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
 
-                {paymentNote.paidAmount > 0 && (
+                {activeTotals.paidAmount > 0 && (
                   <div className="pt-2 border-t border-slate-200 space-y-1">
                     <div className="flex justify-between text-emerald-700 font-bold">
                       <span>Monto Abonado:</span>
                       <span className="font-mono">
                         {paymentNote.currencySymbol}{' '}
-                        {Number(paymentNote.paidAmount).toLocaleString('es-PE', {
+                        {Number(activeTotals.paidAmount).toLocaleString('es-PE', {
                           minimumFractionDigits: 2,
                         })}
                       </span>
                     </div>
-                    {paymentNote.total - paymentNote.paidAmount > 0 && (
+                    {activeTotals.balance > 0 && (
                       <div className="flex justify-between text-amber-700 font-bold">
                         <span>Saldo Pendiente:</span>
                         <span className="font-mono">
                           {paymentNote.currencySymbol}{' '}
-                          {(paymentNote.total - paymentNote.paidAmount).toLocaleString('es-PE', {
+                          {Number(activeTotals.balance).toLocaleString('es-PE', {
                             minimumFractionDigits: 2,
                           })}
                         </span>

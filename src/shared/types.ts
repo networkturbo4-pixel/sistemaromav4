@@ -497,6 +497,20 @@ export type PaymentNoteStatus = 'pending' | 'paid' | 'partial' | 'cancelled';
 
 export type MembershipMonthStatus = 'paid' | 'in_process' | 'overdue' | 'delayed' | 'inactive';
 
+export interface MembershipSubInstallment {
+  id: string;
+  title: string;
+  amount: number;
+  percentage?: number;
+  status: MembershipMonthStatus;
+  dueDate?: string;
+  paidDate?: string;
+  operationNumber?: string;
+  voucherUrl?: string;
+  voucherName?: string;
+  notes?: string;
+}
+
 export interface MembershipMonthItem {
   id: string;
   monthNumber: number;
@@ -510,6 +524,8 @@ export interface MembershipMonthItem {
   paidDate?: string;
   operationNumber?: string;
   notes?: string;
+  isSplit?: boolean;
+  subInstallments?: MembershipSubInstallment[];
 }
 
 export interface PaymentNoteItem {

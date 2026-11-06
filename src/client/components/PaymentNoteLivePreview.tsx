@@ -25,7 +25,11 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
-import { computeInstallmentStatus, formatDueDate } from '../utils/paymentNoteUtils';
+import {
+  computeInstallmentStatus,
+  formatDueDate,
+  calculatePaymentNoteActiveTotals,
+} from '../utils/paymentNoteUtils';
 
 export interface PaymentNoteFormData {
   code: string;
@@ -111,7 +115,30 @@ export const PaymentNoteLivePreview: React.FC<PaymentNoteLivePreviewProps> = ({
   const commercialName = company.commercialName || company.brandName || tenant?.name || 'ROMA Agencia';
   const companyRuc = company.ruc || company.taxId || '';
   const logoUrl = tenant?.customization?.logoLightUrl || tenant?.customization?.logoDarkUrl;
-  const statusConfig = STATUS_CONFIG[formData.status] || STATUS_CONFIG.pending;
+
+  const liveActiveTotals = React.useMemo(() => {
+    return calculatePaymentNoteActiveTotals({
+      isMembership: formData.isMembership,
+      membershipInstallments: formData.membershipInstallments,
+      extraItems: formData.extraItems,
+      items: formData.items,
+      includeTax: formData.includeTax,
+      taxRate: formData.taxRate || 18,
+      discountAmount: Number(formData.discountAmount) || 0,
+      manualPaidAmount: formData.paidAmount,
+    });
+  }, [
+    formData.isMembership,
+    formData.membershipInstallments,
+    formData.extraItems,
+    formData.items,
+    formData.includeTax,
+    formData.taxRate,
+    formData.discountAmount,
+    formData.paidAmount,
+  ]);
+
+  const statusConfig = STATUS_CONFIG[liveActiveTotals.status] || STATUS_CONFIG.pending;
 
   const accountsToDisplay = (
     company.bankAccounts && company.bankAccounts.length > 0
@@ -294,6 +321,97 @@ export const PaymentNoteLivePreview: React.FC<PaymentNoteLivePreviewProps> = ({
                 {installments.map((inst, idx) => {
                   if (!showAllInstallments && !visibleIndices.has(idx)) return null;
                   const comp = computeInstallmentStatus(inst.status, inst.dueDate);
+
+                  if (inst.isSplit && inst.subInstallments && inst.subInstallments.length > 0) {
+                    return (
+                      <div
+                        key={inst.id || idx}
+                        className="p-3 rounded-2xl bg-purple-50/20 dark:bg-purple-950/20 border border-purple-200/80 dark:border-purple-800/60 space-y-2 shadow-2xs"
+                      >
+                        <div className="flex items-center justify-between border-b border-purple-100 dark:border-purple-900/40 pb-1.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-5 h-5 rounded-lg bg-purple-600 flex items-center justify-center font-bold text-[10px] text-white shrink-0">
+                              {inst.monthNumber || idx + 1}
+                            </span>
+                            <div className="min-w-0">
+                              <h5 className="font-black text-xs text-slate-900 dark:text-slate-100 truncate">
+                                {inst.periodName}
+                              </h5>
+                              <p className="text-[10px] font-semibold text-slate-400">
+                                {inst.planName}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300">
+                            {inst.subInstallments.length} Abonos (50/50)
+                          </span>
+                        </div>
+
+                        <div className="space-y-1.5 pl-1">
+                          {inst.subInstallments.map((sub, sIdx) => {
+                            const subComp = computeInstallmentStatus(sub.status, sub.dueDate || inst.dueDate);
+                            return (
+                              <div
+                                key={sub.id || sIdx}
+                                className="p-2.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-200/70 dark:border-slate-800 space-y-1"
+                              >
+                                <div className="flex items-start justify-between gap-1.5">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 font-bold text-[9px]">
+                                        #{inst.monthNumber || idx + 1}.{sIdx + 1}
+                                      </span>
+                                      <strong className="text-slate-800 dark:text-slate-200 text-[11px] truncate">
+                                        {sub.title}
+                                      </strong>
+                                    </div>
+                                    {sub.notes && (
+                                      <p className="text-[9px] text-slate-400 italic mt-0.5 pl-0.5">
+                                        {sub.notes}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  <div className="text-right shrink-0">
+                                    <span className="font-mono font-black text-xs text-slate-900 dark:text-slate-100 block">
+                                      {formData.currencySymbol} {(Number(sub.amount) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                    </span>
+                                    <span
+                                      className={`inline-block mt-0.5 text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded border ${
+                                        subComp.status === 'paid'
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-800'
+                                          : subComp.status === 'delayed'
+                                          ? 'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/60 dark:text-rose-400 dark:border-rose-800'
+                                          : subComp.status === 'in_process'
+                                          ? 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/60 dark:text-amber-400 dark:border-amber-800'
+                                          : 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+                                      }`}
+                                    >
+                                      {subComp.label}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center justify-between text-[9px] text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-850">
+                                  <span>Vence: <strong className="text-slate-600 dark:text-slate-300">{formatDueDate(sub.dueDate || inst.dueDate)}</strong></span>
+                                  {sub.operationNumber && (
+                                    <span className="font-mono">Op: {sub.operationNumber}</span>
+                                  )}
+                                </div>
+
+                                {sub.voucherName && (
+                                  <div className="pt-0.5 flex items-center gap-1 text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                                    <Paperclip className="w-2.5 h-2.5" />
+                                    <span className="truncate">Voucher: {sub.voucherName}</span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }
 
                   return (
                     <div
@@ -525,7 +643,7 @@ export const PaymentNoteLivePreview: React.FC<PaymentNoteLivePreviewProps> = ({
           <div className="flex justify-between text-slate-500 font-medium">
             <span>Subtotal</span>
             <span className="font-mono">
-              {formData.currencySymbol} {formData.subtotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+              {formData.currencySymbol} {liveActiveTotals.subtotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
             </span>
           </div>
 
@@ -542,7 +660,7 @@ export const PaymentNoteLivePreview: React.FC<PaymentNoteLivePreviewProps> = ({
             <div className="flex justify-between text-slate-500 font-medium">
               <span>IGV ({formData.taxRate || 18}%)</span>
               <span className="font-mono">
-                {formData.currencySymbol} {formData.taxAmount.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                {formData.currencySymbol} {liveActiveTotals.taxAmount.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
               </span>
             </div>
           )}
@@ -552,9 +670,26 @@ export const PaymentNoteLivePreview: React.FC<PaymentNoteLivePreviewProps> = ({
               Total Comprobante
             </span>
             <span className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400">
-              {formData.currencySymbol} {formData.total.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+              {formData.currencySymbol} {liveActiveTotals.total.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
             </span>
           </div>
+
+          {(formData.isMembership || liveActiveTotals.paidAmount > 0) && (
+            <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 space-y-1 text-xs">
+              <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-bold">
+                <span>Monto Abonado:</span>
+                <span className="font-mono">
+                  {formData.currencySymbol} {liveActiveTotals.paidAmount.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-between text-amber-600 dark:text-amber-400 font-bold">
+                <span>Saldo Pendiente:</span>
+                <span className="font-mono">
+                  {formData.currencySymbol} {liveActiveTotals.balance.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Cuentas Bancarias Globales */}

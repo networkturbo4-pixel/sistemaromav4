@@ -5,6 +5,7 @@ import {
   PaymentNoteItem,
   PaymentNoteStatus,
   MembershipMonthItem,
+  MembershipSubInstallment,
   MembershipMonthStatus,
   Client,
   ClientBrand,
@@ -52,11 +53,16 @@ import {
   FileText,
   Loader2,
   ClipboardPaste,
+  Split,
 } from 'lucide-react';
 import { PaymentNoteLivePreview } from '../components/PaymentNoteLivePreview';
 import { copyTextToClipboard } from '../utils/clipboard';
 import { parseVoucherWithOcr } from '../utils/voucherOcr';
-import { computeInstallmentStatus, formatDueDate } from '../utils/paymentNoteUtils';
+import {
+  computeInstallmentStatus,
+  formatDueDate,
+  calculatePaymentNoteActiveTotals,
+} from '../utils/paymentNoteUtils';
 
 export const PaymentNotesModule: React.FC = () => {
   const { tenant, apiFetch, toast, confirmAction, can } = useApp();
@@ -223,49 +229,25 @@ export const PaymentNotesModule: React.FC = () => {
     loadData();
   }, []);
 
-  // Recalcular subtotales y total del formulario
+  // Recalcular subtotales y total del formulario considerando exclusión de meses NO ACTIVOS
   useEffect(() => {
-    let subtotal = 0;
-    if (formData.isMembership && formData.membershipInstallments && formData.membershipInstallments.length > 0) {
-      const installmentsSum = formData.membershipInstallments.reduce((acc, it) => acc + (Number(it.amount) || 0), 0);
-      const extrasSum = (formData.extraItems || []).reduce((acc, it) => acc + (Number(it.total) || 0), 0);
-      subtotal = installmentsSum + extrasSum;
-    } else {
-      subtotal = formData.items.reduce((acc, it) => acc + (Number(it.total) || 0), 0);
-    }
-
-    const taxAmount = formData.includeTax
-      ? Math.round(subtotal * (formData.taxRate / 100) * 100) / 100
-      : 0;
-    const discount = Number(formData.discountAmount) || 0;
-    const total = Math.max(0, Math.round((subtotal + taxAmount - discount) * 100) / 100);
-
-    let paidAmount = formData.paidAmount;
-    let status = formData.status;
-    if (formData.isMembership && formData.membershipInstallments && formData.membershipInstallments.length > 0) {
-      const paidInstallments = formData.membershipInstallments
-        .filter((inst) => inst.status === 'paid')
-        .reduce((acc, inst) => acc + (Number(inst.amount) || 0), 0);
-      const paidExtras = (formData.extraItems || [])
-        .filter((ex) => ex.status === 'paid')
-        .reduce((acc, ex) => acc + (Number(ex.total) || 0), 0);
-      const paidSum = paidInstallments + paidExtras;
-      paidAmount = paidSum;
-      if (paidSum >= total && total > 0) {
-        status = 'paid';
-      } else if (paidSum > 0) {
-        status = 'partial';
-      } else {
-        status = 'pending';
-      }
-    }
+    const calc = calculatePaymentNoteActiveTotals({
+      isMembership: formData.isMembership,
+      membershipInstallments: formData.membershipInstallments,
+      extraItems: formData.extraItems,
+      items: formData.items,
+      includeTax: formData.includeTax,
+      taxRate: formData.taxRate,
+      discountAmount: Number(formData.discountAmount) || 0,
+      manualPaidAmount: formData.paidAmount,
+    });
 
     setFormData((prev) => ({
       ...prev,
-      subtotal,
-      taxAmount,
-      total,
-      ...(formData.isMembership ? { paidAmount, status } : {}),
+      subtotal: calc.subtotal,
+      taxAmount: calc.taxAmount,
+      total: calc.total,
+      ...(formData.isMembership ? { paidAmount: calc.paidAmount, status: calc.status } : {}),
     }));
   }, [
     formData.items,
@@ -441,18 +423,14 @@ export const PaymentNotesModule: React.FC = () => {
     return installments;
   };
 
-  // Dividir cuota en 50% adelanto (quincena) y 50% saldo (fin de mes)
-  const handleSplitInstallment5050 = (idx: number) => {
-    const current = formData.membershipInstallments?.[idx];
-    if (!current) return;
-
-    const totalAmount = Number(current.amount) || 0;
+  // Helper para generar los 2 sub-abonos del 50%/50%
+  const generate5050SubInstallments = (
+    current: MembershipMonthItem,
+    totalAmount: number
+  ): MembershipSubInstallment[] => {
     const halfAmount = Math.round((totalAmount / 2) * 100) / 100;
     const secondHalf = Math.round((totalAmount - halfAmount) * 100) / 100;
 
-    const cleanPeriod = current.periodName.replace(/\s*\((1ra|2da)\s*Quincena[^)]*\)/gi, '').trim();
-
-    // Fechas de quincena (15) y fin de mes basadas en el dueDate actual o fecha de emisión
     const baseDueDateStr = current.dueDate || formData.issueDate || new Date().toISOString().split('T')[0];
     const parts = baseDueDateStr.split('-');
     const y = parseInt(parts[0], 10) || new Date().getFullYear();
@@ -462,52 +440,218 @@ export const PaymentNotesModule: React.FC = () => {
     const lastDayOfMonth = new Date(y, m + 1, 0).getDate();
     const finDeMesDate = new Date(y, m, lastDayOfMonth).toISOString().split('T')[0];
 
-    const part1: MembershipMonthItem = {
-      ...current,
-      id: `inst-${Date.now()}-q1`,
-      monthNumber: current.monthNumber,
-      periodName: `${cleanPeriod} (1ra Quincena / 50% Adelanto)`,
-      amount: halfAmount,
-      dueDate: quincenaDate,
-      notes: current.notes || '50% del plan mensual (Adelanto)',
-    };
+    return [
+      {
+        id: `sub-${Date.now()}-q1`,
+        title: '50% Adelanto (Quincena)',
+        percentage: 50,
+        amount: halfAmount,
+        status: current.status === 'inactive' ? 'inactive' : (current.status === 'paid' ? 'paid' : 'in_process'),
+        dueDate: quincenaDate,
+        paidDate: current.paidDate,
+        operationNumber: current.operationNumber,
+        voucherUrl: current.voucherUrl,
+        voucherName: current.voucherName,
+        notes: current.notes || '50% del plan mensual (Adelanto)',
+      },
+      {
+        id: `sub-${Date.now()}-q2`,
+        title: '50% Saldo (Fin de mes)',
+        percentage: 50,
+        amount: secondHalf,
+        status: 'in_process',
+        dueDate: finDeMesDate,
+        notes: '50% saldo restante (Fin de mes)',
+      },
+    ];
+  };
 
-    const part2: MembershipMonthItem = {
-      ...current,
-      id: `inst-${Date.now()}-q2`,
-      monthNumber: current.monthNumber,
-      periodName: `${cleanPeriod} (2da Quincena / 50% Saldo)`,
-      amount: secondHalf,
-      dueDate: finDeMesDate,
-      notes: '50% saldo restante (Fin de mes)',
-      status: 'in_process',
-      operationNumber: undefined,
-      voucherUrl: undefined,
-      voucherName: undefined,
-      paidDate: undefined,
-    };
+  // Alternar el switcher de fraccionar pago del mes
+  const handleToggleSplitMonth = (idx: number) => {
+    setFormData((prev) => {
+      const list = [...(prev.membershipInstallments || [])];
+      const cur = list[idx];
+      if (!cur) return prev;
 
-    const nextList = [...(formData.membershipInstallments || [])];
-    nextList.splice(idx, 1, part1, part2);
+      const nextIsSplit = !cur.isSplit;
+      let nextSubs = cur.subInstallments;
 
-    setFormData((prev) => ({
-      ...prev,
-      membershipInstallments: nextList,
-      items: syncAllItems(nextList, prev.extraItems || []),
-    }));
+      if (nextIsSplit && (!nextSubs || nextSubs.length === 0)) {
+        const total = Number(cur.amount) || 0;
+        nextSubs = generate5050SubInstallments(cur, total);
+      }
 
-    toast(`Mes dividido en 50% Adelanto (${formData.currencySymbol}${halfAmount}) y 50% Saldo (${formData.currencySymbol}${secondHalf}).`);
+      list[idx] = {
+        ...cur,
+        isSplit: nextIsSplit,
+        subInstallments: nextSubs,
+      };
+
+      return {
+        ...prev,
+        membershipInstallments: list,
+        items: syncAllItems(list, prev.extraItems || []),
+      };
+    });
+  };
+
+  // Forzar re-división 50% / 50% de un mes
+  const handleSplitMonth5050 = (idx: number) => {
+    setFormData((prev) => {
+      const list = [...(prev.membershipInstallments || [])];
+      const cur = list[idx];
+      if (!cur) return prev;
+
+      const total = Number(cur.amount) || 0;
+      const nextSubs = generate5050SubInstallments(cur, total);
+
+      list[idx] = {
+        ...cur,
+        isSplit: true,
+        subInstallments: nextSubs,
+      };
+
+      return {
+        ...prev,
+        membershipInstallments: list,
+        items: syncAllItems(list, prev.extraItems || []),
+      };
+    });
+    toast('Mes dividido en 50% Adelanto y 50% Saldo.');
+  };
+
+  // Agregar una sub-cuota adicional al mes
+  const handleAddSubInstallment = (monthIdx: number) => {
+    setFormData((prev) => {
+      const list = [...(prev.membershipInstallments || [])];
+      const cur = list[monthIdx];
+      if (!cur) return prev;
+
+      const existingSubs = cur.subInstallments || [];
+      const subNum = existingSubs.length + 1;
+      const baseDueDate = cur.dueDate || prev.issueDate || new Date().toISOString().split('T')[0];
+
+      const newSub: MembershipSubInstallment = {
+        id: `sub-${Date.now()}-${subNum}`,
+        title: `Abono ${subNum}`,
+        amount: 0,
+        status: 'in_process',
+        dueDate: baseDueDate,
+      };
+
+      const updatedSubs = [...existingSubs, newSub];
+      list[monthIdx] = {
+        ...cur,
+        isSplit: true,
+        subInstallments: updatedSubs,
+      };
+
+      return {
+        ...prev,
+        membershipInstallments: list,
+        items: syncAllItems(list, prev.extraItems || []),
+      };
+    });
+    toast('Nuevo abono fraccionado añadido.');
+  };
+
+  // Actualizar una sub-cuota de un mes
+  const handleUpdateSubInstallment = (
+    monthIdx: number,
+    subIdx: number,
+    patch: Partial<MembershipSubInstallment>
+  ) => {
+    setFormData((prev) => {
+      const list = [...(prev.membershipInstallments || [])];
+      const cur = list[monthIdx];
+      if (!cur || !cur.subInstallments) return prev;
+
+      const updatedSubs = [...cur.subInstallments];
+      if (!updatedSubs[subIdx]) return prev;
+
+      updatedSubs[subIdx] = { ...updatedSubs[subIdx], ...patch };
+      const newMonthTotal = updatedSubs.reduce((acc, s) => acc + (Number(s.amount) || 0), 0);
+
+      list[monthIdx] = {
+        ...cur,
+        amount: newMonthTotal,
+        subInstallments: updatedSubs,
+      };
+
+      return {
+        ...prev,
+        membershipInstallments: list,
+        items: syncAllItems(list, prev.extraItems || []),
+      };
+    });
+  };
+
+  // Eliminar una sub-cuota de un mes
+  const handleDeleteSubInstallment = (monthIdx: number, subIdx: number) => {
+    setFormData((prev) => {
+      const list = [...(prev.membershipInstallments || [])];
+      const cur = list[monthIdx];
+      if (!cur || !cur.subInstallments) return prev;
+
+      const updatedSubs = cur.subInstallments.filter((_, i) => i !== subIdx);
+      const newMonthTotal = updatedSubs.reduce((acc, s) => acc + (Number(s.amount) || 0), 0);
+
+      list[monthIdx] = {
+        ...cur,
+        isSplit: updatedSubs.length > 0,
+        amount: newMonthTotal,
+        subInstallments: updatedSubs,
+      };
+
+      return {
+        ...prev,
+        membershipInstallments: list,
+        items: syncAllItems(list, prev.extraItems || []),
+      };
+    });
+    toast('Abono eliminado.');
   };
 
   const syncItemsFromInstallments = (installments: MembershipMonthItem[]): PaymentNoteItem[] => {
-    return installments.map((inst, idx) => ({
-      id: inst.id || `pni-inst-${idx + 1}`,
-      title: `${inst.planName} - ${inst.periodName}`,
-      description: `Cuota mensual (${inst.status === 'paid' ? 'Pagado' : inst.status === 'overdue' ? 'Vencido' : 'En proceso'})${inst.voucherName ? ` • Voucher: ${inst.voucherName}` : ''}`,
-      quantity: 1,
-      unitPrice: Number(inst.amount) || 0,
-      total: Number(inst.amount) || 0,
-    }));
+    const list: PaymentNoteItem[] = [];
+    installments.forEach((inst, idx) => {
+      if (inst.isSplit && inst.subInstallments && inst.subInstallments.length > 0) {
+        inst.subInstallments.forEach((sub, sIdx) => {
+          list.push({
+            id: sub.id || `pni-inst-${idx + 1}-sub-${sIdx + 1}`,
+            title: `${inst.planName} - ${inst.periodName} (${sub.title})`,
+            description: `Abono fraccionado (${sub.status === 'paid' ? 'Pagado' : sub.status === 'overdue' ? 'Vencido' : 'En proceso'})${sub.voucherName ? ` • Voucher: ${sub.voucherName}` : ''}`,
+            quantity: 1,
+            unitPrice: Number(sub.amount) || 0,
+            total: Number(sub.amount) || 0,
+            status: sub.status === 'paid' ? 'paid' : 'in_process',
+            voucherUrl: sub.voucherUrl,
+            voucherName: sub.voucherName,
+            operationNumber: sub.operationNumber,
+            paidDate: sub.paidDate,
+            notes: sub.notes,
+            linkedMonthId: inst.id,
+          });
+        });
+      } else {
+        list.push({
+          id: inst.id || `pni-inst-${idx + 1}`,
+          title: `${inst.planName} - ${inst.periodName}`,
+          description: `Cuota mensual (${inst.status === 'paid' ? 'Pagado' : inst.status === 'overdue' ? 'Vencido' : 'En proceso'})${inst.voucherName ? ` • Voucher: ${inst.voucherName}` : ''}`,
+          quantity: 1,
+          unitPrice: Number(inst.amount) || 0,
+          total: Number(inst.amount) || 0,
+          status: inst.status === 'paid' ? 'paid' : 'in_process',
+          voucherUrl: inst.voucherUrl,
+          voucherName: inst.voucherName,
+          operationNumber: inst.operationNumber,
+          paidDate: inst.paidDate,
+          notes: inst.notes,
+          linkedMonthId: inst.id,
+        });
+      }
+    });
+    return list;
   };
 
   const syncAllItems = (
@@ -828,9 +972,23 @@ export const PaymentNotesModule: React.FC = () => {
       amount?: number;
     }[] = [];
 
-    // De los meses de membresía
+    // De los meses de membresía y sus sub-abonos
     formData.membershipInstallments?.forEach((m, i) => {
-      if (m.voucherUrl) {
+      if (m.isSplit && m.subInstallments && m.subInstallments.length > 0) {
+        m.subInstallments.forEach((sub, sIdx) => {
+          if (sub.voucherUrl) {
+            list.push({
+              sourceLabel: `Mes ${m.monthNumber || i + 1} (${sub.title || `Abono ${sIdx + 1}`})`,
+              url: sub.voucherUrl,
+              name: sub.voucherName || `Voucher_Mes_${i + 1}_Sub_${sIdx + 1}`,
+              operationNumber: sub.operationNumber,
+              paidDate: sub.paidDate,
+              notes: sub.notes,
+              amount: sub.amount,
+            });
+          }
+        });
+      } else if (m.voucherUrl) {
         list.push({
           sourceLabel: `Mes ${m.monthNumber || i + 1} (${m.periodName})`,
           url: m.voucherUrl,
@@ -979,6 +1137,127 @@ export const PaymentNotesModule: React.FC = () => {
       voucherName: undefined,
     });
     toast(`Voucher del Mes ${idx + 1} eliminado.`);
+  };
+
+  // Subir voucher a un sub-abono (con auto-OCR)
+  const handleUploadSubVoucher = (monthIdx: number, subIdx: number, file: File | undefined) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast('El voucher no debe superar los 10MB.', 'warning');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const url = reader.result as string;
+      const targetSub = formData.membershipInstallments?.[monthIdx]?.subInstallments?.[subIdx];
+      const subAmount = targetSub ? Number(targetSub.amount) || 0 : 0;
+
+      handleUpdateSubInstallment(monthIdx, subIdx, {
+        voucherUrl: url,
+        voucherName: file.name,
+        status: 'paid',
+        paidDate: targetSub?.paidDate || new Date().toISOString().split('T')[0],
+      });
+      toast(`Voucher "${file.name}" adjuntado al abono.`);
+
+      if (file.type.startsWith('image/')) {
+        await runOcrOnImage(`sub-${monthIdx}-${subIdx}`, file, (ocrData) => {
+          const patch: Partial<MembershipSubInstallment> = {};
+          if (ocrData.operationNumber) patch.operationNumber = ocrData.operationNumber;
+          if (ocrData.date) patch.paidDate = ocrData.date;
+          if (ocrData.amount) {
+            if (ocrData.amount > subAmount) {
+              patch.notes = `Voucher por ${formData.currencySymbol} ${ocrData.amount.toFixed(2)}`;
+            } else if (!targetSub?.notes) {
+              patch.notes = ocrData.notes;
+            }
+          }
+          handleUpdateSubInstallment(monthIdx, subIdx, patch);
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Pegar voucher desde el portapapeles a un sub-abono
+  const handlePasteSubVoucher = async (monthIdx: number, subIdx: number) => {
+    try {
+      if (navigator.clipboard?.read) {
+        const clipboardItems = await navigator.clipboard.read();
+        for (const item of clipboardItems) {
+          const imageType = item.types.find((t) => t.startsWith('image/'));
+          if (imageType) {
+            const blob = await item.getType(imageType);
+            const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
+            const file = new File([blob], `Voucher_Pegado_${dateStr}.png`, { type: imageType });
+            handleUploadSubVoucher(monthIdx, subIdx, file);
+            toast('¡Voucher pegado desde el portapapeles! Analizando con OCR...');
+            return;
+          }
+        }
+      }
+      toast('No se encontró imagen en el portapapeles. Copia la captura del voucher y presiona de nuevo.', 'warning');
+    } catch (err) {
+      toast('Haz clic sobre esta tarjeta y presiona Ctrl + V para pegar la captura.', 'info');
+    }
+  };
+
+  // Capturar evento Ctrl + V en tarjeta de sub-abono
+  const handleCardSubPaste = (e: React.ClipboardEvent, monthIdx: number, subIdx: number) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
+          const renamed = new File([file], `Voucher_Pegado_${dateStr}.png`, { type: file.type });
+          handleUploadSubVoucher(monthIdx, subIdx, renamed);
+          toast('¡Voucher capturado con Ctrl + V! Analizando con OCR...');
+          break;
+        }
+      }
+    }
+  };
+
+  // Remover voucher de un sub-abono
+  const handleRemoveSubVoucher = (monthIdx: number, subIdx: number) => {
+    handleUpdateSubInstallment(monthIdx, subIdx, {
+      voucherUrl: undefined,
+      voucherName: undefined,
+    });
+    toast('Voucher del abono eliminado.');
+  };
+
+  // Vincular voucher existente a un sub-abono
+  const handleLinkVoucherToSubInstallment = (
+    monthIdx: number,
+    subIdx: number,
+    source: { url: string; name: string; operationNumber?: string; paidDate?: string; notes?: string }
+  ) => {
+    handleUpdateSubInstallment(monthIdx, subIdx, {
+      voucherUrl: source.url,
+      voucherName: source.name,
+      operationNumber: source.operationNumber || undefined,
+      paidDate: source.paidDate || new Date().toISOString().split('T')[0],
+      status: 'paid',
+      notes: source.notes ? `Voucher compartido: ${source.notes}` : undefined,
+    });
+    toast('Voucher vinculado al abono. Marcado como Pagado.');
+  };
+
+  // Re-escanear OCR en sub-abono
+  const handleReRunOcrSubInstallment = (monthIdx: number, subIdx: number) => {
+    const sub = formData.membershipInstallments?.[monthIdx]?.subInstallments?.[subIdx];
+    if (!sub?.voucherUrl) return;
+    runOcrOnImage(`sub-${monthIdx}-${subIdx}`, sub.voucherUrl, (ocrData) => {
+      const patch: Partial<MembershipSubInstallment> = {};
+      if (ocrData.operationNumber) patch.operationNumber = ocrData.operationNumber;
+      if (ocrData.date) patch.paidDate = ocrData.date;
+      if (ocrData.notes && !sub.notes) patch.notes = ocrData.notes;
+      handleUpdateSubInstallment(monthIdx, subIdx, patch);
+    });
   };
 
   // Subir voucher a un servicio extra (con auto-OCR)
@@ -1858,7 +2137,11 @@ export const PaymentNotesModule: React.FC = () => {
                       <div
                         key={inst.id || idx}
                         tabIndex={0}
-                        onPaste={(e) => handleCardPaste(e, idx, false)}
+                        onPaste={(e) => {
+                          if (!inst.isSplit) {
+                            handleCardPaste(e, idx, false);
+                          }
+                        }}
                         className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 space-y-3 transition hover:border-purple-300 dark:hover:border-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
                       >
                         {/* Fila Principal: Encabezado y Datos del Mes */}
@@ -1900,11 +2183,18 @@ export const PaymentNotesModule: React.FC = () => {
                             />
                           </div>
 
-                          {/* Monto */}
+                          {/* Monto Total del Mes */}
                           <div className="sm:col-span-3">
-                            <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
-                              Monto ({formData.currencySymbol})
-                            </label>
+                            <div className="flex items-center justify-between mb-0.5">
+                              <label className="block text-[10px] font-bold text-slate-400">
+                                Monto Total ({formData.currencySymbol})
+                              </label>
+                              {inst.isSplit && (
+                                <span className="text-[9px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-tight">
+                                  Suma Abonos
+                                </span>
+                              )}
+                            </div>
                             <div className="relative">
                               <input
                                 type="number"
@@ -1921,16 +2211,31 @@ export const PaymentNotesModule: React.FC = () => {
                             </div>
                           </div>
 
-                          {/* Botón Eliminar Mes y Dividir 50/50 */}
+                          {/* Switcher 50% Fraccionar y Botón Eliminar Mes */}
                           <div className="sm:col-span-2 flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => handleSplitInstallment5050(idx)}
-                              className="px-2 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 transition cursor-pointer text-[10px] font-black flex items-center gap-1 shadow-2xs active:scale-95"
-                              title="Dividir este mes en 50% Adelanto (Quincena) y 50% Saldo (Fin de mes)"
-                            >
-                              <span>➗ 50% / 50%</span>
-                            </button>
+                            {/* Switcher Fraccionar */}
+                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-xl border border-purple-200 dark:border-purple-800 bg-white dark:bg-slate-900 shadow-2xs">
+                              <span className="text-[10px] font-black text-purple-700 dark:text-purple-300">
+                                50%
+                              </span>
+                              <button
+                                type="button"
+                                role="switch"
+                                aria-checked={inst.isSplit}
+                                onClick={() => handleToggleSplitMonth(idx)}
+                                className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                  inst.isSplit ? 'bg-purple-600' : 'bg-slate-300 dark:bg-slate-700'
+                                }`}
+                                title={inst.isSplit ? 'Desactivar pago fraccionado' : 'Activar pago fraccionado en 50% Adelanto y 50% Saldo'}
+                              >
+                                <span
+                                  className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                                    inst.isSplit ? 'translate-x-3.5' : 'translate-x-0'
+                                  }`}
+                                />
+                              </button>
+                            </div>
+
                             <button
                               type="button"
                               onClick={() => handleDeleteInstallment(idx)}
@@ -1942,240 +2247,517 @@ export const PaymentNotesModule: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Fila Secundaria: Voucher Adjunto, OCR y Estado del Mes */}
-                        <div className="pt-2 border-t border-slate-200/70 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
-                          {/* CAMPO PARA ADJUNTAR VOUCHER */}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                              <Paperclip className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                              <span>Voucher de Pago:</span>
-                            </span>
-
-                            {inst.voucherUrl ? (
-                              <div className="flex items-center gap-1.5 p-1 px-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800">
-                                <FileCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 max-w-[160px] sm:max-w-[200px] truncate">
-                                  {inst.voucherName || 'Voucher adjuntado'}
+                        {/* CASO A: SI ESTÁ FRACCIONADO (50% ACTIVADO) -> MOSTRAR SUBCARDS Y OCULTAR CAMPOS DIRECTOS */}
+                        {inst.isSplit ? (
+                          <div className="pt-3 border-t border-purple-200/80 dark:border-purple-900/60 space-y-3">
+                            {/* Barra de cabecera de abonos */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 bg-purple-50/70 dark:bg-purple-950/40 p-2.5 rounded-xl border border-purple-200/60 dark:border-purple-800/60">
+                              <div className="flex items-center gap-2">
+                                <Split className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                                <span className="text-xs font-black text-purple-900 dark:text-purple-100">
+                                  Abonos Fraccionados del Mes ({inst.subInstallments?.length || 0})
                                 </span>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-200/60 dark:bg-purple-900/80 text-purple-800 dark:text-purple-200">
+                                  Total: {formData.currencySymbol} {(Number(inst.amount) || 0).toFixed(2)}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    setViewingVoucher({
-                                      url: inst.voucherUrl!,
-                                      name: inst.voucherName || `Voucher_Mes_${idx + 1}`,
-                                    })
-                                  }
-                                  className="p-1 rounded-lg hover:bg-emerald-200/60 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 cursor-pointer ml-1"
-                                  title="Ver comprobante adjunto"
+                                  onClick={() => handleSplitMonth5050(idx)}
+                                  className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-[10px] font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                                  title="Generar automáticamente 2 abonos exactos de 50% Adelanto y 50% Saldo"
                                 >
-                                  <Eye className="w-3.5 h-3.5" />
+                                  <Sparkles className="w-3 h-3 text-purple-600" />
+                                  <span>Re-dividir 50% / 50%</span>
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleReRunOcrInstallment(idx)}
-                                  disabled={ocrProcessingKey === `inst-${idx}`}
-                                  className="p-1 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-950/60 text-purple-600 cursor-pointer disabled:opacity-50"
-                                  title="Escanear voucher con OCR para extraer N° de Operación y Monto"
+                                  onClick={() => handleAddSubInstallment(idx)}
+                                  className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
                                 >
-                                  {ocrProcessingKey === `inst-${idx}` ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-600" />
-                                  ) : (
-                                    <Sparkles className="w-3.5 h-3.5" />
-                                  )}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveVoucher(idx)}
-                                  className="p-1 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-950/60 text-rose-500 cursor-pointer"
-                                  title="Eliminar voucher"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Plus className="w-3 h-3" />
+                                  <span>Añadir Abono</span>
                                 </button>
                               </div>
-                            ) : (
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-purple-500 dark:hover:border-purple-500 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 text-xs font-bold cursor-pointer transition shadow-2xs hover:text-purple-600">
-                                  <UploadCloud className="w-3.5 h-3.5 text-purple-600" />
-                                  <span>Adjuntar Voucher (Auto-OCR)</span>
-                                  <input
-                                    type="file"
-                                    accept="image/*,application/pdf"
-                                    className="hidden"
-                                    onChange={(e) => handleUploadVoucher(idx, e.target.files?.[0])}
-                                  />
-                                </label>
+                            </div>
 
-                                <button
-                                  type="button"
-                                  onClick={() => handlePasteFromClipboard(idx, false)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 text-xs font-bold cursor-pointer transition shadow-2xs"
-                                  title="Pegar imagen del voucher copiada al portapapeles (o presiona Ctrl + V)"
+                            {/* Lista de Subcards */}
+                            <div className="space-y-3 pl-1 sm:pl-3 border-l-2 border-purple-300 dark:border-purple-800">
+                              {(inst.subInstallments || []).map((sub, sIdx) => (
+                                <div
+                                  key={sub.id || sIdx}
+                                  tabIndex={0}
+                                  onPaste={(e) => handleCardSubPaste(e, idx, sIdx)}
+                                  className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs space-y-2.5 hover:border-purple-400 dark:hover:border-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition"
                                 >
-                                  <ClipboardPaste className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                                  <span>Pegar Voucher (Ctrl+V)</span>
-                                </button>
+                                  {/* Fila 1: Badge Abono + Descripción / Porcentaje + Monto + Eliminar */}
+                                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
+                                    <div className="sm:col-span-6 flex items-center gap-2">
+                                      <span className="px-2 py-1 rounded-lg bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 text-[10px] font-black shrink-0">
+                                        Abono {sIdx + 1}
+                                      </span>
+                                      <div className="flex-1 min-w-0">
+                                        <label className="block text-[9.5px] font-bold text-slate-400 mb-0.5">
+                                          Descripción / Porcentaje del Abono
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={sub.title}
+                                          onChange={(e) => handleUpdateSubInstallment(idx, sIdx, { title: e.target.value })}
+                                          placeholder="Ej. 50% Adelanto, 1ra Quincena, 50% Saldo..."
+                                          className="w-full px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-bold bg-slate-50/70 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                                        />
+                                      </div>
+                                    </div>
 
-                                {availableVouchers.length > 0 && (
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-[10px] text-slate-400">o vincular:</span>
-                                    {availableVouchers.slice(0, 2).map((av, avIdx) => (
+                                    <div className="sm:col-span-4">
+                                      <label className="block text-[9.5px] font-bold text-slate-400 mb-0.5">
+                                        Monto ({formData.currencySymbol})
+                                      </label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={sub.amount}
+                                        onChange={(e) => handleUpdateSubInstallment(idx, sIdx, { amount: Number(e.target.value) || 0 })}
+                                        className="w-full px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-black font-mono bg-slate-50/70 dark:bg-slate-950 text-emerald-600 dark:text-emerald-400"
+                                      />
+                                    </div>
+
+                                    <div className="sm:col-span-2 flex items-center justify-end">
                                       <button
-                                        key={avIdx}
                                         type="button"
-                                        onClick={() => handleLinkVoucherToInstallment(idx, av)}
-                                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-[10px] font-bold hover:bg-purple-100 transition cursor-pointer"
-                                        title={`Usar el voucher de ${av.sourceLabel}`}
+                                        onClick={() => handleDeleteSubInstallment(idx, sIdx)}
+                                        className="p-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer"
+                                        title="Eliminar este abono"
                                       >
-                                        <Link2 className="w-3 h-3" />
-                                        <span>Usar de {av.sourceLabel.split(' ')[0]} {av.sourceLabel.split(' ')[1]}</span>
+                                        <Trash2 className="w-3.5 h-3.5" />
                                       </button>
-                                    ))}
+                                    </div>
+                                  </div>
+
+                                  {/* Fila 2: Voucher de Pago y OCR para este sub-abono */}
+                                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                                        <Paperclip className="w-3 h-3 text-purple-600" />
+                                        <span>Voucher:</span>
+                                      </span>
+
+                                      {sub.voucherUrl ? (
+                                        <div className="flex items-center gap-1.5 p-0.5 px-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-[11px]">
+                                          <FileCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+                                          <span className="font-bold text-emerald-700 dark:text-emerald-300 max-w-[140px] truncate">
+                                            {sub.voucherName || 'Voucher adjuntado'}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => setViewingVoucher({ url: sub.voucherUrl!, name: sub.voucherName || `Voucher_Sub_${sIdx + 1}` })}
+                                            className="p-0.5 rounded hover:bg-emerald-200/60 text-emerald-800 cursor-pointer"
+                                            title="Ver comprobante"
+                                          >
+                                            <Eye className="w-3 h-3" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleReRunOcrSubInstallment(idx, sIdx)}
+                                            disabled={ocrProcessingKey === `sub-${idx}-${sIdx}`}
+                                            className="p-0.5 rounded hover:bg-purple-100 text-purple-600 cursor-pointer disabled:opacity-50"
+                                            title="Re-escanear OCR"
+                                          >
+                                            {ocrProcessingKey === `sub-${idx}-${sIdx}` ? (
+                                              <Loader2 className="w-3 h-3 animate-spin text-purple-600" />
+                                            ) : (
+                                              <Sparkles className="w-3 h-3" />
+                                            )}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleRemoveSubVoucher(idx, sIdx)}
+                                            className="p-0.5 rounded hover:bg-rose-100 text-rose-500 cursor-pointer"
+                                            title="Eliminar voucher"
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <label className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 hover:border-purple-500 bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-300 text-[10px] font-bold cursor-pointer transition shadow-2xs hover:text-purple-600">
+                                            <UploadCloud className="w-3 h-3 text-purple-600" />
+                                            <span>Adjuntar (Auto-OCR)</span>
+                                            <input
+                                              type="file"
+                                              accept="image/*,application/pdf"
+                                              className="hidden"
+                                              onChange={(e) => handleUploadSubVoucher(idx, sIdx, e.target.files?.[0])}
+                                            />
+                                          </label>
+                                          <button
+                                            type="button"
+                                            onClick={() => handlePasteSubVoucher(idx, sIdx)}
+                                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 text-[10px] font-bold cursor-pointer transition"
+                                            title="Pegar captura del voucher (o presiona Ctrl + V)"
+                                          >
+                                            <ClipboardPaste className="w-3 h-3" />
+                                            <span>Pegar (Ctrl+V)</span>
+                                          </button>
+                                          {availableVouchers.length > 0 && (
+                                            <div className="flex items-center gap-1">
+                                              <span className="text-[9px] text-slate-400">o:</span>
+                                              {availableVouchers.slice(0, 1).map((av, avIdx) => (
+                                                <button
+                                                  key={avIdx}
+                                                  type="button"
+                                                  onClick={() => handleLinkVoucherToSubInstallment(idx, sIdx, av)}
+                                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-[9px] font-bold hover:bg-purple-100 transition cursor-pointer"
+                                                  title={`Usar de ${av.sourceLabel}`}
+                                                >
+                                                  <Link2 className="w-2.5 h-2.5" />
+                                                  <span>Usar {av.sourceLabel.split(' ')[0]}</span>
+                                                </button>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                      {ocrProcessingKey === `sub-${idx}-${sIdx}` && (
+                                        <span className="text-[10px] font-bold text-purple-600 flex items-center gap-1 animate-pulse">
+                                          <Loader2 className="w-3 h-3 animate-spin" />
+                                          <span>Analizando OCR...</span>
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* Estado del Sub-Abono */}
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateSubInstallment(idx, sIdx, { status: 'paid', paidDate: sub.paidDate || new Date().toISOString().split('T')[0] })}
+                                        className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold flex items-center gap-1 cursor-pointer ${
+                                          sub.status === 'paid' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 opacity-60 hover:opacity-100'
+                                        }`}
+                                      >
+                                        <CheckCircle2 className="w-3 h-3" />
+                                        <span>Pagado</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateSubInstallment(idx, sIdx, { status: 'in_process' })}
+                                        className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold flex items-center gap-1 cursor-pointer ${
+                                          sub.status === 'in_process' ? 'bg-amber-500 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 opacity-60 hover:opacity-100'
+                                        }`}
+                                      >
+                                        <Clock className="w-3 h-3" />
+                                        <span>En Proceso</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateSubInstallment(idx, sIdx, { status: 'overdue' })}
+                                        className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold flex items-center gap-1 cursor-pointer ${
+                                          sub.status === 'overdue' || sub.status === 'delayed' ? 'bg-rose-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 opacity-60 hover:opacity-100'
+                                        }`}
+                                      >
+                                        <AlertCircle className="w-3 h-3" />
+                                        <span>Retrasado</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateSubInstallment(idx, sIdx, { status: 'inactive' })}
+                                        className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold flex items-center gap-1 cursor-pointer ${
+                                          sub.status === 'inactive' ? 'bg-slate-700 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 opacity-60 hover:opacity-100'
+                                        }`}
+                                      >
+                                        <Clock className="w-3 h-3" />
+                                        <span>No Activo</span>
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Fila 3: Fecha Vencimiento, N° Op, Fecha Abono, Nota */}
+                                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-12 gap-2 text-xs">
+                                    <div className="sm:col-span-3">
+                                      <label className="block text-[9px] font-bold text-slate-400 mb-0.5">Fecha Vencimiento</label>
+                                      <input
+                                        type="date"
+                                        value={sub.dueDate || ''}
+                                        onChange={(e) => handleUpdateSubInstallment(idx, sIdx, { dueDate: e.target.value })}
+                                        className="w-full px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-semibold bg-slate-50/70 dark:bg-slate-950 text-slate-800 dark:text-slate-200"
+                                      />
+                                    </div>
+                                    <div className="sm:col-span-3">
+                                      <label className="block text-[9px] font-bold text-slate-400 mb-0.5">N° de Operación</label>
+                                      <input
+                                        type="text"
+                                        value={sub.operationNumber || ''}
+                                        onChange={(e) => handleUpdateSubInstallment(idx, sIdx, { operationNumber: e.target.value })}
+                                        placeholder="Ej. Op: 06083993"
+                                        className="w-full px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold bg-slate-50/70 dark:bg-slate-950 text-slate-800 dark:text-slate-200"
+                                      />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                      <label className="block text-[9px] font-bold text-slate-400 mb-0.5">Fecha Abono</label>
+                                      <input
+                                        type="date"
+                                        value={sub.paidDate || ''}
+                                        onChange={(e) => handleUpdateSubInstallment(idx, sIdx, { paidDate: e.target.value })}
+                                        className="w-full px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-bold bg-slate-50/70 dark:bg-slate-950 text-slate-800 dark:text-slate-200"
+                                      />
+                                    </div>
+                                    <div className="sm:col-span-4">
+                                      <label className="block text-[9px] font-bold text-slate-400 mb-0.5">Nota / Desglose</label>
+                                      <input
+                                        type="text"
+                                        value={sub.notes || ''}
+                                        onChange={(e) => handleUpdateSubInstallment(idx, sIdx, { notes: e.target.value })}
+                                        placeholder="Ej. 50% adelanto del plan..."
+                                        className="w-full px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-800 text-xs bg-slate-50/70 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          /* CASO B: SI NO ESTÁ FRACCIONADO -> MOSTRAR CAMPOS DIRECTOS NORMALES */
+                          <>
+                            {/* Fila Secundaria: Voucher Adjunto, OCR y Estado del Mes */}
+                            <div className="pt-2 border-t border-slate-200/70 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
+                              {/* CAMPO PARA ADJUNTAR VOUCHER */}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                  <Paperclip className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                                  <span>Voucher de Pago:</span>
+                                </span>
+
+                                {inst.voucherUrl ? (
+                                  <div className="flex items-center gap-1.5 p-1 px-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800">
+                                    <FileCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                    <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 max-w-[160px] sm:max-w-[200px] truncate">
+                                      {inst.voucherName || 'Voucher adjuntado'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setViewingVoucher({
+                                          url: inst.voucherUrl!,
+                                          name: inst.voucherName || `Voucher_Mes_${idx + 1}`,
+                                        })
+                                      }
+                                      className="p-1 rounded-lg hover:bg-emerald-200/60 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 cursor-pointer ml-1"
+                                      title="Ver comprobante adjunto"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleReRunOcrInstallment(idx)}
+                                      disabled={ocrProcessingKey === `inst-${idx}`}
+                                      className="p-1 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-950/60 text-purple-600 cursor-pointer disabled:opacity-50"
+                                      title="Escanear voucher con OCR para extraer N° de Operación y Monto"
+                                    >
+                                      {ocrProcessingKey === `inst-${idx}` ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-600" />
+                                      ) : (
+                                        <Sparkles className="w-3.5 h-3.5" />
+                                      )}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveVoucher(idx)}
+                                      className="p-1 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-950/60 text-rose-500 cursor-pointer"
+                                      title="Eliminar voucher"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-purple-500 dark:hover:border-purple-500 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 text-xs font-bold cursor-pointer transition shadow-2xs hover:text-purple-600">
+                                      <UploadCloud className="w-3.5 h-3.5 text-purple-600" />
+                                      <span>Adjuntar Voucher (Auto-OCR)</span>
+                                      <input
+                                        type="file"
+                                        accept="image/*,application/pdf"
+                                        className="hidden"
+                                        onChange={(e) => handleUploadVoucher(idx, e.target.files?.[0])}
+                                      />
+                                    </label>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePasteFromClipboard(idx, false)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 text-xs font-bold cursor-pointer transition shadow-2xs"
+                                      title="Pegar imagen del voucher copiada al portapapeles (o presiona Ctrl + V)"
+                                    >
+                                      <ClipboardPaste className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                                      <span>Pegar Voucher (Ctrl+V)</span>
+                                    </button>
+
+                                    {availableVouchers.length > 0 && (
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-[10px] text-slate-400">o vincular:</span>
+                                        {availableVouchers.slice(0, 2).map((av, avIdx) => (
+                                          <button
+                                            key={avIdx}
+                                            type="button"
+                                            onClick={() => handleLinkVoucherToInstallment(idx, av)}
+                                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-[10px] font-bold hover:bg-purple-100 transition cursor-pointer"
+                                            title={`Usar el voucher de ${av.sourceLabel}`}
+                                          >
+                                            <Link2 className="w-3 h-3" />
+                                            <span>Usar de {av.sourceLabel.split(' ')[0]} {av.sourceLabel.split(' ')[1]}</span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
+
+                                {ocrProcessingKey === `inst-${idx}` && (
+                                  <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1 animate-pulse">
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    <span>{ocrStatusText || 'Extrayendo datos con OCR...'}</span>
+                                  </span>
+                                )}
                               </div>
-                            )}
 
-                            {ocrProcessingKey === `inst-${idx}` && (
-                              <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1 animate-pulse">
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                                <span>{ocrStatusText || 'Extrayendo datos con OCR...'}</span>
-                              </span>
-                            )}
-                          </div>
+                              {/* CAMPO DE ESTADO: PAGADO, EN PROCESO, RETRASADO, NO ACTIVO */}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[11px] font-bold text-slate-400 mr-1">
+                                  Estado:
+                                </span>
 
-                          {/* CAMPO DE ESTADO: PAGADO, EN PROCESO, RETRASADO, NO ACTIVO */}
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[11px] font-bold text-slate-400 mr-1">
-                              Estado:
-                            </span>
+                                {/* Botón Pagado */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleUpdateInstallment(idx, {
+                                      status: 'paid',
+                                      paidDate: inst.paidDate || new Date().toISOString().split('T')[0],
+                                    });
+                                  }}
+                                  className={`px-2.5 py-1 rounded-xl text-xs font-extrabold transition flex items-center gap-1 cursor-pointer ${
+                                    inst.status === 'paid'
+                                      ? 'bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-500/30'
+                                      : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 opacity-60 hover:opacity-100'
+                                  }`}
+                                >
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  <span>Pagado</span>
+                                </button>
 
-                            {/* Botón Pagado */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                handleUpdateInstallment(idx, {
-                                  status: 'paid',
-                                  paidDate: inst.paidDate || new Date().toISOString().split('T')[0],
-                                });
-                              }}
-                              className={`px-2.5 py-1 rounded-xl text-xs font-extrabold transition flex items-center gap-1 cursor-pointer ${
-                                inst.status === 'paid'
-                                  ? 'bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-500/30'
-                                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 opacity-60 hover:opacity-100'
-                              }`}
-                            >
-                              <CheckCircle2 className="w-3 h-3" />
-                              <span>Pagado</span>
-                            </button>
+                                {/* Botón En Proceso */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateInstallment(idx, { status: 'in_process' })}
+                                  className={`px-2.5 py-1 rounded-xl text-xs font-extrabold transition flex items-center gap-1 cursor-pointer ${
+                                    inst.status === 'in_process'
+                                      ? 'bg-amber-500 text-white shadow-xs ring-2 ring-amber-500/30'
+                                      : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 opacity-60 hover:opacity-100'
+                                  }`}
+                                >
+                                  <Clock className="w-3 h-3" />
+                                  <span>En Proceso</span>
+                                </button>
 
-                            {/* Botón En Proceso */}
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateInstallment(idx, { status: 'in_process' })}
-                              className={`px-2.5 py-1 rounded-xl text-xs font-extrabold transition flex items-center gap-1 cursor-pointer ${
-                                inst.status === 'in_process'
-                                  ? 'bg-amber-500 text-white shadow-xs ring-2 ring-amber-500/30'
-                                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 opacity-60 hover:opacity-100'
-                              }`}
-                            >
-                              <Clock className="w-3 h-3" />
-                              <span>En Proceso</span>
-                            </button>
+                                {/* Botón Retrasado */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateInstallment(idx, { status: 'overdue' })}
+                                  className={`px-2.5 py-1 rounded-xl text-xs font-extrabold transition flex items-center gap-1 cursor-pointer ${
+                                    inst.status === 'overdue' || inst.status === 'delayed'
+                                      ? 'bg-rose-600 text-white shadow-xs ring-2 ring-rose-500/30'
+                                      : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 opacity-60 hover:opacity-100'
+                                  }`}
+                                >
+                                  <AlertCircle className="w-3 h-3" />
+                                  <span>Retrasado</span>
+                                </button>
 
-                            {/* Botón Retrasado */}
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateInstallment(idx, { status: 'overdue' })}
-                              className={`px-2.5 py-1 rounded-xl text-xs font-extrabold transition flex items-center gap-1 cursor-pointer ${
-                                inst.status === 'overdue' || inst.status === 'delayed'
-                                  ? 'bg-rose-600 text-white shadow-xs ring-2 ring-rose-500/30'
-                                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 opacity-60 hover:opacity-100'
-                              }`}
-                            >
-                              <AlertCircle className="w-3 h-3" />
-                              <span>Retrasado</span>
-                            </button>
+                                {/* Botón No Activo */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateInstallment(idx, { status: 'inactive' })}
+                                  className={`px-2.5 py-1 rounded-xl text-xs font-extrabold transition flex items-center gap-1 cursor-pointer ${
+                                    inst.status === 'inactive'
+                                      ? 'bg-slate-700 text-white shadow-xs ring-2 ring-slate-500/30'
+                                      : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 opacity-60 hover:opacity-100'
+                                  }`}
+                                >
+                                  <Clock className="w-3 h-3" />
+                                  <span>No Activo</span>
+                                </button>
+                              </div>
+                            </div>
 
-                            {/* Botón No Activo */}
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateInstallment(idx, { status: 'inactive' })}
-                              className={`px-2.5 py-1 rounded-xl text-xs font-extrabold transition flex items-center gap-1 cursor-pointer ${
-                                inst.status === 'inactive'
-                                  ? 'bg-slate-700 text-white shadow-xs ring-2 ring-slate-500/30'
-                                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 opacity-60 hover:opacity-100'
-                              }`}
-                            >
-                              <Clock className="w-3 h-3" />
-                              <span>No Activo</span>
-                            </button>
-                          </div>
-                        </div>
+                            {/* Fila Terciaria: Fecha Vencimiento, N° de Operación, Fecha de Abono y Nota Adicional */}
+                            <div className="pt-2 border-t border-slate-200/50 dark:border-slate-800/60 grid grid-cols-1 sm:grid-cols-12 gap-2 text-xs">
+                              {/* Fecha de Vencimiento */}
+                              <div className="sm:col-span-3">
+                                <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
+                                  Fecha Vencimiento
+                                </label>
+                                <input
+                                  type="date"
+                                  value={inst.dueDate || ''}
+                                  onChange={(e) =>
+                                    handleUpdateInstallment(idx, { dueDate: e.target.value })
+                                  }
+                                  className="w-full px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-semibold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                                />
+                              </div>
 
-                        {/* Fila Terciaria: Fecha Vencimiento, N° de Operación, Fecha de Abono y Nota Adicional */}
-                        <div className="pt-2 border-t border-slate-200/50 dark:border-slate-800/60 grid grid-cols-1 sm:grid-cols-12 gap-2 text-xs">
-                          {/* Fecha de Vencimiento */}
-                          <div className="sm:col-span-3">
-                            <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
-                              Fecha Vencimiento
-                            </label>
-                            <input
-                              type="date"
-                              value={inst.dueDate || ''}
-                              onChange={(e) =>
-                                handleUpdateInstallment(idx, { dueDate: e.target.value })
-                              }
-                              className="w-full px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-semibold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
-                            />
-                          </div>
+                              {/* N° de Operación */}
+                              <div className="sm:col-span-3">
+                                <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
+                                  N° de Operación
+                                </label>
+                                <input
+                                  type="text"
+                                  value={inst.operationNumber || ''}
+                                  onChange={(e) =>
+                                    handleUpdateInstallment(idx, { operationNumber: e.target.value })
+                                  }
+                                  placeholder="Ej. Op: 1827491"
+                                  className="w-full px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                                />
+                              </div>
 
-                          {/* N° de Operación */}
-                          <div className="sm:col-span-3">
-                            <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
-                              N° de Operación
-                            </label>
-                            <input
-                              type="text"
-                              value={inst.operationNumber || ''}
-                              onChange={(e) =>
-                                handleUpdateInstallment(idx, { operationNumber: e.target.value })
-                              }
-                              placeholder="Ej. Op: 1827491"
-                              className="w-full px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
-                            />
-                          </div>
+                              {/* Fecha de Abono */}
+                              <div className="sm:col-span-2">
+                                <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
+                                  Fecha Abono
+                                </label>
+                                <input
+                                  type="date"
+                                  value={inst.paidDate || ''}
+                                  onChange={(e) =>
+                                    handleUpdateInstallment(idx, { paidDate: e.target.value })
+                                  }
+                                  className="w-full px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                                />
+                              </div>
 
-                          {/* Fecha de Abono */}
-                          <div className="sm:col-span-2">
-                            <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
-                              Fecha Abono
-                            </label>
-                            <input
-                              type="date"
-                              value={inst.paidDate || ''}
-                              onChange={(e) =>
-                                handleUpdateInstallment(idx, { paidDate: e.target.value })
-                              }
-                              className="w-full px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
-                            />
-                          </div>
-
-                          {/* Nota Adicional / Desglose */}
-                          <div className="sm:col-span-4">
-                            <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
-                              Nota / Desglose (ej. 50% adelanto)
-                            </label>
-                            <input
-                              type="text"
-                              value={inst.notes || ''}
-                              onChange={(e) =>
-                                handleUpdateInstallment(idx, { notes: e.target.value })
-                              }
-                              placeholder="Ej. 50% adelanto mensual..."
-                              className="w-full px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
-                            />
-                          </div>
-                        </div>
+                              {/* Nota Adicional / Desglose */}
+                              <div className="sm:col-span-4">
+                                <label className="block text-[10px] font-bold text-slate-400 mb-0.5">
+                                  Nota / Desglose (ej. 50% adelanto)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={inst.notes || ''}
+                                  onChange={(e) =>
+                                    handleUpdateInstallment(idx, { notes: e.target.value })
+                                  }
+                                  placeholder="Ej. 50% adelanto mensual..."
+                                  className="w-full px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+                                />
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>
