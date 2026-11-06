@@ -34,7 +34,7 @@ export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
       </div>
 
       {/* Accesos Directos Responsivos */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 max-w-7xl">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3.5 sm:gap-4.5">
         {/* SUBMÓDULO 1: REDES SOCIALES */}
         <button
           type="button"

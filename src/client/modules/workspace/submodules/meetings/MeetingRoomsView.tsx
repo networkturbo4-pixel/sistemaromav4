@@ -146,7 +146,7 @@ export const MeetingRoomsView: React.FC<MeetingRoomsViewProps> = ({
       {loading ? (
         <div className="py-16 text-center text-slate-400 text-xs">Cargando salas virtuales...</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5">
           {rooms.map((room) => {
             const IconComponent = ICON_MAP[room.icon] || Video;
             const isCopied = copiedId === room.id;
