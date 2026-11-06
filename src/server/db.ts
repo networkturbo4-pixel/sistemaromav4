@@ -42,6 +42,9 @@ import {
   TenantDriveConfig,
   AppNotification,
   PushSubscriptionRecord,
+  BiolinkProfile,
+  SavedColorPalette,
+  GeneratedCodeHistoryItem,
 } from '../shared/types';
 import { ALL_PERMISSION_KEYS, PermissionKey } from '../shared/permissions';
 
@@ -67,6 +70,9 @@ export interface DatabaseState {
   driveFolderBlueprints: DriveFolderBlueprint[];
   notifications: AppNotification[];
   pushSubscriptions: PushSubscriptionRecord[];
+  biolinks: BiolinkProfile[];
+  savedPalettes: SavedColorPalette[];
+  codeHistory: GeneratedCodeHistoryItem[];
 }
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -154,6 +160,9 @@ export class DatabaseManager {
         if (!Array.isArray(parsed.driveFolderBlueprints)) parsed.driveFolderBlueprints = [];
         if (!Array.isArray(parsed.notifications)) parsed.notifications = [];
         if (!Array.isArray(parsed.pushSubscriptions)) parsed.pushSubscriptions = [];
+        if (!Array.isArray(parsed.biolinks)) parsed.biolinks = [];
+        if (!Array.isArray(parsed.savedPalettes)) parsed.savedPalettes = [];
+        if (!Array.isArray(parsed.codeHistory)) parsed.codeHistory = [];
 
         // Limpieza automática de artefactos HTML y de IA en copys y briefs existentes
         let dirtyPostsCleaned = 0;
@@ -197,6 +206,9 @@ export class DatabaseManager {
       driveFolderBlueprints: [],
       notifications: [],
       pushSubscriptions: [],
+      biolinks: [],
+      savedPalettes: [],
+      codeHistory: [],
     };
     return defaultState;
   }

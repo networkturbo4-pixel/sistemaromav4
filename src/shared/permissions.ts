@@ -43,6 +43,7 @@ export type PermissionKey =
   | 'workspace.view'
   | 'workspace.social.manage'
   | 'workspace.tasks.manage'
+  | 'workspace.tools.manage'
   // Módulo: Orden de Servicio (OS)
   | 'service_orders.view'
   | 'service_orders.create'
@@ -286,6 +287,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     key: 'workspace.tasks.manage',
     label: 'Gestionar Tareas y Flujo Operativo',
     description: 'Crear tareas operativas, mover estados Kanban, asignar colaboradores y prioridades.',
+    module: 'workspace',
+    moduleLabel: 'Workspace Operativo',
+  },
+  {
+    key: 'workspace.tools.manage',
+    label: 'Gestionar Herramientas Creativas (Paletas, Códigos y Biolinks)',
+    description: 'Generar y exportar paletas de color, códigos QR, códigos de barras y administrar perfiles de Biolink.',
     module: 'workspace',
     moduleLabel: 'Workspace Operativo',
   },

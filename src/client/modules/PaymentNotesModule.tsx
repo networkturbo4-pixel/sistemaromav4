@@ -54,6 +54,8 @@ import {
   Loader2,
   ClipboardPaste,
   Split,
+  Globe,
+  Share2,
 } from 'lucide-react';
 import { PaymentNoteLivePreview } from '../components/PaymentNoteLivePreview';
 import { copyTextToClipboard } from '../utils/clipboard';
@@ -104,6 +106,7 @@ export const PaymentNotesModule: React.FC = () => {
   const [showLivePreview, setShowLivePreview] = useState(true);
   const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false);
   const [viewingVoucher, setViewingVoucher] = useState<{ url: string; name: string } | null>(null);
+  const [copiedNoteCode, setCopiedNoteCode] = useState<string | null>(null);
 
   // Estados para OCR en Vouchers
   const [ocrProcessingKey, setOcrProcessingKey] = useState<string | null>(null);
@@ -3892,11 +3895,15 @@ export const PaymentNotesModule: React.FC = () => {
         </div>
       </div>
 
-      {/* TABLA DE NOTAS DE PAGO */}
+      {/* GRID DE CARDS DE NOTAS DE PAGO (5 COLS PC, 4 COLS LAPTOP, 3 COLS TABLET, 1 COL MOVIL) */}
       {loading ? (
-        <div className="p-12 text-center rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 animate-pulse">
-          <Receipt className="w-8 h-8 mx-auto text-slate-400 mb-2 animate-bounce" />
-          <p className="text-xs font-bold text-slate-500">Cargando comprobantes...</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5">
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
+            <div
+              key={i}
+              className="h-80 rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-slate-500/5 animate-pulse"
+            />
+          ))}
         </div>
       ) : filteredNotes.length === 0 ? (
         <div className="p-12 text-center rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
@@ -3923,381 +3930,265 @@ export const PaymentNotesModule: React.FC = () => {
           )}
         </div>
       ) : (
-        <div>
-          {/* VISTA DESKTOP: TABLA COMPLETA */}
-          <div className="hidden md:block overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-slate-500 font-extrabold text-[11px]">
-                    <th className="py-3 px-4">Código</th>
-                    <th className="py-3 px-4">Cliente / Empresa</th>
-                    <th className="py-3 px-4">Cotización</th>
-                    <th className="py-3 px-4">Emisión / Vencimiento</th>
-                    <th className="py-3 px-4 text-right">Total</th>
-                    <th className="py-3 px-4 text-right">Cobrado</th>
-                    <th className="py-3 px-4 text-center">Estado</th>
-                    <th className="py-3 px-4 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {filteredNotes.map((note) => {
-                    const isPaid = note.status === 'paid';
-                    const isPartial = note.status === 'partial';
-                    const isPending = note.status === 'pending';
-                    const isCancelled = note.status === 'cancelled';
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5">
+          {filteredNotes.map((note) => {
+            const isPaid = note.status === 'paid';
+            const isPartial = note.status === 'partial';
+            const isPending = note.status === 'pending';
+            const isCancelled = note.status === 'cancelled';
+            const pendingBalance = Math.max(0, Number(note.total) - Number(note.paidAmount || 0));
+            const paymentProgress = Math.min(
+              100,
+              Math.max(0, Math.round(((Number(note.paidAmount) || 0) / (Number(note.total) || 1)) * 100))
+            );
 
-                    return (
-                      <tr
-                        key={note.id}
-                        className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition"
+            // Cantidad de cuotas
+            const cuotasCount =
+              note.isMembership && note.membershipInstallments?.length
+                ? note.membershipInstallments.length
+                : note.items?.length || 1;
+
+            // Vistas registradas
+            const viewsCount = (note as any).viewsCount ?? (note as any).views ?? 0;
+
+            // Cliente & Marca
+            const clientDisplayName = note.clientName
+              ? note.companyName && note.companyName !== note.clientName
+                ? `${note.clientName} / ${note.companyName}`
+                : note.clientName
+              : note.companyName || 'Cliente General';
+
+            const clientSubname =
+              note.brandName ||
+              note.companyName ||
+              `${note.documentType} ${note.documentNumber || ''}` ||
+              'Sin marca';
+
+            // Iniciales para el avatar (estilo PB en la imagen)
+            const rawClient = note.clientName || note.companyName || 'CL';
+            const clientInitials =
+              rawClient
+                .split(' ')
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((w) => w[0])
+                .join('')
+                .toUpperCase() || 'CL';
+
+            const isCopied = copiedNoteCode === note.code;
+
+            return (
+              <div
+                key={note.id}
+                className="rounded-3xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs hover:shadow-lg transition-all duration-300 p-4 sm:p-5 flex flex-col justify-between space-y-3.5 hover:-translate-y-0.5 group"
+              >
+                <div className="space-y-3.5">
+                  {/* Fila 1: Código + Copiar & Badge de Estado */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span
+                        onClick={() => handleOpenEdit(note)}
+                        className="font-extrabold text-sm sm:text-base font-mono text-indigo-600 dark:text-indigo-400 tracking-tight cursor-pointer hover:underline truncate"
+                        title={`Nota de Pago ${note.code} - Click para ver o editar`}
                       >
-                        <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">
-                          {note.code}
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <p className="font-extrabold text-slate-900 dark:text-slate-100">
-                            {note.companyName}
-                          </p>
-                          <p className="text-[11px] text-slate-500">
-                            {note.documentType} {note.documentNumber}
-                          </p>
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          {note.quoteCode ? (
-                            <span className="px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-mono font-bold text-[10px] border border-blue-200 dark:border-blue-900/40">
-                              {note.quoteCode}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400 text-[11px]">Directa</span>
-                          )}
-                        </td>
-
-                        <td className="py-3.5 px-4 text-[11px] space-y-0.5">
-                          <p className="text-slate-700 dark:text-slate-300">
-                            {note.issueDate}
-                          </p>
-                          <p className="text-slate-400">
-                            Vence: <strong className="text-slate-600 dark:text-slate-400">{note.dueDate}</strong>
-                          </p>
-                        </td>
-
-                        <td className="py-3.5 px-4 text-right font-black font-mono text-slate-900 dark:text-slate-100 text-sm">
-                          {note.currencySymbol} {Number(note.total).toLocaleString('es-PE')}
-                        </td>
-
-                        <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                          {note.currencySymbol} {Number(note.paidAmount || 0).toLocaleString('es-PE')}
-                        </td>
-
-                        <td className="py-3.5 px-4 text-center">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-extrabold uppercase tracking-wider ${
-                              isPaid
-                                ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40'
-                                : isPending
-                                ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40'
-                                : isPartial
-                                ? 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800/40'
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                            }`}
-                          >
-                            {isPaid && <CheckCircle2 className="w-3 h-3" />}
-                            {isPending && <Clock className="w-3 h-3" />}
-                            {isPaid ? 'Pagado' : isPending ? 'Pendiente' : isPartial ? 'Parcial' : 'Anulado'}
-                          </span>
-                        </td>
-
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {/* Registrar Cobro Rápido */}
-                            {!isPaid && can('payments.edit') && (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenQuickPay(note)}
-                                className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] transition cursor-pointer flex items-center gap-1 shadow-2xs"
-                                title="Registrar cobro o abono recibido"
-                              >
-                                <Check className="w-3 h-3" />
-                                <span>Cobrar</span>
-                              </button>
-                            )}
-
-                            {/* Ver Comprobante Público */}
-                            <a
-                              href={`/p/pago/${note.publicToken}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-                              title="Abrir comprobante público imprimible"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </a>
-
-                            {/* Copiar Enlace */}
-                            <button
-                              type="button"
-                              onClick={() => handleCopyPublicLink(note)}
-                              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-                              title="Copiar enlace para el cliente"
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </button>
-
-                            {/* WhatsApp */}
-                            {note.whatsapp && can('payments.send') && (
-                              <button
-                                type="button"
-                                onClick={() => handleShareWhatsApp(note)}
-                                className="p-1.5 rounded-lg border border-emerald-500/20 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition cursor-pointer"
-                                title="Compartir por WhatsApp"
-                              >
-                                <MessageCircle className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-
-                            {/* Editar */}
-                            {can('payments.edit') && (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEdit(note)}
-                                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-                                title="Editar nota de pago"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-
-                            {/* Eliminar */}
-                            {can('payments.delete') && (
-                              <button
-                                type="button"
-                                onClick={() => handleDelete(note)}
-                                className="p-1.5 rounded-lg border border-rose-500/20 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition cursor-pointer"
-                                title="Eliminar comprobante"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* VISTA MÓVIL RESPONSIVE: ACORDEÓN DESGLOSABLE */}
-          <div className="md:hidden space-y-3">
-            {filteredNotes.map((note) => {
-              const isPaid = note.status === 'paid';
-              const isPartial = note.status === 'partial';
-              const isPending = note.status === 'pending';
-              const isCancelled = note.status === 'cancelled';
-              const isExpanded = expandedNoteId === note.id;
-              const pendingBalance = Math.max(0, Number(note.total) - Number(note.paidAmount || 0));
-
-              return (
-                <div
-                  key={note.id}
-                  className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs overflow-hidden transition-all duration-200"
-                >
-                  {/* Encabezado Desglosable (Clickable) */}
-                  <div
-                    onClick={() => setExpandedNoteId(isExpanded ? null : note.id)}
-                    className="p-4 cursor-pointer hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition select-none flex items-center justify-between gap-3"
-                  >
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono font-bold text-xs text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800/40">
-                          {note.code}
-                        </span>
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wide ${
-                            isPaid
-                              ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40'
-                              : isPending
-                              ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40'
-                              : isPartial
-                              ? 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800/40'
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                          }`}
-                        >
-                          {isPaid && <CheckCircle2 className="w-2.5 h-2.5" />}
-                          {isPending && <Clock className="w-2.5 h-2.5" />}
-                          {isPaid ? 'Pagado' : isPending ? 'Pendiente' : isPartial ? 'Parcial' : 'Anulado'}
-                        </span>
-                      </div>
-
-                      <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100 truncate">
-                        {note.companyName}
-                      </h4>
-                      <p className="text-[10px] text-slate-400">
-                        Vence: <strong className="text-slate-600 dark:text-slate-300">{note.dueDate}</strong>
-                      </p>
+                        {note.code}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const ok = await copyTextToClipboard(note.code);
+                          if (ok) {
+                            setCopiedNoteCode(note.code);
+                            setTimeout(() => setCopiedNoteCode(null), 2000);
+                            toast(`Código ${note.code} copiado.`);
+                          }
+                        }}
+                        className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition cursor-pointer shrink-0"
+                        title="Copiar código"
+                      >
+                        {isCopied ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-500" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <div className="text-right">
-                        <span className="text-[10px] text-slate-400 block font-bold uppercase tracking-wider">Total</span>
-                        <span className="font-mono font-black text-sm text-slate-900 dark:text-slate-100">
-                          {note.currencySymbol} {Number(note.total).toLocaleString('es-PE')}
+                    {/* Badge de Estado con Punto */}
+                    <div className="shrink-0">
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold tracking-wider uppercase border shadow-2xs ${
+                          isPaid
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800'
+                            : isPartial
+                            ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800'
+                            : isPending
+                            ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800'
+                            : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+                        }`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            isPaid
+                              ? 'bg-emerald-500'
+                              : isPartial
+                              ? 'bg-blue-500'
+                              : isPending
+                              ? 'bg-amber-500'
+                              : 'bg-slate-400'
+                          }`}
+                        />
+                        <span>
+                          {isPaid ? 'PAGADO' : isPartial ? 'EN PROCESO' : isPending ? 'PENDIENTE' : 'ANULADA'}
                         </span>
-                      </div>
-                      <div className="w-7 h-7 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500">
-                        {isExpanded ? (
-                          <ChevronUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4" />
-                        )}
-                      </div>
+                      </span>
                     </div>
                   </div>
 
-                  {/* Cuerpo Desglosado Expandible */}
-                  {isExpanded && (
-                    <div className="p-4 pt-1 border-t border-slate-100 dark:border-slate-800 space-y-3 bg-slate-50/40 dark:bg-slate-900/60 animate-fadeIn text-xs">
-                      {/* Metadatos en cuadrícula */}
-                      <div className="grid grid-cols-2 gap-2 text-[11px] pt-2">
-                        <div className="bg-white dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                          <span className="text-[10px] font-bold uppercase text-slate-400 block">Identificación</span>
-                          <span className="font-semibold text-slate-800 dark:text-slate-200">
-                            {note.documentType} {note.documentNumber || '-'}
-                          </span>
-                        </div>
+                  {/* Fila 2: Sub-badges (Vistas y Cuotas) */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/80 flex items-center gap-1.5">
+                      <Eye className="w-3.5 h-3.5 text-slate-400" />
+                      <span>{viewsCount} vistas</span>
+                    </div>
 
-                        <div className="bg-white dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                          <span className="text-[10px] font-bold uppercase text-slate-400 block">Cotización Asociada</span>
-                          {note.quoteCode ? (
-                            <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
-                              {note.quoteCode}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400">Cobro Directo</span>
-                          )}
-                        </div>
+                    <div className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/80 flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-purple-500" />
+                      <span>
+                        {cuotasCount} {cuotasCount === 1 ? 'cuota' : 'cuotas'}
+                      </span>
+                    </div>
+                  </div>
 
-                        <div className="bg-white dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                          <span className="text-[10px] font-bold uppercase text-slate-400 block">Fecha Emisión</span>
-                          <span className="text-slate-700 dark:text-slate-300 font-medium">
-                            {note.issueDate}
-                          </span>
-                        </div>
+                  {/* Fila 3: Card de Cliente */}
+                  <div className="p-3 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl font-black text-xs flex items-center justify-center shrink-0 shadow-2xs text-white bg-amber-600">
+                      {clientInitials}
+                    </div>
 
-                        <div className="bg-white dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                          <span className="text-[10px] font-bold uppercase text-slate-400 block">Cobrado / Saldo</span>
-                          <div className="flex items-center gap-1 font-mono font-bold">
-                            <span className="text-emerald-600 dark:text-emerald-400">
-                              {note.currencySymbol}{Number(note.paidAmount || 0).toLocaleString('es-PE')}
-                            </span>
-                            {pendingBalance > 0 && (
-                              <span className="text-amber-600 dark:text-amber-400 text-[10px]">
-                                (Resta {note.currencySymbol}{pendingBalance.toLocaleString('es-PE')})
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 truncate leading-tight"
+                        title={clientDisplayName}
+                      >
+                        {clientDisplayName}
+                      </p>
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
+                        {clientSubname}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Fila 4: Progreso de Pago */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px] font-extrabold tracking-wider">
+                      <span className="text-slate-400 dark:text-slate-500 uppercase">
+                        PROGRESO DE PAGO
+                      </span>
+                      <span className="text-slate-900 dark:text-slate-100 font-black text-xs font-mono">
+                        {paymentProgress}%
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          paymentProgress >= 100
+                            ? 'bg-emerald-500'
+                            : 'bg-indigo-600 dark:bg-indigo-500'
+                        }`}
+                        style={{ width: `${paymentProgress}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fila 5: Monto Total, Fecha y Saldo Pendiente */}
+                  <div className="space-y-2 pt-1">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <div>
+                        <span className="text-[9px] uppercase font-extrabold tracking-wider text-slate-400 dark:text-slate-500 block">
+                          MONTO TOTAL
+                        </span>
+                        <span className="text-sm sm:text-base font-black text-slate-900 dark:text-slate-100 font-mono tracking-tight">
+                          {note.currencySymbol}{' '}
+                          {Number(note.total).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                        </span>
                       </div>
 
-                      {/* Lista de Ítems / Conceptos si existen */}
-                      {note.items && note.items.length > 0 && (
-                        <div className="bg-white dark:bg-slate-800/80 rounded-xl p-3 border border-slate-100 dark:border-slate-800 space-y-2">
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
-                            Conceptos facturados ({note.items.length})
-                          </span>
-                          <div className="space-y-1.5 divide-y divide-slate-100 dark:divide-slate-700/60">
-                            {note.items.map((item, idx) => (
-                              <div key={idx} className="pt-1.5 first:pt-0 flex items-center justify-between gap-2 text-[11px]">
-                                <div className="min-w-0">
-                                  <p className="font-semibold text-slate-800 dark:text-slate-200 truncate">{item.title || item.name}</p>
-                                  <p className="text-[10px] text-slate-400">
-                                    Cant: {item.quantity} × {note.currencySymbol}{Number(item.unitPrice).toLocaleString('es-PE')}
-                                  </p>
-                                </div>
-                                <span className="font-mono font-bold text-slate-900 dark:text-slate-100 shrink-0">
-                                  {note.currencySymbol}{Number(item.total).toLocaleString('es-PE')}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Barra de Acciones Móviles Accesibles */}
-                      <div className="pt-2 flex flex-wrap items-center gap-1.5">
-                        {!isPaid && can('payments.edit') && (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenQuickPay(note)}
-                            className="flex-1 min-w-[110px] py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Cobrar</span>
-                          </button>
-                        )}
-
-                        <a
-                          href={`/p/pago/${note.publicToken}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 min-w-[110px] py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          <span>Comprobante</span>
-                        </a>
-
-                        <button
-                          type="button"
-                          onClick={() => handleCopyPublicLink(note)}
-                          className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-                          title="Copiar enlace"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
-
-                        {note.whatsapp && can('payments.send') && (
-                          <button
-                            type="button"
-                            onClick={() => handleShareWhatsApp(note)}
-                            className="p-2 rounded-xl border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition cursor-pointer"
-                            title="Compartir por WhatsApp"
-                          >
-                            <MessageCircle className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-
-                        {can('payments.edit') && (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEdit(note)}
-                            className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-                            title="Editar"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-
-                        {can('payments.delete') && (
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(note)}
-                            className="p-2 rounded-xl border border-rose-500/20 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition cursor-pointer"
-                            title="Eliminar"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                      <div className="text-right">
+                        <span className="text-[9px] uppercase font-extrabold tracking-wider text-slate-400 dark:text-slate-500 block">
+                          FECHA
+                        </span>
+                        <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100 font-mono">
+                          {note.issueDate || note.dueDate || '-'}
+                        </span>
                       </div>
                     </div>
+
+                    <div className="border-t border-dashed border-slate-200 dark:border-slate-800 my-2" />
+
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-[10px] sm:text-xs font-black tracking-wider uppercase text-rose-500">
+                        SALDO PENDIENTE
+                      </span>
+                      <span className="text-base sm:text-lg font-black font-mono tracking-tight text-rose-500">
+                        {note.currencySymbol}{' '}
+                        {pendingBalance.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fila 6: Botones de Acción al pie de la Card */}
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEdit(note)}
+                    className="flex-1 py-2 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100/90 text-indigo-700 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-2xs group/btn"
+                    title="Ver o editar nota de pago"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 transition-transform group-hover/btn:scale-110" />
+                    <span>Ver / Editar</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (note.whatsapp && can('payments.send')) {
+                        handleShareWhatsApp(note);
+                      } else {
+                        handleCopyPublicLink(note);
+                      }
+                    }}
+                    className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer shadow-2xs shrink-0"
+                    title={note.whatsapp ? 'Compartir por WhatsApp' : 'Copiar enlace público'}
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                  </button>
+
+                  <a
+                    href={`/p/pago/${note.publicToken}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer shadow-2xs shrink-0 flex items-center justify-center"
+                    title="Abrir comprobante público en nueva pestaña"
+                  >
+                    <Globe className="w-3.5 h-3.5" />
+                  </a>
+
+                  {can('payments.delete') && (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(note)}
+                      className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-rose-200 dark:hover:border-rose-900/50 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition cursor-pointer shadow-2xs shrink-0"
+                      title="Eliminar comprobante"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   )}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

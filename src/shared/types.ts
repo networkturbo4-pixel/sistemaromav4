@@ -1031,6 +1031,97 @@ export interface PushSubscriptionRecord {
   updatedAt: string;
 }
 
+// =============================================================================
+// HERRAMIENTAS: PALETAS DE COLOR, GENERADOR DE CÓDIGOS & BIOLINKS
+// =============================================================================
+
+export interface SavedColorPalette {
+  id: string;
+  tenantId: string;
+  name: string;
+  primaryShade: number; // e.g. 500 or 700
+  shades: {
+    shade: number; // 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950
+    hex: string;
+  }[];
+  createdAt: string;
+}
+
+export interface GeneratedCodeHistoryItem {
+  id: string;
+  tenantId: string;
+  type: 'qr' | 'barcode';
+  subType: string;
+  value: string;
+  label?: string;
+  createdAt: string;
+}
+
+export type BiolinkTheme =
+  | 'minimal_light'
+  | 'dark_slate'
+  | 'roma_agency'
+  | 'vibrant_gradient'
+  | 'neon_cyber'
+  | 'glassmorphism'
+  | 'luxury_gold'
+  | 'pastel_rose';
+
+export type BiolinkButtonShape = 'rounded' | 'pill' | 'square' | 'outline' | 'shadow_3d';
+
+export interface BiolinkSocialLink {
+  platform: 'instagram' | 'whatsapp' | 'tiktok' | 'youtube' | 'facebook' | 'linkedin' | 'twitter' | 'spotify' | 'website' | 'email' | 'phone';
+  url: string;
+}
+
+export type BiolinkBlockType = 'link' | 'whatsapp' | 'header' | 'divider' | 'banner' | 'video' | 'contact';
+
+export interface BiolinkBlock {
+  id: string;
+  type: BiolinkBlockType;
+  title: string;
+  url?: string;
+  subtitle?: string;
+  icon?: string;
+  badgeText?: string;
+  animation?: 'none' | 'pulse' | 'bounce' | 'glow';
+  imageUrl?: string;
+  videoUrl?: string;
+  isActive: boolean;
+  clicksCount: number;
+}
+
+export interface BiolinkDailyStat {
+  date: string; // YYYY-MM-DD
+  views: number;
+  clicks: number;
+}
+
+export interface BiolinkProfile {
+  id: string;
+  tenantId: string;
+  slug: string; // e.g. "roma", "pizzakhallessi"
+  title: string;
+  bio: string;
+  avatarUrl?: string;
+  verified: boolean;
+  theme: BiolinkTheme;
+  buttonShape: BiolinkButtonShape;
+  customBgColor?: string;
+  customTextColor?: string;
+  customAccentColor?: string;
+  socialLinks: BiolinkSocialLink[];
+  blocks: BiolinkBlock[];
+  viewsCount: number;
+  clicksCount: number;
+  viewsHistory?: BiolinkDailyStat[];
+  seoTitle?: string;
+  seoDescription?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+
 
 
 
