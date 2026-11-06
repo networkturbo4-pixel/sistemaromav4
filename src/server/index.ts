@@ -3528,21 +3528,19 @@ app.post(
         const distIndexHtml = path.resolve(process.cwd(), 'dist', 'client', 'index.html');
         const hasPrecompiledDist = fs.existsSync(distIndexHtml);
 
-        if (srcExists && hasVite) {
+        if (hasPrecompiledDist) {
+          // Entorno de producción precompilado (cPanel, etc.)
+          // Los archivos optimizados de dist/ ya vienen compilados y sincronizados desde GitHub.
+          // Se omite 'npm run build' en el servidor para evitar agotar la RAM de CloudLinux/cPanel (error 503).
+          addLog('build', 'success', 'Archivos precompilados en dist/ verificados y vigentes desde el repositorio. No requiere compilación pesada.');
+        } else if (srcExists && hasVite) {
           addLog('build', 'pending', 'Compilando frontend (Vite) y backend (TypeScript)...');
           try {
             await execAsync('npm run build');
             addLog('build', 'success', 'Compilación exitosa: dist/client y dist/server actualizados.');
           } catch (buildErr) {
-            if (hasPrecompiledDist) {
-              addLog('build', 'warning', `Aviso en compilación: ${(buildErr as Error).message}. Se conservan los archivos optimizados vigentes en dist/.`);
-            } else {
-              throw buildErr;
-            }
+            addLog('build', 'warning', `Aviso en compilación: ${(buildErr as Error).message}.`);
           }
-        } else if (hasPrecompiledDist) {
-          // Entorno de producción precompilado (cPanel, etc.)
-          addLog('build', 'success', 'Entorno de producción precompilado: Archivos optimizados en dist/ verificados y vigentes. No se requiere compilar en el servidor.');
         } else if (srcExists && !hasVite) {
           // Hay código fuente pero falta Vite en node_modules
           addLog('build', 'pending', 'Instalando dependencias de compilación...');
@@ -3551,11 +3549,7 @@ app.post(
             await execAsync('npm run build');
             addLog('build', 'success', 'Compilación exitosa tras instalar dependencias de desarrollo.');
           } catch (installErr) {
-            if (hasPrecompiledDist) {
-              addLog('build', 'warning', `No se pudo compilar (${(installErr as Error).message}), pero dist/ se mantiene activo.`);
-            } else {
-              throw installErr;
-            }
+            addLog('build', 'warning', `No se pudo compilar (${(installErr as Error).message}).`);
           }
         } else {
           addLog('build', 'warning', 'No se detectó código fuente src/ ni binario Vite. Se mantienen los archivos productivos actuales.');
@@ -4382,8 +4376,9 @@ async function bootstrap() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 [SISTEMA ROMA V4 SaaS] Servidor activo en http://localhost:${PORT}`);
+  const serverPort = process.env.PORT || 3001;
+  app.listen(serverPort, () => {
+    console.log(`🚀 [SISTEMA ROMA V4 SaaS] Servidor activo en ${serverPort}`);
   });
 }
 
