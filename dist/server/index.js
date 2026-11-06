@@ -2505,6 +2505,8 @@ function getDynamicUploadDirs() {
         path_1.default.resolve(cwd, '../sistema/uploads'),
         path_1.default.resolve(cwd, '../sistema_anterior/uploads'),
         path_1.default.resolve(cwd, '../roma/uploads'),
+        '/home/iqxalgre/public_html/uploads',
+        '/home/iqxalgre/uploads',
         '/home/theromaagency/public_html/uploads',
         '/home/theromaagency/uploads',
     ];
@@ -2581,15 +2583,88 @@ app.get('/api/system/uploads-diagnostic', (req, res) => {
         directories: details,
     });
 });
+// Función recursiva para sincronizar archivos desde el sistema anterior al local
+function syncLegacyUploadsFolder(srcDir, destDir) {
+    let copied = 0;
+    let skipped = 0;
+    let bytes = 0;
+    if (!fs_1.default.existsSync(destDir)) {
+        fs_1.default.mkdirSync(destDir, { recursive: true });
+    }
+    try {
+        const entries = fs_1.default.readdirSync(srcDir, { withFileTypes: true });
+        for (const ent of entries) {
+            const srcPath = path_1.default.join(srcDir, ent.name);
+            const destPath = path_1.default.join(destDir, ent.name);
+            if (ent.isDirectory()) {
+                const sub = syncLegacyUploadsFolder(srcPath, destPath);
+                copied += sub.copied;
+                skipped += sub.skipped;
+                bytes += sub.bytes;
+            }
+            else if (ent.isFile()) {
+                try {
+                    if (!fs_1.default.existsSync(destPath)) {
+                        fs_1.default.copyFileSync(srcPath, destPath);
+                        const st = fs_1.default.statSync(destPath);
+                        bytes += st.size;
+                        copied++;
+                    }
+                    else {
+                        skipped++;
+                    }
+                }
+                catch { }
+            }
+        }
+    }
+    catch { }
+    return { copied, skipped, bytes };
+}
+// Endpoint para disparar la migración manual de uploads del sistema anterior
+app.post('/api/system/migrate-legacy-uploads', auth_1.requireAuth, (req, res) => {
+    const source = req.body?.source || process.env.UPLOADS_DIR || '/home/iqxalgre/public_html/uploads';
+    if (!fs_1.default.existsSync(source)) {
+        return res.status(404).json({ error: `La carpeta de origen no existe: ${source}` });
+    }
+    const result = syncLegacyUploadsFolder(source, uploadsDir);
+    console.log(`[Migración Legacy] Completada desde ${source}: ${result.copied} archivos copiados, ${result.skipped} omitidos.`);
+    res.json({
+        ok: true,
+        source,
+        destination: uploadsDir,
+        ...result,
+        megabytes: Number((result.bytes / (1024 * 1024)).toFixed(2)),
+    });
+});
 app.use('/uploads', (req, res, next) => {
     const relativeSubpath = decodeURIComponent(req.path.replace(/^\/+/, ''));
     if (!relativeSubpath)
         return next();
+    // 1. Revisar si ya está en la carpeta uploads local del sistema actual
+    const localTarget = path_1.default.resolve(uploadsDir, relativeSubpath);
+    if (fs_1.default.existsSync(localTarget) && fs_1.default.statSync(localTarget).isFile()) {
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.sendFile(localTarget);
+    }
+    // 2. Si no está en local, buscar en directorios del sistema anterior y copiar on-demand
     const candidateDirs = getDynamicUploadDirs();
     for (const dir of candidateDirs) {
+        if (dir === uploadsDir)
+            continue;
         try {
             const fullPath = path_1.default.resolve(dir, relativeSubpath);
             if (fs_1.default.existsSync(fullPath) && fs_1.default.statSync(fullPath).isFile()) {
+                // Auto-migración on-demand: guardar copia permanente en local
+                try {
+                    const parentDir = path_1.default.dirname(localTarget);
+                    if (!fs_1.default.existsSync(parentDir)) {
+                        fs_1.default.mkdirSync(parentDir, { recursive: true });
+                    }
+                    fs_1.default.copyFileSync(fullPath, localTarget);
+                    console.log(`[Auto-Migrado a Local] ${relativeSubpath}`);
+                }
+                catch { }
                 res.setHeader('Cache-Control', 'public, max-age=86400');
                 return res.sendFile(fullPath);
             }
@@ -2612,6 +2687,22 @@ if (fs_1.default.existsSync(clientDistPath)) {
 }
 async function bootstrap() {
     await db_1.db.initialize();
+    // Auto-migración en segundo plano al iniciar si la carpeta del sistema anterior existe
+    const legacyDir = process.env.UPLOADS_DIR || '/home/iqxalgre/public_html/uploads';
+    if (fs_1.default.existsSync(legacyDir)) {
+        console.log(`📦 [Auto-Migración] Detectada carpeta del sistema anterior en: ${legacyDir}`);
+        console.log(`⏳ [Auto-Migración] Sincronizando archivos hacia ${uploadsDir} en segundo plano...`);
+        setImmediate(() => {
+            try {
+                const stats = syncLegacyUploadsFolder(legacyDir, uploadsDir);
+                const mb = (stats.bytes / (1024 * 1024)).toFixed(2);
+                console.log(`✅ [Auto-Migración] Sincronización completada: ${stats.copied} archivos nuevos (${mb} MB), ${stats.skipped} existentes.`);
+            }
+            catch (err) {
+                console.error('[Auto-Migración] Error al sincronizar:', err.message);
+            }
+        });
+    }
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`🚀 [SISTEMA ROMA V4 SaaS] Servidor activo en http://localhost:${PORT}`);
     });
