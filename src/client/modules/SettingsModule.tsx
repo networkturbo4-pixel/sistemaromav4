@@ -78,6 +78,7 @@ import {
   Briefcase,
   ClipboardList,
   CheckCheck,
+  Volume2,
   LayoutDashboard,
 } from 'lucide-react';
 import { GoogleDriveSettingsTab } from '../components/GoogleDriveSettingsTab';
