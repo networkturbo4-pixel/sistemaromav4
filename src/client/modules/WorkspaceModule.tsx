@@ -14,6 +14,7 @@ import {
   User as UserType,
   WorkspaceForm,
   WorkspaceMeeting,
+  Whiteboard,
 } from '../../shared/types';
 import { DriveFolderPickerModal } from '../components/DriveFolderPickerModal';
 import { PaintCanvasModal } from '../components/PaintCanvasModal';
@@ -37,6 +38,7 @@ import { DriveModule } from './DriveModule';
 import { ToolsModuleView } from './workspace/submodules/tools/ToolsModuleView';
 import { FormsSubmoduleView } from './workspace/submodules/forms/FormsSubmoduleView';
 import { MeetingsSubmoduleView } from './workspace/submodules/meetings/MeetingsSubmoduleView';
+import { WhiteboardsSubmoduleView } from './workspace/submodules/whiteboards/WhiteboardsSubmoduleView';
 
 // Modales
 import { ProjectModal } from './workspace/modals/ProjectModal';
@@ -51,10 +53,11 @@ import { X } from 'lucide-react';
 export const WorkspaceModule: React.FC = () => {
   const { tenant, user, toast, confirmAction, apiFetch } = useApp();
 
-  // Nivel 0: Navegación de Submódulos ('hub', 'social', 'tasks', 'drive', 'tools', 'forms', 'meetings')
-  const [currentView, setCurrentView] = useState<'hub' | 'social' | 'tasks' | 'drive' | 'tools' | 'forms' | 'meetings'>('hub');
+  // Nivel 0: Navegación de Submódulos ('hub', 'social', 'tasks', 'drive', 'tools', 'forms', 'meetings', 'whiteboards')
+  const [currentView, setCurrentView] = useState<'hub' | 'social' | 'tasks' | 'drive' | 'tools' | 'forms' | 'meetings' | 'whiteboards'>('hub');
   const [forms, setForms] = useState<WorkspaceForm[]>([]);
   const [meetings, setMeetings] = useState<WorkspaceMeeting[]>([]);
+  const [whiteboardsCount, setWhiteboardsCount] = useState<number>(0);
 
   // Nivel 1: Fases de Redes Sociales
   // 1 = Proyectos de Redes Sociales
@@ -139,6 +142,7 @@ export const WorkspaceModule: React.FC = () => {
         monthsRes,
         formsRes,
         meetingsRes,
+        whiteboardsRes,
       ] = await Promise.all([
         apiFetch<{ clients: Client[] }>('/api/clients').catch(() => ({ clients: [] })),
         apiFetch<{ users: UserType[] }>('/api/settings/users').catch(() => ({ users: [] })),
@@ -149,6 +153,7 @@ export const WorkspaceModule: React.FC = () => {
         apiFetch<{ months: WorkspaceMonth[] }>('/api/workspace/months').catch(() => ({ months: [] })),
         apiFetch<{ forms: WorkspaceForm[] }>('/api/workspace/forms').catch(() => ({ forms: [] })),
         apiFetch<{ meetings: WorkspaceMeeting[] }>('/api/workspace/meetings').catch(() => ({ meetings: [] })),
+        apiFetch<{ whiteboards: Whiteboard[] }>('/api/workspace/whiteboards').catch(() => ({ whiteboards: [] })),
       ]);
       setClients(clientsRes.clients || []);
       setTeamUsers(usersRes.users || []);
@@ -159,6 +164,7 @@ export const WorkspaceModule: React.FC = () => {
       setMonths(monthsRes.months || []);
       setForms(formsRes.forms || []);
       setMeetings(meetingsRes.meetings || []);
+      setWhiteboardsCount(whiteboardsRes.whiteboards?.length || 0);
     } catch {
       toast('Error al sincronizar datos del Workspace', 'error');
     } finally {
@@ -174,7 +180,7 @@ export const WorkspaceModule: React.FC = () => {
   useEffect(() => {
     const handleOpenWorkspaceSubview = (e: any) => {
       const detail = e.detail;
-      if (detail === 'social' || detail === 'tasks' || detail === 'drive' || detail === 'hub' || detail === 'tools' || detail === 'forms' || detail === 'meetings') {
+      if (detail === 'social' || detail === 'tasks' || detail === 'drive' || detail === 'hub' || detail === 'tools' || detail === 'forms' || detail === 'meetings' || detail === 'whiteboards') {
         setCurrentView(detail);
         if (detail === 'social') {
           setSocialPhase(1);
@@ -970,6 +976,7 @@ export const WorkspaceModule: React.FC = () => {
           tasks={tasks}
           formsCount={forms.length}
           meetingsCount={meetings.length}
+          whiteboardsCount={whiteboardsCount}
           onSelectSubmodule={(view) => {
             setCurrentView(view);
             if (view === 'social') setSocialPhase(1);
@@ -1144,6 +1151,15 @@ export const WorkspaceModule: React.FC = () => {
             setCurrentView('hub');
             loadInitialData();
           }} />
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* SUBMÓDULO: PIZARRAS CREATIVAS (WHITEBOARDS) */}
+      {/* ===================================================================== */}
+      {currentView === 'whiteboards' && (
+        <div className="space-y-4 animate-fadeIn">
+          <WhiteboardsSubmoduleView />
         </div>
       )}
 

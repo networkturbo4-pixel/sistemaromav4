@@ -36,6 +36,7 @@ import {
 } from './middleware/auth';
 import { PERMISSIONS_CATALOG, hasPermission, hasAnyPermission } from '../shared/permissions';
 import driveRouter from './routes/drive.routes';
+import whiteboardRouter from './routes/whiteboards.routes';
 import { googleDriveService } from './services/googleDriveService';
 import { generateTotpSecret, generateTotpCode, verifyTotpCode, buildOtpAuthUri } from './utils/totp';
 import { notificationService, notifyEvent } from './services/notificationService';
@@ -46,12 +47,28 @@ const app = express();
 const PORT = Number(process.env.PORT || 3001);
 
 app.use(cors());
-app.use(compression());
-// Permitir subir imágenes Base64 de logos, favicons y PWA de hasta 10MB
-app.use(express.json({ limit: '10mb' }));
+app.use(
+  compression({
+    filter: (req, res) => {
+      if (
+        req.headers.accept === 'text/event-stream' ||
+        req.path.includes('/stream') ||
+        (req.originalUrl && req.originalUrl.includes('/stream'))
+      ) {
+        return false;
+      }
+      return compression.filter(req, res);
+    },
+  })
+);
+// Permitir subir imágenes Base64 de logos, favicons, PWA y canvas de pizarras de hasta 50MB
+app.use(express.json({ limit: '50mb' }));
 
 // Módulo de Google Drive & Archivos Cloud
 app.use('/api/drive', driveRouter);
+
+// Módulo de Pizarras Creativas (Whiteboards)
+app.use('/api/workspace/whiteboards', whiteboardRouter);
 
 // =============================================================================
 // 1. ENDPOINTS PÚBLICOS Y AUTENTICACIÓN POR PIN DE 8 DÍGITOS
@@ -384,17 +401,35 @@ app.get(
 
 // Canal SSE (Server-Sent Events) para recibir notificaciones en tiempo real
 app.get('/api/notifications/stream', requireAuth, (req: AuthenticatedRequest, res: Response) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders?.();
+  try {
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('Content-Encoding', 'identity');
+    res.flushHeaders?.();
 
-  const unregister = notificationService.registerSseClient(req.auth!.tenant.id, res);
+    // Enviar comentario de keepalive cada 20s para prevenir timeout de cPanel/Phusion Passenger
+    const heartbeatInterval = setInterval(() => {
+      try {
+        res.write(': keepalive\n\n');
+      } catch (e) {
+        clearInterval(heartbeatInterval);
+      }
+    }, 20000);
 
-  req.on('close', () => {
-    unregister();
-  });
+    const unregister = notificationService.registerSseClient(req.auth!.tenant.id, res);
+
+    req.on('close', () => {
+      clearInterval(heartbeatInterval);
+      unregister();
+    });
+  } catch (err) {
+    console.error('[SSE Error]:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
 });
 
 // Marcar notificación individual como leída
@@ -830,7 +865,11 @@ app.get(
   requirePermission('quotes.view'),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const quote = await db.getQuoteById(req.params.id as string, req.auth!.tenant.id);
+      let quote = await db.getQuoteById(req.params.id as string, req.auth!.tenant.id);
+      const isSuperAdmin = req.auth?.role?.isSystem || req.auth?.role?.name === 'Super Administrador';
+      if (!quote && isSuperAdmin) {
+        quote = (db as any).localState?.quotes?.find((q: any) => q.id === req.params.id) || null;
+      }
       if (!quote) {
         res.status(404).json({ error: 'Cotización no encontrada.' });
         return;
@@ -1196,6 +1235,68 @@ app.post('/api/public/biolinks/:slug/click', async (req: Request, res: Response)
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// =============================================================================
+// SUBMÓDULO: PIZARRAS CREATIVAS (VISTA PÚBLICA / ENLACE COMPARTIDO)
+// =============================================================================
+
+app.get('/api/public/whiteboards/:tokenOrId', async (req: Request, res: Response) => {
+  try {
+    const tokenOrId = req.params.tokenOrId as string;
+    const board = await db.getWhiteboardByShareToken(tokenOrId);
+    if (!board) {
+      return res.status(404).json({ error: 'Pizarra no encontrada o enlace inválido.' });
+    }
+    const isPublic = board.accessType === 'public';
+    const hasInvitation = board.invitations?.some((inv) => inv.token === tokenOrId);
+    if (!isPublic && !hasInvitation) {
+      return res.status(403).json({ error: 'Esta pizarra tiene acceso restringido.' });
+    }
+    const effectiveRole = hasInvitation
+      ? board.invitations?.find((inv) => inv.token === tokenOrId)?.role || 'viewer'
+      : board.publicRole;
+
+    const tenant = await db.getTenantById(board.tenantId);
+    return res.json({
+      success: true,
+      whiteboard: {
+        id: board.id,
+        title: board.title,
+        content: board.content,
+        thumbnail: board.thumbnail,
+        accessType: board.accessType,
+        publicRole: effectiveRole,
+        updatedAt: board.updatedAt,
+      },
+      tenant: tenant ? { name: tenant.name, logo: (tenant as any).companyInfo?.logoUrl || '' } : null,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/public/whiteboards/:tokenOrId/canvas', async (req: Request, res: Response) => {
+  try {
+    const tokenOrId = req.params.tokenOrId as string;
+    const { content, thumbnail } = req.body;
+    const board = await db.getWhiteboardByShareToken(tokenOrId);
+    if (!board) {
+      return res.status(404).json({ error: 'Pizarra no encontrada' });
+    }
+    const hasInvitation = board.invitations?.some((inv) => inv.token === tokenOrId);
+    const effectiveRole = hasInvitation
+      ? board.invitations?.find((inv) => inv.token === tokenOrId)?.role || 'viewer'
+      : board.publicRole;
+
+    if (effectiveRole !== 'editor') {
+      return res.status(403).json({ error: 'Solo tienes permisos de visualización en esta pizarra.' });
+    }
+    await db.saveWhiteboardCanvas(board.id, board.tenantId, content, thumbnail);
+    return res.json({ success: true, savedAt: new Date().toISOString() });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -4639,8 +4740,18 @@ app.use('/uploads', (req: Request, res: Response, next: NextFunction) => {
     }
   }
 
-  // Si no se encuentra en ningún directorio, responder 404 estricto para evitar
-  // que caiga en app.get('*') y devuelva el HTML de la SPA a una etiqueta <img>
+  // 3. Si el archivo multimedia es una imagen y no se encuentra en ningún directorio,
+  // responder con un placeholder SVG neutro (200 OK) para evitar errores 404 en consola
+  // y evitar íconos rotos en las etiquetas <img> de marcas o avatares.
+  const isImage = /\.(jpe?g|png|webp|svg|gif|ico)$/i.test(relativeSubpath);
+  if (isImage) {
+    const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none"><rect width="128" height="128" rx="16" fill="#f8fafc"/><path d="M44 50C46.7614 50 49 47.7614 49 45C49 42.2386 46.7614 40 44 40C41.2386 40 39 42.2386 39 45C39 47.7614 41.2386 50 44 50Z" fill="#94a3b8"/><path d="M36 86L54 62L66 76L78 60L92 86H36Z" fill="#cbd5e1"/><rect x="0.5" y="0.5" width="127" height="127" rx="15.5" stroke="#e2e8f0"/></svg>`.trim();
+    res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.status(200).send(placeholderSvg);
+  }
+
+  // Si no se encuentra en ningún directorio y no es imagen, responder 404 estricto
   res.status(404).send('Archivo multimedia no encontrado');
 });
 

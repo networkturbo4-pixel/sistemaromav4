@@ -2035,6 +2035,9 @@ export const PaymentNotesModule: React.FC = () => {
                         src={selectedBrand.logoUrl}
                         alt={selectedBrand.name}
                         className="w-6 h-6 rounded-lg object-contain bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-0.5 shrink-0"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
                       />
                     ) : (
                       <div

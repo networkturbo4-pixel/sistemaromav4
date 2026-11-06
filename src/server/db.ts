@@ -63,6 +63,13 @@ import {
   WorkspaceMeeting,
   WorkspaceMeetingAgreement,
   WorkspaceMeetingRecording,
+  Whiteboard,
+  WhiteboardFolder,
+  WhiteboardUserAccess,
+  WhiteboardInvitation,
+  WhiteboardTag,
+  WhiteboardAccessType,
+  WhiteboardPublicRole,
 } from '../shared/types';
 import { ALL_PERMISSION_KEYS, PermissionKey } from '../shared/permissions';
 
@@ -100,6 +107,8 @@ export interface DatabaseState {
   formSubmissions: FormSubmission[];
   workspaceMeetingRooms: WorkspaceMeetingRoom[];
   workspaceMeetings: WorkspaceMeeting[];
+  whiteboards: Whiteboard[];
+  whiteboardFolders: WhiteboardFolder[];
 }
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -252,6 +261,8 @@ export class DatabaseManager {
       formSubmissions: [],
       workspaceMeetingRooms: [],
       workspaceMeetings: [],
+      whiteboards: [],
+      whiteboardFolders: [],
     };
     return defaultState;
   }
@@ -562,44 +573,56 @@ export class DatabaseManager {
   }
 
   public async updateTenantCustomization(tenantId: string, customization: Partial<TenantCustomization>): Promise<Tenant | null> {
-    const tenant = await this.getTenantById(tenantId);
-    if (!tenant) return null;
-    tenant.customization = { ...tenant.customization, ...customization };
-    tenant.updatedAt = new Date().toISOString();
+    const idx = this.localState.tenants.findIndex((t) => t.id === tenantId);
+    if (idx === -1) return null;
+    const current = this.localState.tenants[idx];
+    current.customization = { ...(current.customization || DEFAULT_CUSTOMIZATION), ...customization };
+    current.updatedAt = new Date().toISOString();
     this.saveLocalState();
-    return tenant;
+    return await this.getTenantById(tenantId);
   }
 
   public async updateTenantCompanyInfo(tenantId: string, companyInfo: Partial<CompanyInfo>): Promise<Tenant | null> {
-    const tenant = await this.getTenantById(tenantId);
-    if (!tenant) return null;
-    tenant.companyInfo = { ...tenant.companyInfo, ...companyInfo };
-    tenant.updatedAt = new Date().toISOString();
+    const idx = this.localState.tenants.findIndex((t) => t.id === tenantId);
+    if (idx === -1) return null;
+    const current = this.localState.tenants[idx];
+    current.companyInfo = {
+      ...(current.companyInfo || { ...DEFAULT_COMPANY_INFO, commercialName: current.name, legalName: current.name }),
+      ...companyInfo,
+    };
+    if (companyInfo.commercialName?.trim()) {
+      current.name = companyInfo.commercialName.trim();
+    }
+    current.updatedAt = new Date().toISOString();
     this.saveLocalState();
-    return tenant;
+    return await this.getTenantById(tenantId);
   }
 
   public async updateTenantBankAccounts(tenantId: string, bankAccounts: any[]): Promise<Tenant | null> {
-    const tenant = await this.getTenantById(tenantId);
-    if (!tenant) return null;
-    if (!tenant.companyInfo) tenant.companyInfo = DEFAULT_COMPANY_INFO;
-    tenant.companyInfo.bankAccounts = bankAccounts;
-    tenant.updatedAt = new Date().toISOString();
+    const idx = this.localState.tenants.findIndex((t) => t.id === tenantId);
+    if (idx === -1) return null;
+    const current = this.localState.tenants[idx];
+    if (!current.companyInfo) {
+      current.companyInfo = { ...DEFAULT_COMPANY_INFO, commercialName: current.name, legalName: current.name };
+    }
+    current.companyInfo.bankAccounts = bankAccounts;
+    current.updatedAt = new Date().toISOString();
     this.saveLocalState();
-    return tenant;
+    return await this.getTenantById(tenantId);
   }
 
   public async updateTenantDriveConfig(tenantId: string, driveConfig: Partial<TenantDriveConfig>): Promise<Tenant | null> {
-    const tenant = await this.getTenantById(tenantId);
-    if (!tenant) return null;
-    tenant.driveConfig = {
-      ...(tenant.driveConfig || { authType: 'none' }),
+    const idx = this.localState.tenants.findIndex((t) => t.id === tenantId);
+    if (idx === -1) return null;
+    const current = this.localState.tenants[idx];
+    current.driveConfig = {
+      ...(current.driveConfig || { authType: 'none' }),
       ...driveConfig,
       updatedAt: new Date().toISOString(),
     };
-    tenant.updatedAt = new Date().toISOString();
+    current.updatedAt = new Date().toISOString();
     this.saveLocalState();
-    return tenant;
+    return await this.getTenantById(tenantId);
   }
 
   public async deleteTenant(id: string): Promise<boolean> {
@@ -662,7 +685,7 @@ export class DatabaseManager {
 
   public async getSessionContext(userId: string, tenantId: string) {
     const user = this.localState.users.find((u) => u.id === userId && u.tenantId === tenantId);
-    const tenant = this.localState.tenants.find((t) => t.id === tenantId);
+    const tenant = await this.getTenantById(tenantId);
     if (!user || !tenant) return null;
     const role = this.localState.roles.find((r) => r.id === user.roleId && r.tenantId === tenantId);
     return { user, tenant, role };
@@ -3825,6 +3848,317 @@ export class DatabaseManager {
     this.saveLocalState();
     return { task: newTask, agreement };
   }
+
+  // ===========================================================================
+  // SUBMÓDULO DE WORKSPACE: PIZARRAS CREATIVAS (WHITEBOARDS)
+  // ===========================================================================
+
+  public async getWhiteboards(
+    tenantId: string,
+    filters?: { folderId?: string | null; search?: string; tag?: string },
+    userId?: string,
+    isAdmin?: boolean
+  ): Promise<Whiteboard[]> {
+    if (!this.localState.whiteboards) {
+      this.localState.whiteboards = [];
+    }
+    let list = this.localState.whiteboards.filter((w) => w.tenantId === tenantId);
+
+    // Filtrar por permisos / usuario asignado si no es admin
+    if (!isAdmin && userId) {
+      list = list.filter((w) => {
+        if (w.createdBy === userId) return true;
+        if (w.accessType === 'public') return true;
+        return w.assignedUsers?.some((u) => u.userId === userId);
+      });
+    }
+
+    if (filters?.folderId !== undefined) {
+      if (filters.folderId === null || filters.folderId === '' || filters.folderId === 'all') {
+        // no filter
+      } else if (filters.folderId === 'none') {
+        list = list.filter((w) => !w.folderId);
+      } else {
+        list = list.filter((w) => w.folderId === filters.folderId);
+      }
+    }
+
+    if (filters?.tag) {
+      const tagLower = filters.tag.toLowerCase();
+      list = list.filter((w) =>
+        w.tags?.some((t) => t.name.toLowerCase() === tagLower)
+      );
+    }
+
+    if (filters?.search) {
+      const q = filters.search.toLowerCase().trim();
+      list = list.filter(
+        (w) =>
+          w.title.toLowerCase().includes(q) ||
+          w.tags?.some((t) => t.name.toLowerCase().includes(q))
+      );
+    }
+
+    // Ordenar por última actualización descendente
+    return list.sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+  }
+
+  public async getWhiteboardById(id: string, tenantId?: string): Promise<Whiteboard | null> {
+    if (!this.localState.whiteboards) return null;
+    return (
+      this.localState.whiteboards.find(
+        (w) => w.id === id && (!tenantId || w.tenantId === tenantId)
+      ) || null
+    );
+  }
+
+  public async getWhiteboardByShareToken(tokenOrId: string): Promise<Whiteboard | null> {
+    if (!this.localState.whiteboards) return null;
+    return (
+      this.localState.whiteboards.find(
+        (w) =>
+          w.id === tokenOrId ||
+          w.shareToken === tokenOrId ||
+          w.invitations?.some((inv) => inv.token === tokenOrId)
+      ) || null
+    );
+  }
+
+  public async createWhiteboard(
+    tenantId: string,
+    data: {
+      title: string;
+      folderId?: string | null;
+      tags?: WhiteboardTag[];
+      profilePic?: string;
+      accessType?: WhiteboardAccessType;
+      publicRole?: WhiteboardPublicRole;
+      initialInvites?: Array<{ email: string; role: 'editor' | 'viewer' }>;
+    },
+    userId: string,
+    userName?: string,
+    userAvatar?: string
+  ): Promise<Whiteboard> {
+    if (!this.localState.whiteboards) {
+      this.localState.whiteboards = [];
+    }
+    const now = new Date().toISOString();
+    const id = `wb-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const shareToken = generateToken(16);
+
+    const invitations: WhiteboardInvitation[] = (data.initialInvites || []).map((inv) => ({
+      id: `inv-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      whiteboardId: id,
+      email: inv.email,
+      role: inv.role,
+      token: generateToken(16),
+      createdAt: now,
+    }));
+
+    const newBoard: Whiteboard = {
+      id,
+      tenantId,
+      title: data.title || 'Pizarra sin título',
+      content: JSON.stringify({ version: '5.3.0', objects: [] }),
+      thumbnail: '',
+      profilePic: data.profilePic || '',
+      folderId: data.folderId || null,
+      tags: data.tags || [],
+      accessType: data.accessType || 'restricted',
+      publicRole: data.publicRole || 'viewer',
+      shareToken,
+      createdBy: userId,
+      createdByName: userName,
+      createdByAvatar: userAvatar,
+      assignedUsers: [
+        {
+          userId,
+          userName,
+          userAvatar,
+          role: 'editor',
+        },
+      ],
+      invitations,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.localState.whiteboards.unshift(newBoard);
+    this.saveLocalState();
+    return newBoard;
+  }
+
+  public async updateWhiteboard(
+    id: string,
+    tenantId: string,
+    data: Partial<Whiteboard>
+  ): Promise<Whiteboard | null> {
+    if (!this.localState.whiteboards) return null;
+    const idx = this.localState.whiteboards.findIndex(
+      (w) => w.id === id && w.tenantId === tenantId
+    );
+    if (idx === -1) return null;
+
+    const current = this.localState.whiteboards[idx];
+    const updated: Whiteboard = {
+      ...current,
+      ...data,
+      id: current.id,
+      tenantId: current.tenantId,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.localState.whiteboards[idx] = updated;
+    this.saveLocalState();
+    return updated;
+  }
+
+  public async saveWhiteboardCanvas(
+    id: string,
+    tenantId: string,
+    content: string,
+    thumbnail?: string
+  ): Promise<boolean> {
+    if (!this.localState.whiteboards) return false;
+    const board = this.localState.whiteboards.find(
+      (w) => w.id === id && w.tenantId === tenantId
+    );
+    if (!board) return false;
+
+    board.content = content;
+    if (thumbnail) {
+      board.thumbnail = thumbnail;
+    }
+    board.updatedAt = new Date().toISOString();
+    this.saveLocalState();
+    return true;
+  }
+
+  public async deleteWhiteboard(id: string, tenantId: string): Promise<boolean> {
+    if (!this.localState.whiteboards) return false;
+    const initialLen = this.localState.whiteboards.length;
+    this.localState.whiteboards = this.localState.whiteboards.filter(
+      (w) => !(w.id === id && w.tenantId === tenantId)
+    );
+    const deleted = this.localState.whiteboards.length < initialLen;
+    if (deleted) this.saveLocalState();
+    return deleted;
+  }
+
+  public async duplicateWhiteboard(
+    id: string,
+    tenantId: string,
+    userId: string,
+    userName?: string
+  ): Promise<Whiteboard | null> {
+    const original = await this.getWhiteboardById(id, tenantId);
+    if (!original) return null;
+
+    const now = new Date().toISOString();
+    const copyId = `wb-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const copy: Whiteboard = {
+      ...original,
+      id: copyId,
+      title: `${original.title} (Copia)`,
+      shareToken: generateToken(16),
+      createdBy: userId,
+      createdByName: userName,
+      assignedUsers: [
+        {
+          userId,
+          userName,
+          role: 'editor',
+        },
+      ],
+      invitations: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.localState.whiteboards.unshift(copy);
+    this.saveLocalState();
+    return copy;
+  }
+
+  // --- CARPETAS DE PIZARRAS ---
+
+  public async getWhiteboardFolders(tenantId: string): Promise<
+    Array<WhiteboardFolder & { boardCount: number }>
+  > {
+    if (!this.localState.whiteboardFolders) {
+      this.localState.whiteboardFolders = [];
+    }
+    if (!this.localState.whiteboards) {
+      this.localState.whiteboards = [];
+    }
+
+    const folders = this.localState.whiteboardFolders.filter(
+      (f) => f.tenantId === tenantId || !f.tenantId || f.tenantId === 'tenant-roma-01'
+    );
+    const boards = this.localState.whiteboards.filter((w) => w.tenantId === tenantId);
+
+    return folders.map((folder) => ({
+      ...folder,
+      boardCount: boards.filter((b) => b.folderId === folder.id).length,
+    }));
+  }
+
+  public async createWhiteboardFolder(
+    tenantId: string,
+    data: { name: string; color?: string },
+    userId: string
+  ): Promise<WhiteboardFolder> {
+    if (!this.localState.whiteboardFolders) {
+      this.localState.whiteboardFolders = [];
+    }
+    const folder: WhiteboardFolder = {
+      id: `wbf-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+      tenantId,
+      name: data.name || 'Nueva Carpeta',
+      color: data.color || '#3b82f6',
+      createdBy: userId,
+      createdAt: new Date().toISOString(),
+    };
+    this.localState.whiteboardFolders.push(folder);
+    this.saveLocalState();
+    return folder;
+  }
+
+  public async updateWhiteboardFolder(
+    folderId: string,
+    tenantId: string,
+    data: { name?: string; color?: string }
+  ): Promise<WhiteboardFolder | null> {
+    if (!this.localState.whiteboardFolders) return null;
+    const folder = this.localState.whiteboardFolders.find((f) => f.id === folderId);
+    if (!folder) return null;
+    if (data.name) folder.name = data.name;
+    if (data.color) folder.color = data.color;
+    this.saveLocalState();
+    return folder;
+  }
+
+  public async deleteWhiteboardFolder(folderId: string, tenantId?: string): Promise<boolean> {
+    if (!this.localState.whiteboardFolders) return false;
+    const initialLen = this.localState.whiteboardFolders.length;
+    this.localState.whiteboardFolders = this.localState.whiteboardFolders.filter(
+      (f) => f.id !== folderId
+    );
+    // Desvincular carpetas de las pizarras
+    if (this.localState.whiteboards) {
+      this.localState.whiteboards.forEach((w) => {
+        if (w.folderId === folderId) {
+          w.folderId = null;
+        }
+      });
+    }
+    const deleted = this.localState.whiteboardFolders.length < initialLen;
+    if (deleted) this.saveLocalState();
+    return deleted;
+  }
+
 
 }
 

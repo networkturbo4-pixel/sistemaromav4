@@ -47,6 +47,8 @@ export type PermissionKey =
   | 'workspace.forms.manage'
   | 'workspace.meetings.view'
   | 'workspace.meetings.manage'
+  | 'workspace.whiteboards.view'
+  | 'workspace.whiteboards.manage'
   // Módulo: Orden de Servicio (OS)
   | 'service_orders.view'
   | 'service_orders.create'
@@ -329,6 +331,20 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     key: 'workspace.meetings.manage',
     label: 'Gestionar Salas, Actas y Acuerdos',
     description: 'Crear salas de reunión, registrar actas con Google Meet y convertir acuerdos en tareas operativas.',
+    module: 'workspace',
+    moduleLabel: 'Workspace Operativo',
+  },
+  {
+    key: 'workspace.whiteboards.view',
+    label: 'Ver Pizarras Creativas',
+    description: 'Consultar lienzos, diagramas y carpetas de pizarras colaborativas.',
+    module: 'workspace',
+    moduleLabel: 'Workspace Operativo',
+  },
+  {
+    key: 'workspace.whiteboards.manage',
+    label: 'Gestionar Pizarras y Lienzos',
+    description: 'Crear, editar, diseñar con herramientas visuales, exportar y compartir pizarras.',
     module: 'workspace',
     moduleLabel: 'Workspace Operativo',
   },

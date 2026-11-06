@@ -500,8 +500,27 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   ];
 
   useEffect(() => {
-    setCompanyForm(tenant.companyInfo);
-  }, [tenant.companyInfo]);
+    if (tenant) {
+      const info = tenant.companyInfo;
+      setCompanyForm({
+        commercialName: info?.commercialName || tenant.name || '',
+        legalName: info?.legalName || tenant.name || '',
+        ruc: info?.ruc || '',
+        email: info?.email || '',
+        whatsapp: info?.whatsapp || '+51 ',
+        address: info?.address || '',
+        socials: {
+          instagram: info?.socials?.instagram || '',
+          facebook: info?.socials?.facebook || '',
+          tiktok: info?.socials?.tiktok || '',
+          website: info?.socials?.website || '',
+          linkedin: info?.socials?.linkedin || '',
+          youtube: info?.socials?.youtube || '',
+        },
+        bankAccounts: info?.bankAccounts || [],
+      });
+    }
+  }, [tenant.id, tenant.companyInfo, tenant.name]);
 
   const resetBankAccountForm = () => {
     setBankFormName('');

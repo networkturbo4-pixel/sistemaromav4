@@ -1706,6 +1706,9 @@ export const ClientsModule: React.FC = () => {
                                   src={brand.logoUrl}
                                   alt={brand.name}
                                   className="w-7 h-7 rounded-lg object-contain bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-0.5 shrink-0"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                  }}
                                 />
                               ) : (
                                 <div
@@ -1878,6 +1881,9 @@ export const ClientsModule: React.FC = () => {
                                     src={brand.logoUrl}
                                     alt={brand.name}
                                     className="w-4 h-4 rounded object-contain"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                    }}
                                   />
                                 ) : (
                                   <div

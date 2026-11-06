@@ -916,6 +916,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateTenantState = (updatedTenant: Tenant) => {
     setTenant(updatedTenant);
+    loadTenantsList();
   };
 
   const saveUserThemePreference = useCallback(
@@ -1245,6 +1246,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
           }
         } catch (e) {}
+      };
+      eventSource.onerror = () => {
+        // En entornos como cPanel/Passenger, reconexiones o pausas de red son normales.
+        // El polling de respaldo a los 30s mantiene la sincronización activa sin romper la app.
       };
     } catch (e) {
       console.warn('[SSE] EventSource no disponible:', e);

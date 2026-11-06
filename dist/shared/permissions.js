@@ -247,6 +247,20 @@ exports.PERMISSIONS_CATALOG = [
         module: 'workspace',
         moduleLabel: 'Workspace Operativo',
     },
+    {
+        key: 'workspace.whiteboards.view',
+        label: 'Ver Pizarras Creativas',
+        description: 'Consultar lienzos, diagramas y carpetas de pizarras colaborativas.',
+        module: 'workspace',
+        moduleLabel: 'Workspace Operativo',
+    },
+    {
+        key: 'workspace.whiteboards.manage',
+        label: 'Gestionar Pizarras y Lienzos',
+        description: 'Crear, editar, diseñar con herramientas visuales, exportar y compartir pizarras.',
+        module: 'workspace',
+        moduleLabel: 'Workspace Operativo',
+    },
     // ÓRDENES DE SERVICIO (OS)
     {
         key: 'service_orders.view',

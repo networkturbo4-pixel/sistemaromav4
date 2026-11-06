@@ -1589,3 +1589,63 @@ export interface WorkspaceMeeting {
   createdAt: string;
   updatedAt: string;
 }
+
+// =============================================================================
+// SUBMÓDULO DE WORKSPACE: PIZARRAS CREATIVAS (WHITEBOARDS)
+// =============================================================================
+
+export interface WhiteboardTag {
+  name: string;
+  color: string;
+}
+
+export interface WhiteboardUserAccess {
+  userId: string;
+  userName?: string;
+  userAvatar?: string;
+  email?: string;
+  role: 'editor' | 'viewer';
+}
+
+export interface WhiteboardInvitation {
+  id: string;
+  whiteboardId: string;
+  email: string;
+  role: 'editor' | 'viewer';
+  token: string;
+  createdAt: string;
+}
+
+export interface WhiteboardFolder {
+  id: string;
+  tenantId: string;
+  name: string;
+  color: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export type WhiteboardAccessType = 'restricted' | 'public';
+export type WhiteboardPublicRole = 'viewer' | 'editor';
+
+export interface Whiteboard {
+  id: string;
+  tenantId: string;
+  title: string;
+  content?: string; // Fabric.js JSON serialized canvas
+  thumbnail?: string; // Base64 data URL
+  profilePic?: string; // Cover / thumbnail image URL
+  folderId?: string | null;
+  tags: WhiteboardTag[];
+  accessType: WhiteboardAccessType;
+  publicRole: WhiteboardPublicRole;
+  shareToken?: string;
+  createdBy: string;
+  createdByName?: string;
+  createdByAvatar?: string;
+  assignedUsers: WhiteboardUserAccess[];
+  invitations?: WhiteboardInvitation[];
+  createdAt: string;
+  updatedAt: string;
+}
+

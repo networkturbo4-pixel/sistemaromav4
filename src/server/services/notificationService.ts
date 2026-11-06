@@ -119,7 +119,11 @@ class NotificationService {
     clientSet.add(res);
 
     // Enviar evento de conexión exitosa
-    res.write(`data: ${JSON.stringify({ type: 'connected', tenantId })}\n\n`);
+    try {
+      res.write(`data: ${JSON.stringify({ type: 'connected', tenantId })}\n\n`);
+    } catch (e) {
+      clientSet.delete(res);
+    }
 
     return () => {
       clientSet.delete(res);
