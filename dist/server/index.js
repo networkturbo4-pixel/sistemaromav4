@@ -2634,8 +2634,16 @@ app.post('/api/system/update', auth_1.requireAuth, (0, auth_1.requireAnyPermissi
                 addLog('git', 'pending', `Conectando con repositorio remoto y trayendo cambios (rama: ${branch})...`);
                 try {
                     await execAsync(`${gitCmd} fetch origin`);
-                    const { stdout: pullOut, stderr: pullErr } = await execAsync(`${gitCmd} pull origin ${branch}`);
-                    addLog('git', 'success', `Git pull exitoso: ${pullOut.trim() || pullErr.trim() || 'Actualizado al día'}`);
+                    // Limpiar diferencias en archivos rastreados (como dist/ generado localmente en el servidor)
+                    // para evitar que Git aborte con "Your local changes would be overwritten by merge"
+                    try {
+                        await execAsync(`${gitCmd} reset --hard origin/${branch}`);
+                        addLog('git', 'success', `Sincronización Git limpia aplicada a origin/${branch}.`);
+                    }
+                    catch {
+                        const { stdout: pullOut, stderr: pullErr } = await execAsync(`${gitCmd} pull origin ${branch}`);
+                        addLog('git', 'success', `Git pull exitoso: ${pullOut.trim() || pullErr.trim() || 'Actualizado al día'}`);
+                    }
                     // Protección automática contra plantilla dev de Vite:
                     try {
                         const rootIndexHtml = path_1.default.resolve(process.cwd(), 'index.html');
