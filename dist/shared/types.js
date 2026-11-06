@@ -29,7 +29,12 @@ exports.DEFAULT_CUSTOMIZATION = {
     typographyScale: 'normal',
     fontFamily: 'Inter',
     toastStyle: 'glass',
-    toastPosition: 'bottom-right',
+    toastPosition: 'top-right',
+    toastPositions: {
+        desktop: 'top-right',
+        tablet: 'top-center',
+        mobile: 'top-center',
+    },
     confirmModalStyle: 'modern-center',
 };
 exports.DEFAULT_COMPANY_INFO = {

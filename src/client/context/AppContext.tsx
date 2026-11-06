@@ -978,13 +978,82 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const unreadNotificationsCount = notifications.filter((n) => !n.isRead).length;
 
-  // Posición dinámica del contenedor de Toasts según configuración del Tenant
-  const toastPosClass =
-    tenant.customization.toastPosition === 'top-right'
-      ? 'top-5 right-5 items-end'
-      : tenant.customization.toastPosition === 'top-center'
-      ? 'top-5 left-1/2 -translate-x-1/2 items-center'
-      : 'bottom-20 md:bottom-6 right-5 items-end';
+  // Posición dinámica y responsive del contenedor de Toasts por dispositivo (PC, Tablet, Celular)
+  const desktopToastPos =
+    tenant.customization.toastPositions?.desktop ||
+    tenant.customization.toastPosition ||
+    'top-right';
+  const tabletToastPos =
+    tenant.customization.toastPositions?.tablet ||
+    tenant.customization.toastPosition ||
+    'top-center';
+  const mobileToastPos =
+    tenant.customization.toastPositions?.mobile ||
+    'top-center';
+
+  const getResponsiveToastClasses = (
+    mobilePos: ToastPosition,
+    tabletPos: ToastPosition,
+    desktopPos: ToastPosition
+  ): string => {
+    const getMobile = (p: ToastPosition) => {
+      switch (p) {
+        case 'top-left':
+          return 'top-4 left-4 items-start';
+        case 'top-center':
+          return 'top-4 left-1/2 -translate-x-1/2 items-center';
+        case 'bottom-left':
+          return 'bottom-20 left-4 items-start';
+        case 'bottom-center':
+          return 'bottom-20 left-1/2 -translate-x-1/2 items-center';
+        case 'bottom-right':
+          return 'bottom-20 right-4 items-end';
+        case 'top-right':
+        default:
+          return 'top-4 right-4 items-end';
+      }
+    };
+
+    const getTablet = (p: ToastPosition) => {
+      switch (p) {
+        case 'top-left':
+          return 'md:top-5 md:left-5 md:right-auto md:bottom-auto md:translate-x-0 md:items-start';
+        case 'top-center':
+          return 'md:top-5 md:left-1/2 md:right-auto md:bottom-auto md:-translate-x-1/2 md:items-center';
+        case 'bottom-left':
+          return 'md:bottom-6 md:left-5 md:top-auto md:right-auto md:translate-x-0 md:items-start';
+        case 'bottom-center':
+          return 'md:bottom-6 md:left-1/2 md:top-auto md:right-auto md:-translate-x-1/2 md:items-center';
+        case 'bottom-right':
+          return 'md:bottom-6 md:right-5 md:top-auto md:left-auto md:translate-x-0 md:items-end';
+        case 'top-right':
+        default:
+          return 'md:top-5 md:right-5 md:left-auto md:bottom-auto md:translate-x-0 md:items-end';
+      }
+    };
+
+    const getDesktop = (p: ToastPosition) => {
+      switch (p) {
+        case 'top-left':
+          return 'lg:top-6 lg:left-6 lg:right-auto lg:bottom-auto lg:translate-x-0 lg:items-start';
+        case 'top-center':
+          return 'lg:top-6 lg:left-1/2 lg:right-auto lg:bottom-auto lg:-translate-x-1/2 lg:items-center';
+        case 'bottom-left':
+          return 'lg:bottom-6 lg:left-6 lg:top-auto lg:right-auto lg:translate-x-0 lg:items-start';
+        case 'bottom-center':
+          return 'lg:bottom-6 lg:left-1/2 lg:top-auto lg:right-auto lg:-translate-x-1/2 lg:items-center';
+        case 'bottom-right':
+          return 'lg:bottom-6 lg:right-6 lg:top-auto lg:left-auto lg:translate-x-0 lg:items-end';
+        case 'top-right':
+        default:
+          return 'lg:top-6 lg:right-6 lg:left-auto lg:bottom-auto lg:translate-x-0 lg:items-end';
+      }
+    };
+
+    return `${getMobile(mobilePos)} ${getTablet(tabletPos)} ${getDesktop(desktopPos)}`;
+  };
+
+  const toastPosClass = getResponsiveToastClasses(mobileToastPos, tabletToastPos, desktopToastPos);
 
   const activeModalStyle =
     confirmState.styleOverride || tenant.customization.confirmModalStyle;

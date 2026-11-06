@@ -2,7 +2,13 @@ import { PermissionKey } from './permissions';
 
 export type TypographyScale = 'compact' | 'normal' | 'comfortable' | 'large';
 export type ToastStyleVariant = 'glass' | 'minimal' | 'solid' | 'pill';
-export type ToastPosition = 'top-right' | 'bottom-right' | 'top-center';
+export type ToastPosition =
+  | 'top-right'
+  | 'top-center'
+  | 'top-left'
+  | 'bottom-right'
+  | 'bottom-center'
+  | 'bottom-left';
 export type ConfirmModalStyleVariant = 'modern-center' | 'glass-blur' | 'compact-sheet' | 'split-banner';
 
 export interface ThemePalette {
@@ -44,6 +50,12 @@ export interface TenantCustomization {
   /** Estilo de Toast */
   toastStyle: ToastStyleVariant;
   toastPosition: ToastPosition;
+  /** Posiciones personalizadas de Toast por dispositivo (PC, Tablet, Móvil) */
+  toastPositions?: {
+    desktop: ToastPosition;
+    tablet: ToastPosition;
+    mobile: ToastPosition;
+  };
   /** Estilo de Modal de Confirmación */
   confirmModalStyle: ConfirmModalStyleVariant;
 }
@@ -217,7 +229,12 @@ export const DEFAULT_CUSTOMIZATION: TenantCustomization = {
   typographyScale: 'normal',
   fontFamily: 'Inter',
   toastStyle: 'glass',
-  toastPosition: 'bottom-right',
+  toastPosition: 'top-right',
+  toastPositions: {
+    desktop: 'top-right',
+    tablet: 'top-center',
+    mobile: 'top-center',
+  },
   confirmModalStyle: 'modern-center',
 };
 
@@ -1074,7 +1091,18 @@ export interface BiolinkSocialLink {
   url: string;
 }
 
-export type BiolinkBlockType = 'link' | 'whatsapp' | 'header' | 'divider' | 'banner' | 'video' | 'contact';
+export type BiolinkBlockType =
+  | 'link'
+  | 'whatsapp'
+  | 'phone'
+  | 'email'
+  | 'location'
+  | 'catalog'
+  | 'header'
+  | 'divider'
+  | 'banner'
+  | 'video'
+  | 'contact';
 
 export interface BiolinkBlock {
   id: string;
