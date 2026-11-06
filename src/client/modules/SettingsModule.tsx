@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp, PermissionGate } from '../context/AppContext';
+import { playNotificationChime } from '../utils/notificationSound';
 import {
   Tenant,
   TenantSummary,
@@ -249,6 +250,11 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     toast,
     confirmAction,
     can,
+    isPushSupported,
+    isPushSubscribed,
+    enablePushNotifications,
+    disablePushNotifications,
+    sendTestPushNotification,
   } = useApp();
 
   // Mapeo retrocompatible de pestaña
@@ -2724,6 +2730,135 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                       Deslizante estilo App móvil
                     </p>
                   </button>
+                </div>
+              </div>
+
+              {/* SECCIÓN 3: NOTIFICACIONES PUSH MÓVILES (PWA EN CELULAR) & CANAL DE EVENTOS */}
+              <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                      <span>📲 3. NOTIFICACIONES PUSH EN CELULAR (PWA) & CANAL MULTITENANT</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Recibe alertas nativas en tu pantalla de bloqueo y bandeja de notificaciones al tener instalada la PWA.
+                    </p>
+                  </div>
+
+                  {/* Estado Push */}
+                  <div className="flex items-center gap-2">
+                    {isPushSubscribed ? (
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shadow-2xs">
+                        <CheckCheck className="w-4 h-4" />
+                        <span>Activas en este celular</span>
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shadow-2xs">
+                        No activas aún
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Card de Configuración Push */}
+                <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/40 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                        <Smartphone className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-extrabold text-slate-900 dark:text-slate-100">
+                          Suscripción Web Push para Celulares Android y iOS
+                        </h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                          Usa el Service Worker de la PWA y claves VAPID seguras para enviar alertas directas al dispositivo incluso con la aplicación cerrada.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                      {isPushSubscribed ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => sendTestPushNotification()}
+                            className="px-3.5 py-2 rounded-xl border border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            <span>Probar en mi celular</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => disablePushNotifications()}
+                            className="px-3.5 py-2 rounded-xl border border-rose-500/30 text-rose-500 hover:bg-rose-500/10 text-xs font-bold transition cursor-pointer shadow-2xs"
+                          >
+                            Desactivar
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => enablePushNotifications()}
+                          className="px-4 py-2 rounded-xl text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs bg-indigo-600 hover:bg-indigo-500"
+                        >
+                          <Bell className="w-3.5 h-3.5" />
+                          <span>Activar en este Celular</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => playNotificationChime()}
+                        className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-500/10 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        title="Probar sonido chime del sistema"
+                      >
+                        <Volume2 className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>Probar Chime</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Resumen de Módulos Conectados */}
+                  <div className="pt-3 border-t border-slate-200/80 dark:border-slate-800/80">
+                    <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-2">
+                      Módulos conectados automáticamente al sistema de notificaciones:
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 flex items-center gap-2">
+                        <CheckCheck className="w-3.5 h-3.5 text-indigo-500" />
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Clientes & Marcas</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 flex items-center gap-2">
+                        <CheckCheck className="w-3.5 h-3.5 text-amber-500" />
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Cotizaciones</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 flex items-center gap-2">
+                        <CheckCheck className="w-3.5 h-3.5 text-blue-500" />
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Órdenes de Servicio</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 flex items-center gap-2">
+                        <CheckCheck className="w-3.5 h-3.5 text-emerald-500" />
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Pagos & Notas de Cobro</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 flex items-center gap-2">
+                        <CheckCheck className="w-3.5 h-3.5 text-purple-500" />
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Workspace & Redes</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 flex items-center gap-2">
+                        <CheckCheck className="w-3.5 h-3.5 text-cyan-500" />
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Google Drive & Cloud</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 flex items-center gap-2">
+                        <CheckCheck className="w-3.5 h-3.5 text-teal-500" />
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Usuarios & Roles</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/30 flex items-center gap-2">
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                        <span className="font-bold text-indigo-600 dark:text-indigo-400">Módulos Futuros (Auto)</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

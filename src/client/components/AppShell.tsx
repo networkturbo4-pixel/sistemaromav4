@@ -38,10 +38,12 @@ import {
   Search,
   Zap,
   RefreshCw,
+  Bell,
 } from 'lucide-react';
 import { SettingsTab } from '../modules/SettingsModule';
 import { CommandPalette } from './CommandPalette';
 import { QuickOnboardingCreatorModal } from './QuickOnboardingCreatorModal';
+import { NotificationCenterModal } from './NotificationCenterModal';
 
 export type ActiveModule =
   | 'dashboard'
@@ -97,7 +99,10 @@ export const AppShell: React.FC<AppShellProps> = ({
     isSwitchingTenant,
     apiFetch,
     toast,
+    unreadNotificationsCount,
   } = useApp();
+
+  const [notificationModalOpen, setNotificationModalOpen] = useState(false);
 
   // Detección automática en segundo plano de actualizaciones en GitHub
   const [updateAvailableInfo, setUpdateAvailableInfo] = useState<{
@@ -486,14 +491,31 @@ export const AppShell: React.FC<AppShellProps> = ({
             )}
           </button>
 
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen(false)}
-            className="md:hidden p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
-            aria-label="Cerrar menú"
-          >
-            <X className="w-5 h-5 text-slate-500" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setNotificationModalOpen(true)}
+              className="relative p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 hover:bg-slate-50 dark:hover:bg-slate-800/80 transition cursor-pointer shadow-2xs group flex items-center justify-center shrink-0"
+              title="Centro de Notificaciones & Alertas"
+              aria-label="Abrir centro de notificaciones"
+            >
+              <Bell className="w-4 h-4 text-slate-500 group-hover:text-indigo-500 transition" />
+              {unreadNotificationsCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center ring-2 ring-white dark:ring-slate-900 animate-pulse">
+                  {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(false)}
+              className="md:hidden p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+              aria-label="Cerrar menú"
+            >
+              <X className="w-5 h-5 text-slate-500" />
+            </button>
+          </div>
         </div>
 
         {/* Modern Workspace / Tenant Switcher */}
@@ -854,9 +876,29 @@ export const AppShell: React.FC<AppShellProps> = ({
               </button>
             </div>
 
-            {/* LADO DERECHO: PERFIL DE USUARIO */}
-            {user && role && (
-              <div className="relative" ref={headerUserRef}>
+            {/* LADO DERECHO: NOTIFICACIONES + PERFIL DE USUARIO */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setNotificationModalOpen(true)}
+                className="relative p-2 rounded-xl border hover:border-indigo-500/40 transition cursor-pointer shadow-2xs group flex items-center justify-center shrink-0"
+                style={{
+                  borderColor: 'var(--app-border)',
+                  backgroundColor: 'var(--app-bg)',
+                }}
+                title="Centro de Notificaciones"
+                aria-label="Abrir centro de notificaciones"
+              >
+                <Bell className="w-4 h-4 text-slate-500 group-hover:text-indigo-500 transition" />
+                {unreadNotificationsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center ring-2 ring-white dark:ring-slate-900 animate-pulse">
+                    {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
+                  </span>
+                )}
+              </button>
+
+              {user && role && (
+                <div className="relative" ref={headerUserRef}>
                 <button
                   type="button"
                   onClick={() => setHeaderUserOpen((prev) => !prev)}
@@ -984,6 +1026,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                 )}
               </div>
             )}
+            </div>
           </div>
         </header>
 
@@ -1437,6 +1480,13 @@ export const AppShell: React.FC<AppShellProps> = ({
         isOpen={creatorModalOpen}
         onClose={() => setCreatorModalOpen(false)}
         onNavigate={onSelectModule}
+      />
+
+      {/* 7. CENTRO DE NOTIFICACIONES MULTITENANT & PWA */}
+      <NotificationCenterModal
+        isOpen={notificationModalOpen}
+        onClose={() => setNotificationModalOpen(false)}
+        onNavigateModule={onSelectModule}
       />
     </div>
   );
