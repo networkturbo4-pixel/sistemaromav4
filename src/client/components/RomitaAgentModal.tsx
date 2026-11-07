@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+import { RomitaMarkdownView } from './RomitaMarkdownView';
 import {
   Sparkles,
   Mic,
@@ -67,14 +68,58 @@ export const RomitaAgentModal: React.FC<RomitaAgentModalProps> = ({
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
 
-  const [messages, setMessages] = useState<ChatMessage[]>(() => [
-    {
-      id: 'welcome',
-      role: 'assistant',
-      text: `¡Hola ${user?.name ? user.name.split(' ')[0] : ''}! Soy **Romita**, tu asistente de IA. Puedo **crear clientes**, **asignar tareas**, **gestionar cotizaciones** o darte resúmenes del sistema.`,
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const stored = localStorage.getItem('roma_romita_chat_history');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((m: any) => ({
+            ...m,
+            timestamp: new Date(m.timestamp),
+          }));
+        }
+      }
+    } catch {}
+    return [
+      {
+        id: 'welcome',
+        role: 'assistant',
+        text: `¡Hola ${user?.name ? user.name.split(' ')[0] : ''}! Soy **Romita**, tu asistente de IA. Puedo **crear clientes**, **asignar tareas**, **gestionar cotizaciones** o darte resúmenes y reportes en tablas.`,
+        timestamp: new Date(),
+      },
+    ];
+  });
+
+  // Guardar en localStorage y notificar cambios
+  useEffect(() => {
+    try {
+      localStorage.setItem('roma_romita_chat_history', JSON.stringify(messages));
+      window.dispatchEvent(new CustomEvent('roma_romita_chat_updated', { detail: { source: 'modal' } }));
+    } catch {}
+  }, [messages]);
+
+  // Escuchar actualizaciones externas (ej. desde el submódulo de Workspace)
+  useEffect(() => {
+    const handleSync = (e: any) => {
+      if (e?.detail?.source === 'modal') return;
+      try {
+        const stored = localStorage.getItem('roma_romita_chat_history');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            setMessages(parsed.map((m: any) => ({
+              ...m,
+              timestamp: new Date(m.timestamp),
+            })));
+          }
+        }
+      } catch {}
+    };
+
+    window.addEventListener('roma_romita_chat_updated', handleSync);
+    return () => window.removeEventListener('roma_romita_chat_updated', handleSync);
+  }, []);
 
   const [activePendingAction, setActivePendingAction] = useState<PendingActionProposal | null>(null);
 
@@ -248,6 +293,24 @@ export const RomitaAgentModal: React.FC<RomitaAgentModalProps> = ({
       speakText('Operación completada con éxito.');
 
       window.dispatchEvent(new CustomEvent('roma-data-mutated', { detail: action }));
+
+      // Guardar en bitácora de acciones de Romita
+      try {
+        const logEntry = {
+          id: action.id,
+          type: action.type,
+          module: action.module,
+          title: action.title,
+          description: action.description,
+          payload: action.payload,
+          timestamp: new Date().toISOString(),
+          user: user?.name || 'Usuario',
+          status: 'executed',
+        };
+        const existingLogs = JSON.parse(localStorage.getItem('roma_romita_action_history') || '[]');
+        localStorage.setItem('roma_romita_action_history', JSON.stringify([logEntry, ...existingLogs.slice(0, 49)]));
+        window.dispatchEvent(new Event('roma_romita_actions_updated'));
+      } catch {}
     } catch (err: any) {
       showToast(err.message || 'Error al ejecutar la acción', 'error');
     } finally {
@@ -308,20 +371,13 @@ export const RomitaAgentModal: React.FC<RomitaAgentModalProps> = ({
                 : 'color-mix(in srgb, var(--app-surface) 94%, black 6%)',
             }}
           >
-            <div className="flex items-center gap-2">
-              <div className="relative flex items-center justify-center">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping absolute" />
-                <span className="w-2 h-2 rounded-full bg-emerald-500 relative" />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-xs tracking-tight flex items-center gap-1">
-                  <Sparkles className="w-3.5 h-3.5 text-sky-500" />
-                  Romita AI
-                </span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded-md font-bold bg-sky-500/10 text-sky-600 dark:text-sky-400">
-                  Copilot
-                </span>
-              </div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-extrabold text-xs tracking-tight" style={{ color: 'var(--app-text)' }}>
+                Romita AI
+              </span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-sky-500/10 text-sky-600 dark:text-sky-400">
+                Copilot
+              </span>
             </div>
 
             <div className="flex items-center gap-1">
@@ -407,7 +463,7 @@ export const RomitaAgentModal: React.FC<RomitaAgentModalProps> = ({
                         color: msg.role === 'user' ? '#ffffff' : 'var(--app-text)',
                       }}
                     >
-                      <p className="whitespace-pre-wrap">{msg.text}</p>
+                      <RomitaMarkdownView content={msg.text} />
                     </div>
                     <span className="text-[9px] text-slate-400 mt-0.5 px-1">
                       {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -494,40 +550,6 @@ export const RomitaAgentModal: React.FC<RomitaAgentModalProps> = ({
                   </div>
                 </div>
               )}
-
-              {/* CHIPS DE ACCIÓN RÁPIDA */}
-              <div
-                className="px-3 py-1.5 flex items-center gap-1.5 overflow-x-auto text-[10px] border-t scrollbar-none"
-                style={{
-                  borderColor: 'var(--app-border)',
-                  backgroundColor: 'var(--app-surface)',
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage('Crear nuevo cliente corporativo')}
-                  className="px-2 py-0.5 rounded-md border text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition shrink-0 cursor-pointer"
-                  style={{ borderColor: 'var(--app-border)' }}
-                >
-                  + Cliente
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage('Crear tarea urgente: Revisar contrato')}
-                  className="px-2 py-0.5 rounded-md border text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition shrink-0 cursor-pointer"
-                  style={{ borderColor: 'var(--app-border)' }}
-                >
-                  + Tarea
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage('Dame un resumen de cotizaciones y clientes')}
-                  className="px-2 py-0.5 rounded-md border text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition shrink-0 cursor-pointer"
-                  style={{ borderColor: 'var(--app-border)' }}
-                >
-                  📊 Resumen
-                </button>
-              </div>
 
               {/* BARRA DE ENTRADA (PROMPT BOX) */}
               <div

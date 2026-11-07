@@ -72,6 +72,9 @@ import {
   WhiteboardAccessType,
   WhiteboardPublicRole,
   BrandGuideline,
+  WorkspaceEmailAccount,
+  WorkspaceEmailMessage,
+  EmailFolder,
 } from '../shared/types';
 import { ALL_PERMISSION_KEYS, PermissionKey } from '../shared/permissions';
 
@@ -112,6 +115,8 @@ export interface DatabaseState {
   whiteboards: Whiteboard[];
   whiteboardFolders: WhiteboardFolder[];
   brandGuidelines: BrandGuideline[];
+  workspaceEmailAccounts: WorkspaceEmailAccount[];
+  workspaceEmailMessages: WorkspaceEmailMessage[];
 }
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -209,6 +214,8 @@ export class DatabaseManager {
         if (!Array.isArray(parsed.accountingEntries)) parsed.accountingEntries = [];
         if (!Array.isArray(parsed.workspaceForms)) parsed.workspaceForms = [];
         if (!Array.isArray(parsed.formSubmissions)) parsed.formSubmissions = [];
+        if (!Array.isArray(parsed.workspaceEmailAccounts)) parsed.workspaceEmailAccounts = [];
+        if (!Array.isArray(parsed.workspaceEmailMessages)) parsed.workspaceEmailMessages = [];
 
         // Limpieza automática de artefactos HTML y de IA en copys y briefs existentes
         let dirtyPostsCleaned = 0;
@@ -267,6 +274,8 @@ export class DatabaseManager {
       whiteboards: [],
       whiteboardFolders: [],
       brandGuidelines: [],
+      workspaceEmailAccounts: [],
+      workspaceEmailMessages: [],
     };
     return defaultState;
   }
@@ -4345,6 +4354,259 @@ export class DatabaseManager {
     if (deleted) this.saveLocalState();
     return deleted;
   }
+
+  // ======
+  // CORREOS CORPORATIVOS (SMTP / IMAP)
+  // ===========================================================================
+
+  public async getEmailAccounts(tenantId: string, userId?: string): Promise<WorkspaceEmailAccount[]> {
+    if (!Array.isArray(this.localState.workspaceEmailAccounts)) {
+      this.localState.workspaceEmailAccounts = [];
+    }
+    return this.localState.workspaceEmailAccounts.filter((acc) => {
+      if (acc.tenantId !== tenantId) return false;
+      if (userId && acc.userId && acc.userId !== userId) return false;
+      return true;
+    });
+  }
+
+  public async getEmailAccountById(id: string, tenantId: string): Promise<WorkspaceEmailAccount | null> {
+    const list = await this.getEmailAccounts(tenantId);
+    return list.find((a) => a.id === id) || null;
+  }
+
+  public async saveEmailAccount(
+    data: Partial<WorkspaceEmailAccount> & { tenantId: string; email: string; name: string }
+  ): Promise<WorkspaceEmailAccount> {
+    if (!Array.isArray(this.localState.workspaceEmailAccounts)) {
+      this.localState.workspaceEmailAccounts = [];
+    }
+    const now = new Date().toISOString();
+
+    if (data.id) {
+      const idx = this.localState.workspaceEmailAccounts.findIndex(
+        (a) => a.id === data.id && a.tenantId === data.tenantId
+      );
+      if (idx !== -1) {
+        const existing = this.localState.workspaceEmailAccounts[idx];
+        const updated: WorkspaceEmailAccount = {
+          ...existing,
+          ...data,
+          smtpPassword: data.smtpPassword !== undefined && data.smtpPassword !== '' ? data.smtpPassword : existing.smtpPassword,
+          imapPassword: data.imapPassword !== undefined && data.imapPassword !== '' ? data.imapPassword : existing.imapPassword,
+          updatedAt: now,
+        };
+        this.localState.workspaceEmailAccounts[idx] = updated;
+        this.saveLocalState();
+        return updated;
+      }
+    }
+
+    if (data.isDefault || this.localState.workspaceEmailAccounts.filter((a) => a.tenantId === data.tenantId).length === 0) {
+      this.localState.workspaceEmailAccounts.forEach((a) => {
+        if (a.tenantId === data.tenantId) a.isDefault = false;
+      });
+    }
+
+    const newAccount: WorkspaceEmailAccount = {
+      id: data.id || ('emacc-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7)),
+      tenantId: data.tenantId,
+      userId: data.userId,
+      name: data.name || 'Principal',
+      email: data.email.trim().toLowerCase(),
+      senderName: data.senderName || 'Agencia',
+      signatureHtml: data.signatureHtml || '',
+      isDefault: data.isDefault ?? true,
+      smtpHost: data.smtpHost || '',
+      smtpPort: Number(data.smtpPort) || 465,
+      smtpSecure: data.smtpSecure !== undefined ? Boolean(data.smtpSecure) : true,
+      smtpUser: data.smtpUser || data.email,
+      smtpPassword: data.smtpPassword || '',
+      imapHost: data.imapHost || '',
+      imapPort: Number(data.imapPort) || 993,
+      imapSecure: data.imapSecure !== undefined ? Boolean(data.imapSecure) : true,
+      imapUser: data.imapUser || data.email,
+      imapPassword: data.imapPassword || data.smtpPassword || '',
+      provider: data.provider || 'custom',
+      lastSyncedAt: data.lastSyncedAt,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.localState.workspaceEmailAccounts.push(newAccount);
+    this.saveLocalState();
+    return newAccount;
+  }
+
+  public async deleteEmailAccount(id: string, tenantId: string): Promise<boolean> {
+    if (!Array.isArray(this.localState.workspaceEmailAccounts)) return false;
+    const initial = this.localState.workspaceEmailAccounts.length;
+    this.localState.workspaceEmailAccounts = this.localState.workspaceEmailAccounts.filter(
+      (a) => !(a.id === id && a.tenantId === tenantId)
+    );
+    const deleted = this.localState.workspaceEmailAccounts.length < initial;
+    if (deleted) {
+      if (Array.isArray(this.localState.workspaceEmailMessages)) {
+        this.localState.workspaceEmailMessages = this.localState.workspaceEmailMessages.filter(
+          (m) => !(m.accountId === id && m.tenantId === tenantId)
+        );
+      }
+      this.saveLocalState();
+    }
+    return deleted;
+  }
+
+  public async getEmailMessages(
+    tenantId: string,
+    filter: {
+      accountId?: string;
+      folder?: EmailFolder;
+      search?: string;
+      limit?: number;
+      offset?: number;
+    } = {}
+  ): Promise<{ messages: WorkspaceEmailMessage[]; total: number; unreadCount: number }> {
+    if (!Array.isArray(this.localState.workspaceEmailMessages)) {
+      this.localState.workspaceEmailMessages = [];
+    }
+
+    let list = this.localState.workspaceEmailMessages.filter((m) => m.tenantId === tenantId);
+
+    if (filter.accountId) {
+      list = list.filter((m) => m.accountId === filter.accountId);
+    }
+
+    const unreadCount = list.filter((m) => m.folder === 'inbox' && !m.isRead).length;
+
+    if (filter.folder) {
+      if (filter.folder === 'starred') {
+        list = list.filter((m) => m.isStarred);
+      } else {
+        list = list.filter((m) => m.folder === filter.folder);
+      }
+    }
+
+    if (filter.search) {
+      const q = filter.search.toLowerCase().trim();
+      list = list.filter(
+        (m) =>
+          m.subject?.toLowerCase().includes(q) ||
+          m.from?.toLowerCase().includes(q) ||
+          m.fromName?.toLowerCase().includes(q) ||
+          m.snippet?.toLowerCase().includes(q) ||
+          m.to?.some((t) => t.toLowerCase().includes(q))
+      );
+    }
+
+    list.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime());
+
+    const total = list.length;
+    const offset = filter.offset || 0;
+    const limit = filter.limit || 50;
+    const paginated = list.slice(offset, offset + limit);
+
+    return { messages: paginated, total, unreadCount };
+  }
+
+  public async getEmailMessageById(id: string, tenantId: string): Promise<WorkspaceEmailMessage | null> {
+    if (!Array.isArray(this.localState.workspaceEmailMessages)) return null;
+    return this.localState.workspaceEmailMessages.find((m) => m.id === id && m.tenantId === tenantId) || null;
+  }
+
+  public async saveEmailMessage(
+    data: Partial<WorkspaceEmailMessage> & { tenantId: string; accountId: string; subject: string; from: string; to: string[] }
+  ): Promise<WorkspaceEmailMessage> {
+    if (!Array.isArray(this.localState.workspaceEmailMessages)) {
+      this.localState.workspaceEmailMessages = [];
+    }
+
+    const now = new Date().toISOString();
+    const newMsg: WorkspaceEmailMessage = {
+      id: data.id || ('msg-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7)),
+      tenantId: data.tenantId,
+      accountId: data.accountId,
+      folder: data.folder || 'inbox',
+      uid: data.uid,
+      messageId: data.messageId,
+      from: data.from,
+      fromName: data.fromName || '',
+      to: Array.isArray(data.to) ? data.to : [data.to],
+      cc: data.cc || [],
+      bcc: data.bcc || [],
+      replyTo: data.replyTo,
+      subject: data.subject || '(Sin Asunto)',
+      snippet: data.snippet || (data.bodyText ? data.bodyText.substring(0, 140).trim() : ''),
+      bodyHtml: data.bodyHtml || '',
+      bodyText: data.bodyText || '',
+      isRead: data.isRead ?? false,
+      isStarred: data.isStarred ?? false,
+      hasAttachments: Boolean(data.attachments && data.attachments.length > 0),
+      attachments: data.attachments || [],
+      date: data.date || now,
+      createdAt: data.createdAt || now,
+    };
+
+    const existingIdx = this.localState.workspaceEmailMessages.findIndex(
+      (m) =>
+        (m.id === newMsg.id || (newMsg.messageId && m.messageId === newMsg.messageId)) &&
+        m.tenantId === newMsg.tenantId &&
+        m.accountId === newMsg.accountId
+    );
+
+    if (existingIdx !== -1) {
+      this.localState.workspaceEmailMessages[existingIdx] = {
+        ...this.localState.workspaceEmailMessages[existingIdx],
+        ...newMsg,
+      };
+      this.saveLocalState();
+      return this.localState.workspaceEmailMessages[existingIdx];
+    }
+
+    this.localState.workspaceEmailMessages.unshift(newMsg);
+    this.saveLocalState();
+    return newMsg;
+  }
+
+  public async updateEmailMessage(
+    id: string,
+    tenantId: string,
+    updates: Partial<WorkspaceEmailMessage>
+  ): Promise<WorkspaceEmailMessage | null> {
+    if (!Array.isArray(this.localState.workspaceEmailMessages)) return null;
+    const idx = this.localState.workspaceEmailMessages.findIndex((m) => m.id === id && m.tenantId === tenantId);
+    if (idx === -1) return null;
+
+    const current = this.localState.workspaceEmailMessages[idx];
+    const updated: WorkspaceEmailMessage = {
+      ...current,
+      ...updates,
+      id: current.id,
+      tenantId: current.tenantId,
+      accountId: current.accountId,
+    };
+
+    this.localState.workspaceEmailMessages[idx] = updated;
+    this.saveLocalState();
+    return updated;
+  }
+
+  public async deleteEmailMessage(id: string, tenantId: string, hardDelete = false): Promise<boolean> {
+    if (!Array.isArray(this.localState.workspaceEmailMessages)) return false;
+    const idx = this.localState.workspaceEmailMessages.findIndex((m) => m.id === id && m.tenantId === tenantId);
+    if (idx === -1) return false;
+
+    if (!hardDelete && this.localState.workspaceEmailMessages[idx].folder !== 'trash') {
+      this.localState.workspaceEmailMessages[idx].folder = 'trash';
+      this.saveLocalState();
+      return true;
+    }
+
+    this.localState.workspaceEmailMessages.splice(idx, 1);
+    this.saveLocalState();
+    return true;
+  }
+
 }
+
 
 export const db = new DatabaseManager();

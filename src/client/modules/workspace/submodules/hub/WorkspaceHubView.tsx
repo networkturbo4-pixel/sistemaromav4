@@ -1,5 +1,5 @@
 import React from 'react';
-import { Share2, ListTodo, HardDrive, ArrowRight, Sparkles, Wrench, FileText, Video } from 'lucide-react';
+import { Share2, ListTodo, HardDrive, ArrowRight, Sparkles, Wrench, FileText, Video, Bot } from 'lucide-react';
 import { WorkspaceProject, WorkspaceTask } from '../../../../shared/types';
 
 interface WorkspaceHubViewProps {
@@ -8,7 +8,7 @@ interface WorkspaceHubViewProps {
   formsCount?: number;
   meetingsCount?: number;
   whiteboardsCount?: number;
-  onSelectSubmodule: (view: 'social' | 'tasks' | 'drive' | 'tools' | 'forms' | 'meetings' | 'whiteboards' | 'brand-guidelines') => void;
+  onSelectSubmodule: (view: 'social' | 'tasks' | 'drive' | 'tools' | 'forms' | 'meetings' | 'whiteboards' | 'brand-guidelines' | 'romita') => void;
 }
 
 export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
@@ -288,6 +288,38 @@ export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
           </div>
 
           <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] sm:text-xs font-bold text-amber-600 dark:text-amber-400">
+            <span>Ingresar</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </button>
+
+        {/* SUBMÓDULO 9: ROMITA AI & HISTORIAL */}
+        <button
+          type="button"
+          onClick={() => onSelectSubmodule('romita')}
+          className="group bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 text-left shadow-xs hover:shadow-md hover:border-sky-400 dark:hover:border-sky-600 hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between cursor-pointer"
+        >
+          <div>
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-sky-50 dark:bg-sky-950/50 border border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0 mb-2.5 sm:mb-3 group-hover:bg-sky-600 group-hover:text-white transition-colors duration-200">
+              <Bot className="w-5 h-5 sm:w-6 sm:h-6" />
+            </div>
+
+            <div className="flex items-center gap-1.5 mb-0.5 sm:mb-1">
+              <span className="text-[10px] sm:text-xs font-bold text-slate-400">
+                Copilot & Bitácora
+              </span>
+            </div>
+
+            <h3 className="text-xs sm:text-base font-extrabold text-slate-900 dark:text-white group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors line-clamp-1">
+              Romita AI & Historial
+            </h3>
+
+            <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-tight sm:leading-relaxed">
+              Agente con permisos de acción, historial de chats y bitácora de ejecuciones del SaaS.
+            </p>
+          </div>
+
+          <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] sm:text-xs font-bold text-sky-600 dark:text-sky-400">
             <span>Ingresar</span>
             <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
           </div>

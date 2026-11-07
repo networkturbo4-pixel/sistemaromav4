@@ -40,6 +40,7 @@ import { FormsSubmoduleView } from './workspace/submodules/forms/FormsSubmoduleV
 import { MeetingsSubmoduleView } from './workspace/submodules/meetings/MeetingsSubmoduleView';
 import { WhiteboardsSubmoduleView } from './workspace/submodules/whiteboards/WhiteboardsSubmoduleView';
 import { BrandGuidelinesSubmoduleView } from './workspace/submodules/brand-guidelines/BrandGuidelinesSubmoduleView';
+import { RomitaWorkspaceView } from './workspace/submodules/romita/RomitaWorkspaceView';
 
 // Modales
 import { ProjectModal } from './workspace/modals/ProjectModal';
@@ -54,8 +55,8 @@ import { X } from 'lucide-react';
 export const WorkspaceModule: React.FC = () => {
   const { tenant, user, toast, confirmAction, apiFetch } = useApp();
 
-  // Nivel 0: Navegación de Submódulos ('hub', 'social', 'tasks', 'drive', 'tools', 'forms', 'meetings', 'whiteboards', 'brand-guidelines')
-  const [currentView, setCurrentView] = useState<'hub' | 'social' | 'tasks' | 'drive' | 'tools' | 'forms' | 'meetings' | 'whiteboards' | 'brand-guidelines'>('hub');
+  // Nivel 0: Navegación de Submódulos ('hub', 'social', 'tasks', 'drive', 'tools', 'forms', 'meetings', 'whiteboards', 'brand-guidelines', 'romita')
+  const [currentView, setCurrentView] = useState<'hub' | 'social' | 'tasks' | 'drive' | 'tools' | 'forms' | 'meetings' | 'whiteboards' | 'brand-guidelines' | 'romita'>('hub');
   const [forms, setForms] = useState<WorkspaceForm[]>([]);
   const [meetings, setMeetings] = useState<WorkspaceMeeting[]>([]);
   const [whiteboardsCount, setWhiteboardsCount] = useState<number>(0);
@@ -1170,6 +1171,15 @@ export const WorkspaceModule: React.FC = () => {
       {currentView === 'brand-guidelines' && (
         <div className="space-y-4 animate-fadeIn">
           <BrandGuidelinesSubmoduleView onBackToHub={() => setCurrentView('hub')} />
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* SUBMÓDULO: ROMITA AI & HISTORIAL OPERATIVO */}
+      {/* ===================================================================== */}
+      {currentView === 'romita' && (
+        <div className="space-y-4 animate-fadeIn">
+          <RomitaWorkspaceView onBackToHub={() => setCurrentView('hub')} />
         </div>
       )}
 

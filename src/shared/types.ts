@@ -1865,3 +1865,74 @@ export interface BrandGuideline {
   createdAt: string;
   updatedAt: string;
 }
+
+// =============================================================================
+// SUBMÓDULO DE WORKSPACE: CORREOS CORPORATIVOS (SMTP / IMAP)
+// =============================================================================
+
+export interface WorkspaceEmailAccount {
+  id: string;
+  tenantId: string;
+  userId?: string;
+  name: string; // ej: "Ventas Principal", "Administración"
+  email: string; // ej: contacto@tudominio.com
+  senderName: string; // ej: "Agencia Roma"
+  signatureHtml?: string;
+  isDefault?: boolean;
+  
+  // Servidor Saliente (SMTP)
+  smtpHost: string; // ej: mail.tudominio.com
+  smtpPort: number; // 465 (SSL) o 587 (TLS)
+  smtpSecure: boolean;
+  smtpUser: string;
+  smtpPassword?: string;
+  
+  // Servidor Entrante (IMAP)
+  imapHost: string; // ej: mail.tudominio.com
+  imapPort: number; // 993 (SSL) o 143 (TLS)
+  imapSecure: boolean;
+  imapUser: string;
+  imapPassword?: string;
+
+  provider?: 'namecheap' | 'banahosting' | 'custom' | 'gmail';
+  lastSyncedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type EmailFolder = 'inbox' | 'sent' | 'drafts' | 'trash' | 'spam' | 'starred';
+
+export interface EmailAttachment {
+  id?: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  url?: string;
+  contentId?: string;
+}
+
+export interface WorkspaceEmailMessage {
+  id: string;
+  tenantId: string;
+  accountId: string;
+  folder: EmailFolder;
+  uid?: number;
+  messageId?: string;
+  from: string;
+  fromName?: string;
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+  replyTo?: string;
+  subject: string;
+  snippet?: string;
+  bodyHtml?: string;
+  bodyText?: string;
+  isRead: boolean;
+  isStarred: boolean;
+  hasAttachments: boolean;
+  attachments?: EmailAttachment[];
+  date: string; // ISO
+  createdAt: string;
+}
+

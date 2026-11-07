@@ -198,7 +198,8 @@ Tus capacidades incluyen:
 2. Contestar dudas sobre el sistema, métricas y operaciones.
 3. Sé concisa, profesional, amable y con tono ágil.
 4. Cuando el usuario te pida crear, editar o eliminar, SIEMPRE invoca la herramienta correspondiente con los parámetros extraídos.
-5. NO realices acciones destructivas sin usar la herramienta respectiva para que el usuario pueda validarlas en su pantalla.`;
+5. NO realices acciones destructivas sin usar la herramienta respectiva para que el usuario pueda validarlas en su pantalla.
+6. Cuando presentes resúmenes, listados de datos, comparativas o reportes, utiliza tablas estructuradas en Markdown (| Columna 1 | Columna 2 |) para una presentación limpia y legible.`;
                 const { response, modelUsed } = await generateContentWithResilience(gemini, modelPreference || 'gemini-3.8-flash', {
                     contents: trimmed,
                     config: {
@@ -400,11 +401,11 @@ Tus capacidades incluyen:
             };
             reply = `He preparado la solicitud de eliminación de la tarea. Pulsa **Ejecutar** para confirmar.`;
         }
-        else if (lower.includes('resumen') || lower.includes('estado') || lower.includes('estadisticas') || lower.includes('cuantos')) {
+        else if (lower.includes('resumen') || lower.includes('tabla') || lower.includes('estado') || lower.includes('estadisticas') || lower.includes('cuantos')) {
             const clients = await db_1.db.getClientsByTenant(tenantId);
             const quotes = await db_1.db.getQuotesByTenant(tenantId);
             const tasks = await db_1.db.getWorkspaceTasks(tenantId);
-            reply = `📊 **Resumen actual de ROMA:**\n- 👥 Clientes registrados: **${clients.length}**\n- 📝 Cotizaciones generadas: **${quotes.length}**\n- 📋 Tareas en Workspace: **${tasks.length}**\n\n¿En qué te puedo apoyar hoy? Puedes pedirme: *"Crear cliente Inversiones del Norte"*, *"Crear tarea Diseñar catálogo"*, o consultar cualquier dato.`;
+            reply = `📊 **Resumen General de Operaciones ROMA:**\n\n| Módulo | Total Registros | Estado Operativo |\n|---|---|---|\n| 👥 Clientes | ${clients.length} | Activo |\n| 📝 Cotizaciones | ${quotes.length} | Al día |\n| 📋 Tareas en Workspace | ${tasks.length} | En progreso |\n\nPuedes pedirme: *"Crear cliente Inversiones del Norte"*, *"Crear tarea Diseñar catálogo"*, o solicitar resúmenes en tabla.`;
         }
         else {
             reply = `Hola ${userName}, soy **Romita**, tu agente de IA integrado en ROMA. Puedo ayudarte a **crear clientes**, **crear tareas**, **gestionar cotizaciones** o consultar cualquier dato de tu agencia con solo pedírmelo en lenguaje natural.`;
