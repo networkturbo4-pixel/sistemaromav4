@@ -290,6 +290,14 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
       raw.push({ id: 'before_after', type: 'before_after', label: 'Evolución: Antes vs. Después' });
     }
 
+    if (guideline.logoVersions && guideline.logoVersions.length > 0) {
+      raw.push({ id: 'logo_versions', type: 'logo_versions', label: 'Versiones Oficiales y Submarcas' });
+    }
+
+    if (guideline.mockupGalleryItems && guideline.mockupGalleryItems.length > 0) {
+      raw.push({ id: 'mockup_gallery_slide', type: 'mockup_gallery_slide', label: 'Galería de Mockups Fotográficos' });
+    }
+
     raw.push(
       { id: 'geometry_icons', type: 'geometry_icons', label: 'Retícula Áurea, Tamaños Mínimos e Iconografía' },
       { id: 'clearspace_donts', type: 'clearspace_donts', label: 'Área de Resguardo y Usos Incorrectos' },
@@ -763,6 +771,72 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
         doc.text('• Paleta estandarizada con valores certificados HEX, RGB y CMYK.', 160, 116);
 
         createFooter('Evolución Rebrand');
+      }
+
+      // -------------------------------------------------------------
+      // PÁGINA (Condicional): VERSIONES OFICIALES Y SUBMARCAS
+      // -------------------------------------------------------------
+      if (guideline.logoVersions && guideline.logoVersions.length > 0) {
+        currentPageNum++;
+        doc.addPage([297, 167], 'landscape');
+        createHeader(String(currentPageNum).padStart(2, '0'), 'Versiones Oficiales y Submarcas de la Marca');
+
+        const vers = guideline.logoVersions.slice(0, 6);
+        vers.forEach((v, idx) => {
+          const col = idx % 3;
+          const row = Math.floor(idx / 3);
+          const x = 20 + col * 88;
+          const y = 34 + row * 54;
+
+          doc.setFillColor(22, 22, 26);
+          doc.roundedRect(x, y, 82, 48, 2.5, 2.5, 'F');
+
+          doc.setFontSize(8.5);
+          doc.setTextColor(prR, prG, prB);
+          doc.text(v.tag ? `[${v.tag.toUpperCase()}]` : '[OFICIAL]', x + 6, y + 10);
+
+          doc.setFontSize(10.5);
+          doc.setTextColor(255, 255, 255);
+          doc.text(doc.splitTextToSize(v.name, 70), x + 6, y + 20);
+
+          doc.setFontSize(7.5);
+          doc.setTextColor(140, 140, 150);
+          doc.text(v.description ? doc.splitTextToSize(v.description, 70) : 'Versión complementaria aprobada.', x + 6, y + 36);
+        });
+
+        createFooter('Versiones y Submarcas');
+      }
+
+      // -------------------------------------------------------------
+      // PÁGINA (Condicional): GALERÍA DE MOCKUPS FOTOGRÁFICOS
+      // -------------------------------------------------------------
+      if (guideline.mockupGalleryItems && guideline.mockupGalleryItems.length > 0) {
+        currentPageNum++;
+        doc.addPage([297, 167], 'landscape');
+        createHeader(String(currentPageNum).padStart(2, '0'), 'Galería de Mockups y Aplicaciones Fotográficas');
+
+        const mItems = guideline.mockupGalleryItems.slice(0, 4);
+        mItems.forEach((m, idx) => {
+          const x = 20 + idx * 64;
+          doc.setFillColor(22, 22, 26);
+          doc.roundedRect(x, 34, 60, 106, 2.5, 2.5, 'F');
+
+          doc.setFontSize(8);
+          doc.setTextColor(prR, prG, prB);
+          doc.text(m.category.toUpperCase(), x + 6, 46);
+
+          doc.setFontSize(10);
+          doc.setTextColor(255, 255, 255);
+          doc.text(doc.splitTextToSize(m.title, 48), x + 6, 58);
+
+          doc.setFontSize(7.5);
+          doc.setTextColor(150, 150, 160);
+          doc.text(`Escala: ${m.stampScale || 100}%`, x + 6, 80);
+          doc.text(`Posición: ${m.stampPositionPreset || 'Centro'}`, x + 6, 90);
+          doc.text(`Fusión: ${m.blendMode || 'Normal'}`, x + 6, 100);
+        });
+
+        createFooter('Aplicaciones y Mockups');
       }
 
       // -------------------------------------------------------------
@@ -1370,6 +1444,115 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
   // ---------------------------------------------------------------------------
   // HELPER DE AUTO-ESTAMPADO DEL LOGO O ICONO/ISOTIPO (PARA PRENDAS Y MOCKUPS)
   // ---------------------------------------------------------------------------
+  // Resuelve qué logo utilizar en mockups fotográficos
+  const resolvePublicMockupLogo = (
+    logoType: 'primary' | 'secondary' | 'symbol' | 'symbol_dark' | 'favicon' | 'custom_version',
+    customVersionId?: string
+  ): string => {
+    if (!guideline) return '';
+    if (logoType === 'custom_version' && customVersionId) {
+      const found = (guideline.logoVersions || []).find((v) => v.id === customVersionId);
+      if (found?.url) return found.url;
+    }
+    if (logoType === 'secondary') {
+      return (
+        guideline.logoSecondaryUrl ||
+        guideline.logoPrimaryUrl ||
+        guideline.logoSymbolDarkUrl ||
+        guideline.logoSymbolUrl ||
+        ''
+      );
+    }
+    if (logoType === 'symbol') {
+      return (
+        guideline.logoSymbolUrl ||
+        guideline.logoPrimaryUrl ||
+        guideline.logoSymbolDarkUrl ||
+        ''
+      );
+    }
+    if (logoType === 'symbol_dark') {
+      return (
+        guideline.logoSymbolDarkUrl ||
+        guideline.logoSymbolUrl ||
+        guideline.logoSecondaryUrl ||
+        guideline.logoPrimaryUrl ||
+        ''
+      );
+    }
+    if (logoType === 'favicon') {
+      return guideline.logoFaviconUrl || guideline.logoSymbolUrl || guideline.logoPrimaryUrl || '';
+    }
+    return guideline.logoPrimaryUrl || guideline.logoSymbolUrl || guideline.logoSecondaryUrl || '';
+  };
+
+  const getPublicMockupStampStyle = (
+    pos: 'chest_left' | 'center_large' | 'back_print' | 'full' | 'subtle' = 'center_large',
+    scale: number = 100,
+    blendMode: 'normal' | 'multiply' | 'screen' = 'normal'
+  ): React.CSSProperties => {
+    const scaleRatio = (scale || 100) / 100;
+    const base: React.CSSProperties = {
+      position: 'absolute',
+      transform: 'translate(-50%, -50%)',
+      pointerEvents: 'none',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      mixBlendMode: blendMode,
+    };
+    switch (pos) {
+      case 'chest_left':
+        return {
+          ...base,
+          top: '36%',
+          left: '38%',
+          width: `${Math.round(20 * scaleRatio)}%`,
+          height: `${Math.round(20 * scaleRatio)}%`,
+        };
+      case 'center_large':
+        return {
+          ...base,
+          top: '46%',
+          left: '50%',
+          width: `${Math.round(36 * scaleRatio)}%`,
+          height: `${Math.round(36 * scaleRatio)}%`,
+        };
+      case 'back_print':
+        return {
+          ...base,
+          top: '42%',
+          left: '50%',
+          width: `${Math.round(44 * scaleRatio)}%`,
+          height: `${Math.round(44 * scaleRatio)}%`,
+        };
+      case 'full':
+        return {
+          ...base,
+          top: '50%',
+          left: '50%',
+          width: `${Math.round(52 * scaleRatio)}%`,
+          height: `${Math.round(52 * scaleRatio)}%`,
+        };
+      case 'subtle':
+        return {
+          ...base,
+          top: '58%',
+          left: '50%',
+          width: `${Math.round(22 * scaleRatio)}%`,
+          height: `${Math.round(22 * scaleRatio)}%`,
+        };
+      default:
+        return {
+          ...base,
+          top: '50%',
+          left: '50%',
+          width: `${Math.round(35 * scaleRatio)}%`,
+          height: `${Math.round(35 * scaleRatio)}%`,
+        };
+    }
+  };
+
   const renderBrandStamp = (
     variant: 'light' | 'dark' = 'light',
     sizeClass = 'h-5',
@@ -2142,6 +2325,156 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
     const primaryFont = guideline.typography?.[0]?.fontFamily || 'Inter';
 
     switch (slide.type) {
+      case 'logo_versions':
+        return (
+          <div className={`w-full min-h-full flex flex-col justify-between p-6 sm:p-12 ${bgClass} select-none`}>
+            <div className="flex justify-between items-center">
+              <div>
+                <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60 block">
+                  Sistema de Identidad • Variaciones y Submarcas
+                </span>
+                <h3 className="text-lg sm:text-2xl font-bold tracking-tight mt-0.5">
+                  Versiones Oficiales Autorizadas
+                </h3>
+              </div>
+              <span className="text-[10px] font-mono opacity-50">
+                {(guideline.logoVersions || []).length} variantes
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 my-auto py-4">
+              {(guideline.logoVersions || []).map((ver, idx) => (
+                <div
+                  key={ver.id || idx}
+                  className="rounded-2xl p-5 border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between gap-4 shadow-lg group hover:border-amber-400/40 transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-zinc-200">{ver.name}</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/25">
+                      {ver.tag || 'Oficial'}
+                    </span>
+                  </div>
+
+                  <div className="h-32 rounded-xl bg-zinc-950/80 border border-zinc-800/80 p-4 flex items-center justify-center overflow-hidden">
+                    {ver.url ? (
+                      <img
+                        src={ver.url}
+                        alt={ver.name}
+                        className="max-h-24 max-w-full object-contain filter drop-shadow-md transition-transform duration-300 group-hover:scale-105"
+                      />
+                    ) : (
+                      <span className="text-xs font-mono text-zinc-500">{ver.name}</span>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] text-zinc-400">
+                    {ver.description || 'Versión adaptada para reproducción en soportes específicos.'}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-2 border-t border-zinc-800/40">
+              <span>Versiones y Extensiones de Marca</span>
+              <span>Lámina de Variantes</span>
+            </div>
+          </div>
+        );
+
+      case 'mockup_gallery_slide': {
+        const items = guideline.mockupGalleryItems || [];
+        const isFew = items.length <= 2;
+        const gridCols = isFew
+          ? 'grid-cols-1 sm:grid-cols-2'
+          : items.length === 3
+          ? 'grid-cols-1 sm:grid-cols-3'
+          : 'grid-cols-2 sm:grid-cols-4';
+
+        return (
+          <div className={`w-full min-h-full flex flex-col justify-between p-6 sm:p-10 ${bgClass} select-none`}>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <div>
+                <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60 block">
+                  Galería de Mockups Fotográficos • Estudio Real
+                </span>
+                <span className="text-[10px] font-mono opacity-50">
+                  Simulación de alta fidelidad fotográfica en soportes reales
+                </span>
+              </div>
+              <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                {items.length} aplicaciones activas
+              </span>
+            </div>
+
+            <div className={`grid ${gridCols} gap-4 my-auto py-2`}>
+              {items.map((item, idx) => {
+                const logoSrc = resolvePublicMockupLogo(item.assignedLogoType, item.customLogoVersionId);
+                const stampStyle = getPublicMockupStampStyle(
+                  item.stampPositionPreset,
+                  item.stampScale,
+                  item.blendMode
+                );
+
+                return (
+                  <div
+                    key={item.id || idx}
+                    className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden shadow-lg flex flex-col justify-between group hover:border-zinc-700 transition"
+                  >
+                    <div className="relative aspect-[4/3] bg-zinc-950 overflow-hidden">
+                      <img
+                        src={item.mockupImageUrl}
+                        alt={item.title}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      <div style={stampStyle}>
+                        {logoSrc ? (
+                          <img
+                            src={logoSrc}
+                            alt="Logo estampado"
+                            className="max-h-full max-w-full object-contain filter drop-shadow-md"
+                          />
+                        ) : (
+                          <span className="text-[10px] font-bold text-white bg-black/60 px-2 py-1 rounded">
+                            {guideline.brandName}
+                          </span>
+                        )}
+                      </div>
+                      <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-md text-[9px] font-mono text-white uppercase border border-white/10">
+                        {item.category}
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-zinc-950/80 flex items-center justify-between border-t border-zinc-800/80">
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-zinc-100 truncate">{item.title}</h4>
+                        <p className="text-[9px] font-mono text-zinc-400 truncate">
+                          {item.assignedLogoType === 'symbol'
+                            ? 'Isotipo Claro'
+                            : item.assignedLogoType === 'symbol_dark'
+                            ? 'Isotipo Oscuro'
+                            : item.assignedLogoType === 'secondary'
+                            ? 'Logo Secundario'
+                            : item.assignedLogoType === 'favicon'
+                            ? 'Favicon Oficial'
+                            : item.customLogoVersionName || 'Logo Principal'}
+                        </p>
+                      </div>
+                      <span className="text-[9px] font-mono text-amber-400">
+                        {item.stampScale || 100}%
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-2 border-t border-zinc-800/40">
+              <span>Aplicaciones Corporativas y Merchandising en Fotografía</span>
+              <span>Lámina de Mockups</span>
+            </div>
+          </div>
+        );
+      }
       case 'cover':
         return (
           <div className={`w-full min-h-full flex flex-col justify-between p-5 sm:p-10 md:p-16 ${bgClass} select-none overflow-y-auto sm:overflow-y-hidden`}>

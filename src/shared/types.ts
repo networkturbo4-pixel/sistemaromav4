@@ -1691,6 +1691,28 @@ export interface BrandGuidelineRoundSnapshot {
   colors?: BrandGuidelineColor[];
 }
 
+export interface BrandGuidelineLogoVersion {
+  id: string;
+  name: string; // ej: "Versión Horizontal Monocromática", "Versión Emblema", "Submarca"
+  url: string;
+  tag?: string; // ej: "1 Tinta", "Bordado", "Digital"
+  description?: string;
+}
+
+export interface BrandGuidelineCustomMockup {
+  id: string;
+  title: string; // ej: "Polo Oversize 300g", "Chaleco Softshell", "Furgoneta de Flota", "Llavero Metálico"
+  category: 'textil' | 'vehiculos' | 'promocional' | 'papeleria' | 'packaging' | 'outdoor';
+  mockupImageUrl: string;
+  assignedLogoType: 'primary' | 'secondary' | 'symbol' | 'symbol_dark' | 'favicon' | 'custom_version';
+  customLogoVersionId?: string;
+  customLogoVersionName?: string;
+  stampPositionPreset?: 'chest_left' | 'center_large' | 'back_print' | 'full' | 'subtle';
+  stampScale?: number; // porcentaje 50 a 160
+  blendMode?: 'normal' | 'multiply' | 'screen';
+  notes?: string;
+}
+
 export interface BrandGuidelineGoal {
   id: string;
   number: string; // ej: "01", "02", "03"
@@ -1779,6 +1801,9 @@ export interface BrandGuideline {
   logoSecondaryUrl?: string; // Logo oscuro sobre fondo claro
   logoSymbolUrl?: string; // Icono / Isotipo aislado (versión clara o principal)
   logoSymbolDarkUrl?: string; // Icono / Isotipo aislado (versión oscura sobre fondo claro)
+  logoFaviconUrl?: string; // Favicon oficial 16x16 / 32x32 para web y aplicaciones
+  logoVersions?: BrandGuidelineLogoVersion[]; // Versiones adicionales personalizadas de la marca
+  mockupGalleryItems?: BrandGuidelineCustomMockup[]; // Mockups fotográficos seleccionados de la galería
   mockupStampMode?: 'auto' | 'symbol_only' | 'full_logo'; // Qué estampar en mockups
   isRebrand?: boolean; // Si es false (Marca Nueva), no se muestra la lámina comparativa Antes vs Después
   logoBeforeUrl?: string; // Logo anterior para slider comparativo Antes vs Después

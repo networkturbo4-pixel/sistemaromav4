@@ -3,7 +3,8 @@ import {
   X, Lock, KeyRound, Palette, Type, Plus, Trash2, Check, Sparkles,
   Smartphone, Monitor, Shirt, Upload, HardDrive, Image as ImageIcon,
   ShieldCheck, Sliders, FolderCheck, ExternalLink, Maximize2, Minimize2,
-  ClipboardPaste, Eye
+  ClipboardPaste, Eye, Search, Filter, Layers, Tag, PlusCircle, Wand2,
+  SlidersHorizontal, CheckCircle2
 } from 'lucide-react';
 import {
   BrandGuideline,
@@ -13,9 +14,207 @@ import {
   BrandGuidelineGoal,
   BrandGuidelineOtherIdea,
   BrandGuidelineStep,
+  BrandGuidelineLogoVersion,
+  BrandGuidelineCustomMockup,
 } from '../../../../../shared/types';
 import { useApp } from '../../../../context/AppContext';
 import { DriveFolderPickerModal } from '../../../../components/DriveFolderPickerModal';
+
+export interface MockupCatalogTemplate {
+  id: string;
+  title: string;
+  category: 'textil' | 'vehiculos' | 'promocional' | 'papeleria' | 'packaging' | 'outdoor';
+  categoryLabel: string;
+  mockupImageUrl: string;
+  defaultPosition: 'chest_left' | 'center_large' | 'back_print' | 'full' | 'subtle';
+  defaultScale: number;
+  defaultBlendMode: 'normal' | 'multiply' | 'screen';
+  defaultLogoType: 'primary' | 'secondary' | 'symbol' | 'symbol_dark' | 'favicon';
+  description: string;
+}
+
+export const MOCKUP_CATALOG_TEMPLATES: MockupCatalogTemplate[] = [
+  {
+    id: 'tpl_chaleco',
+    title: 'Chaleco Corporativo Softshell',
+    category: 'textil',
+    categoryLabel: 'Textil & Indumentaria',
+    mockupImageUrl: 'https://images.unsplash.com/photo-1578587018452-892bacefd3f2?w=1000&auto=format&fit=crop&q=80',
+    defaultPosition: 'chest_left',
+    defaultScale: 90,
+    defaultBlendMode: 'screen',
+    defaultLogoType: 'symbol',
+    description: 'Chaleco técnico para staff y directiva con bordado en pecho izquierdo.',
+  },
+  {
+    id: 'tpl_polo_negro',
+    title: 'Polo Oversize Streetwear Negro 300g',
+    category: 'textil',
+    categoryLabel: 'Textil & Indumentaria',
+    mockupImageUrl: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=1000&auto=format&fit=crop&q=80',
+    defaultPosition: 'center_large',
+    defaultScale: 100,
+    defaultBlendMode: 'screen',
+    defaultLogoType: 'primary',
+    description: 'Camiseta de corte contemporáneo boxy con serigrafía tacto cero en pecho.',
+  },
+  {
+    id: 'tpl_polo_blanco',
+    title: 'Camiseta Algodón Peinado Blanca',
+    category: 'textil',
+    categoryLabel: 'Textil & Indumentaria',
+    mockupImageUrl: 'https://images.unsplash.com/photo-1581655353564-df123a1eb820?w=1000&auto=format&fit=crop&q=80',
+    defaultPosition: 'chest_left',
+    defaultScale: 85,
+    defaultBlendMode: 'multiply',
+    defaultLogoType: 'secondary',
+    description: 'Prenda ligera de uso diario con estampado de escudo a color.',
+  },
+  {
+    id: 'tpl_hoodie',
+    title: 'Hoodie Canguro Heavyweight Franela',
+    category: 'textil',
+    categoryLabel: 'Textil & Indumentaria',
+    mockupImageUrl: 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=1000&auto=format&fit=crop&q=80',
+    defaultPosition: 'center_large',
+    defaultScale: 110,
+    defaultBlendMode: 'screen',
+    defaultLogoType: 'primary',
+    description: 'Polera con capucha y bolsillo canguro, estampada en gran formato.',
+  },
+  {
+    id: 'tpl_gorra',
+    title: 'Gorra Estructurada 6 Paneles',
+    category: 'textil',
+    categoryLabel: 'Textil & Indumentaria',
+    mockupImageUrl: 'https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=1000&auto=format&fit=crop&q=80',
+    defaultPosition: 'center_large',
+    defaultScale: 80,
+    defaultBlendMode: 'normal',
+    defaultLogoType: 'symbol',
+    description: 'Gorra deportiva estructurada con bordado frontal en relieve.',
+  },
+  {
+    id: 'tpl_van',
+    title: 'Furgoneta Comercial de Reparto (Van)',
+    category: 'vehiculos',
+    categoryLabel: 'Vehículos & Flota',
+    mockupImageUrl: 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=1000&auto=format&fit=crop&q=80',
+    defaultPosition: 'full',
+    defaultScale: 95,
+    defaultBlendMode: 'normal',
+    defaultLogoType: 'primary',
+    description: 'Rotulación integral de laterales para vehículos de transporte y distribución.',
+  },
+  {
+    id: 'tpl_pickup',
+    title: 'Camioneta Pickup de Operaciones',
+    category: 'vehiculos',
+    categoryLabel: 'Vehículos & Flota',
+    mockupImageUrl: 'https://images.unsplash.com/photo-1559416523-140ddc3d238c?w=1000&auto=format&fit=crop&q=80',
+    defaultPosition: 'center_large',
+    defaultScale: 90,
+    defaultBlendMode: 'normal',
+    defaultLogoType: 'primary',
+    description: 'Vehículo de terreno con distintivo institucional en puertas laterales.',
+  },
+  {
+    id: 'tpl_llavero',
+    title: 'Llavero Metálico Acero Grabado Láser',
+    category: 'promocional',
+    categoryLabel: 'Promocionales & Merch',
+    mockupImageUrl: 'https://images.unsplash.com/photo-1614313511387-1436a4480ebb?w=1000&auto=format&fit=crop&q=80',
+    defaultPosition: 'center_large',
+    defaultScale: 75,
+    defaultBlendMode: 'multiply',
+    defaultLogoType: 'symbol_dark',
+    description: 'Accesorio de merchandising premium con grabado láser en bajo relieve.',
+  },
+  {
+    id: 'tpl_termo',
+    title: 'Termo Metálico / Botella Inox 750ml',
+    category: 'promocional',
+    categoryLabel: 'Promocionales & Merch',
+    mockupImageUrl: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=1000&auto=format&fit=crop&q=80',
+    defaultPosition: 'center_large',
+    defaultScale: 85,
+    defaultBlendMode: 'screen',
+    defaultLogoType: 'symbol',
+    description: 'Botella térmica de doble capa para clientes VIP y bienvenida a colaboradores.',
+  },
+  {
+    id: 'tpl_taza',
+    title: 'Taza Cerámica de Café Mate 11oz',
+    category: 'promocional',
+    categoryLabel: 'Promocionales & Merch',
+    mockupImageUrl: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=1000&auto=format&fit=crop&q=80',
+    defaultPosition: 'center_large',
+    defaultScale: 90,
+    defaultBlendMode: 'multiply',
+    defaultLogoType: 'secondary',
+    description: 'Vajilla para oficina o locales gastronómicos con acabado esmaltado mate.',
+  },
+  {
+    id: 'tpl_bolsa',
+    title: 'Bolsa Kraft Ecológica con Asas Retorcidas',
+    category: 'packaging',
+    categoryLabel: 'Packaging & Bolsas',
+    mockupImageUrl: 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=1000&auto=format&fit=crop&q=80',
+    defaultPosition: 'center_large',
+    defaultScale: 100,
+    defaultBlendMode: 'multiply',
+    defaultLogoType: 'secondary',
+    description: 'Bolsa de papel kraft reciclado 140g para compras retail y take away.',
+  },
+  {
+    id: 'tpl_caja',
+    title: 'Caja de Envíos E-Commerce Postal',
+    category: 'packaging',
+    categoryLabel: 'Packaging & Bolsas',
+    mockupImageUrl: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1000&auto=format&fit=crop&q=80',
+    defaultPosition: 'center_large',
+    defaultScale: 105,
+    defaultBlendMode: 'multiply',
+    defaultLogoType: 'secondary',
+    description: 'Empaque de cartón corrugado automontable con faja o cinta personalizada.',
+  },
+  {
+    id: 'tpl_vaso',
+    title: 'Vaso Doble Pared Térmico Take-Away 16oz',
+    category: 'packaging',
+    categoryLabel: 'Packaging & Bolsas',
+    mockupImageUrl: 'https://images.unsplash.com/photo-1577937927133-66ef06acdf18?w=1000&auto=format&fit=crop&q=80',
+    defaultPosition: 'center_large',
+    defaultScale: 85,
+    defaultBlendMode: 'normal',
+    defaultLogoType: 'primary',
+    description: 'Vaso descartable compostable para cafetería con faja texturizada.',
+  },
+  {
+    id: 'tpl_papeleria',
+    title: 'Papelería Ejecutiva & Tarjetas de Presentación',
+    category: 'papeleria',
+    categoryLabel: 'Papelería Corporativa',
+    mockupImageUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1000&auto=format&fit=crop&q=80',
+    defaultPosition: 'center_large',
+    defaultScale: 90,
+    defaultBlendMode: 'normal',
+    defaultLogoType: 'secondary',
+    description: 'Set de tarjetas en cartulina dúplex 600g con stamping y sobres a juego.',
+  },
+  {
+    id: 'tpl_billboard',
+    title: 'Valla Publicitaria Exterior (Billboard)',
+    category: 'outdoor',
+    categoryLabel: 'Publicidad Exterior (OOH)',
+    mockupImageUrl: 'https://images.unsplash.com/photo-1584824486509-112e4181ff6b?w=1000&auto=format&fit=crop&q=80',
+    defaultPosition: 'center_large',
+    defaultScale: 110,
+    defaultBlendMode: 'screen',
+    defaultLogoType: 'primary',
+    description: 'Panel de gran formato urbano con iluminación nocturna y alto impacto.',
+  },
+];
 
 interface BrandGuidelineEditorModalProps {
   isOpen: boolean;
@@ -90,7 +289,7 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
   const isEditing = Boolean(guideline);
 
   const [activeTab, setActiveTab] = useState<
-    'general' | 'logos' | 'pillars' | 'colors' | 'typography' | 'mockups' | 'steps'
+    'general' | 'logos' | 'mockup_gallery' | 'pillars' | 'colors' | 'typography' | 'mockups' | 'steps'
   >('general');
   const [saving, setSaving] = useState(false);
   const [isDrivePickerOpen, setIsDrivePickerOpen] = useState(false);
@@ -110,13 +309,15 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
   const [requirePin, setRequirePin] = useState(false);
   const [publicPin, setPublicPin] = useState('');
 
-  // Logos, Iconos/Isotipos, Antes/Después y Reglas
+  // Logos, Iconos/Isotipos, Favicon, Versiones Personalizadas y Reglas
   const [directionName, setDirectionName] = useState('Direction One');
   const [directionRationale, setDirectionRationale] = useState('');
   const [logoPrimaryUrl, setLogoPrimaryUrl] = useState('');
   const [logoSecondaryUrl, setLogoSecondaryUrl] = useState('');
   const [logoSymbolUrl, setLogoSymbolUrl] = useState('');
   const [logoSymbolDarkUrl, setLogoSymbolDarkUrl] = useState('');
+  const [logoFaviconUrl, setLogoFaviconUrl] = useState('');
+  const [logoVersions, setLogoVersions] = useState<BrandGuidelineLogoVersion[]>([]);
   const [mockupStampMode, setMockupStampMode] = useState<'auto' | 'symbol_only' | 'full_logo'>('auto');
   const [otherIdeas, setOtherIdeas] = useState<BrandGuidelineOtherIdea[]>([]);
   const [activePasteSlot, setActivePasteSlot] = useState<string>('symbol');
@@ -131,6 +332,12 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
   const [iconStrokeWidth, setIconStrokeWidth] = useState('2px');
   const [iconCornerRadius, setIconCornerRadius] = useState('6px');
   const [donts, setDonts] = useState<BrandGuidelineDontRule[]>([]);
+
+  // Galería de Mockups Fotográficos
+  const [mockupGalleryItems, setMockupGalleryItems] = useState<BrandGuidelineCustomMockup[]>([]);
+  const [mockupSearchQuery, setMockupSearchQuery] = useState('');
+  const [mockupCategoryFilter, setMockupCategoryFilter] = useState<string>('todos');
+  const [activeMockupConfig, setActiveMockupConfig] = useState<BrandGuidelineCustomMockup | null>(null);
 
   // Brief
   const [briefOverviewTitle, setBriefOverviewTitle] = useState('');
@@ -303,6 +510,9 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
       setLogoSecondaryUrl(guideline.logoSecondaryUrl || '');
       setLogoSymbolUrl(guideline.logoSymbolUrl || '');
       setLogoSymbolDarkUrl(guideline.logoSymbolDarkUrl || '');
+      setLogoFaviconUrl(guideline.logoFaviconUrl || '');
+      setLogoVersions(guideline.logoVersions || []);
+      setMockupGalleryItems(guideline.mockupGalleryItems || []);
       setMockupStampMode(guideline.mockupStampMode || 'auto');
       setOtherIdeas(
         guideline.otherIdeas && guideline.otherIdeas.length > 0
@@ -442,6 +652,9 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
       setLogoSecondaryUrl('');
       setLogoSymbolUrl('');
       setLogoSymbolDarkUrl('');
+      setLogoFaviconUrl('');
+      setLogoVersions([]);
+      setMockupGalleryItems([]);
       setMockupStampMode('auto');
       setOtherIdeas([
         { id: 'oi1', title: 'Isotipo Principal / Variación 01', imageUrl: '' },
@@ -511,6 +724,169 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
       setNextSteps(DEFAULT_SPANISH_STEPS);
     }
   }, [guideline, isOpen]);
+
+  // Resuelve qué imagen de logo usar según la selección
+  const resolveMockupLogoUrl = (
+    logoType: 'primary' | 'secondary' | 'symbol' | 'symbol_dark' | 'favicon' | 'custom_version',
+    customVersionId?: string
+  ): string => {
+    if (logoType === 'custom_version' && customVersionId) {
+      const found = logoVersions.find((v) => v.id === customVersionId);
+      if (found?.url) return found.url;
+    }
+    if (logoType === 'secondary') {
+      return logoSecondaryUrl || logoPrimaryUrl || logoSymbolDarkUrl || logoSymbolUrl;
+    }
+    if (logoType === 'symbol') {
+      return logoSymbolUrl || logoPrimaryUrl || logoSymbolDarkUrl;
+    }
+    if (logoType === 'symbol_dark') {
+      return logoSymbolDarkUrl || logoSymbolUrl || logoSecondaryUrl || logoPrimaryUrl;
+    }
+    if (logoType === 'favicon') {
+      return logoFaviconUrl || logoSymbolUrl || logoPrimaryUrl;
+    }
+    return logoPrimaryUrl || logoSymbolUrl || logoSecondaryUrl;
+  };
+
+  // Posiciona y escala el estampado en el mockup
+  const getMockupStampStyle = (
+    pos: 'chest_left' | 'center_large' | 'back_print' | 'full' | 'subtle' = 'center_large',
+    scale: number = 100,
+    blendMode: 'normal' | 'multiply' | 'screen' = 'normal'
+  ): React.CSSProperties => {
+    const scaleRatio = (scale || 100) / 100;
+    const base: React.CSSProperties = {
+      position: 'absolute',
+      transform: 'translate(-50%, -50%)',
+      pointerEvents: 'none',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      mixBlendMode: blendMode,
+    };
+    switch (pos) {
+      case 'chest_left':
+        return {
+          ...base,
+          top: '36%',
+          left: '38%',
+          width: `${Math.round(20 * scaleRatio)}%`,
+          height: `${Math.round(20 * scaleRatio)}%`,
+        };
+      case 'center_large':
+        return {
+          ...base,
+          top: '46%',
+          left: '50%',
+          width: `${Math.round(36 * scaleRatio)}%`,
+          height: `${Math.round(36 * scaleRatio)}%`,
+        };
+      case 'back_print':
+        return {
+          ...base,
+          top: '42%',
+          left: '50%',
+          width: `${Math.round(44 * scaleRatio)}%`,
+          height: `${Math.round(44 * scaleRatio)}%`,
+        };
+      case 'full':
+        return {
+          ...base,
+          top: '50%',
+          left: '50%',
+          width: `${Math.round(52 * scaleRatio)}%`,
+          height: `${Math.round(52 * scaleRatio)}%`,
+        };
+      case 'subtle':
+        return {
+          ...base,
+          top: '58%',
+          left: '50%',
+          width: `${Math.round(22 * scaleRatio)}%`,
+          height: `${Math.round(22 * scaleRatio)}%`,
+        };
+      default:
+        return {
+          ...base,
+          top: '50%',
+          left: '50%',
+          width: `${Math.round(35 * scaleRatio)}%`,
+          height: `${Math.round(35 * scaleRatio)}%`,
+        };
+    }
+  };
+
+  // Auto-rellena de forma inteligente todo el manual según el nombre de la marca
+  const handleAutoFillFromBrandName = () => {
+    if (!brandName.trim()) {
+      toast('Ingresa primero el nombre de la marca en el campo de texto', 'error');
+      return;
+    }
+    const name = brandName.trim();
+    const lower = name.toLowerCase();
+
+    let generatedTagline = `Identidad, propósito y excelencia visual para ${name}`;
+    let generatedRationale = `La identidad visual de ${name} nace de la convergencia armónica entre vanguardia, solidez y propósito. Su símbolo sintetiza los pilares estratégicos de la marca mediante una estructura geométrica equilibrada y altamente legible en cualquier soporte digital, editorial o promocional.`;
+    let bTitle = `Manual de Identidad Visual & Lineamientos de Marca — ${name}`;
+    let bText1 = `El presente proyecto de identidad visual establece los estándares normativos para la correcta implementación y consistencia de ${name}. Se enfoca en consolidar una imagen distintiva, moderna y reconocible en todos los puntos de contacto con sus audiencias.`;
+    let bText2 = `El sistema combina sobriedad tipográfica y flexibilidad cromática para proyectar confianza, calidad y profesionalismo tanto en aplicaciones impresas y textiles como en plataformas digitales de alto impacto.`;
+
+    let g1Title = 'Modernización y Vanguardia';
+    let g1Desc = `Proyectar la nueva etapa de ${name} con una presencia visual moderna, sólida y competitiva.`;
+    let g2Title = 'Diferenciación y Memoria';
+    let g2Desc = `Destacar con una identidad memorable que conecte de forma inmediata con clientes y aliados.`;
+    let g3Title = 'Versatilidad Omnicanal';
+    let g3Desc = `Garantizar legibilidad óptima desde formatos mínimos (favicons, app icon) hasta gran escala (rotulación, OOH).`;
+
+    if (
+      lower.includes('pizza') ||
+      lower.includes('burger') ||
+      lower.includes('cafe') ||
+      lower.includes('food') ||
+      lower.includes('rest') ||
+      lower.includes('khalessi')
+    ) {
+      generatedTagline = `Sabor auténtico, tradición y pasión culinaria`;
+      generatedRationale = `El imagotipo de ${name} transmite calidez, apetencia y cercanía a través de líneas fluidas y armonía orgánica, invitando a una experiencia gastronómica memorable y familiar.`;
+      g1Title = 'Apetencia y Calidez Visual';
+      g1Desc = 'Generar un impacto visual seductor y acogedor que transmita frescura y excelencia culinaria.';
+      g2Title = 'Fidelización y Cercanía';
+      g2Desc = 'Consolidar un vínculo afectivo duradero entre los comensales y la esencia de la marca.';
+      g3Title = 'Empaques y Delivery Premium';
+      g3Desc = 'Garantizar que cajas, vasos y bolsas generen una experiencia de unboxing impecable.';
+    } else if (
+      lower.includes('comercio') ||
+      lower.includes('camara') ||
+      lower.includes('turismo') ||
+      lower.includes('industria') ||
+      lower.includes('piura') ||
+      lower.includes('huancabamba')
+    ) {
+      generatedTagline = `Conectamos el potencial productivo y el desarrollo territorial`;
+      generatedRationale = `La identidad visual de ${name} nace de la conexión entre el territorio, la representación empresarial y la visión de futuro. Su símbolo aporta solidez institucional y proyección económica sostenible.`;
+      g1Title = 'Solidez Institucional';
+      g1Desc = 'Transmitir respaldo, representatividad y liderazgo empresarial en toda la región.';
+      g2Title = 'Impulso Económico y Red';
+      g2Desc = 'Fomentar la cooperación entre socios estratégicos, emprendedores y organismos públicos.';
+      g3Title = 'Proyección y Turismo Sostenible';
+      g3Desc = 'Poner en valor la riqueza territorial, turística y productiva con estándares de vanguardia.';
+    }
+
+    setTagline(generatedTagline);
+    setDirectionName('Propuesta Principal');
+    setDirectionRationale(generatedRationale);
+    setBriefOverviewTitle(bTitle);
+    setBriefOverviewText(bText1);
+    setBriefSecondaryText(bText2);
+    setGoals([
+      { id: `g_af1`, number: '01', title: g1Title, description: g1Desc },
+      { id: `g_af2`, number: '02', title: g2Title, description: g2Desc },
+      { id: `g_af3`, number: '03', title: g3Title, description: g3Desc },
+    ]);
+    setNextSteps(DEFAULT_SPANISH_STEPS);
+    toast(`✨ ¡Todo el manual ha sido auto-rellenado para "${name}"! Puedes personalizar cada pestaña.`, 'success');
+  };
 
   if (!isOpen) return null;
 
@@ -831,6 +1207,9 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
         logoSecondaryUrl,
         logoSymbolUrl,
         logoSymbolDarkUrl,
+        logoFaviconUrl,
+        logoVersions,
+        mockupGalleryItems,
         mockupStampMode,
         otherIdeas,
         isRebrand,
@@ -999,12 +1378,13 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
             <div className="flex lg:flex-col gap-1.5 w-full">
               {[
                 { id: 'general', label: '1. General y PIN', desc: 'Identidad, cliente y acceso' },
-                { id: 'logos', label: '2. Logos, Mockups & Reglas', desc: 'Archivos PNG/SVG, Safe Zone' },
-                { id: 'pillars', label: '3. Brief y Pilares', desc: 'Objetivos y narrativa' },
-                { id: 'colors', label: '4. Paleta (Auto RGB/CMYK)', desc: `${colors.length} colores activos` },
-                { id: 'typography', label: '5. Tipografía & Tester', desc: `${typography[0]?.fontFamily || 'Inter'}` },
-                { id: 'mockups', label: '6. Drive Kit & Web', desc: driveFolderName ? 'Drive vinculado' : 'Entregables y URLs' },
-                { id: 'steps', label: '7. Próximos Pasos', desc: `${nextSteps.length} etapas de cierre` },
+                { id: 'logos', label: '2. Logos y Versiones', desc: `${logoVersions.length} versiones + Favicon` },
+                { id: 'mockup_gallery', label: '3. Galería de Mockups', desc: `${mockupGalleryItems.length} mockups activos` },
+                { id: 'pillars', label: '4. Brief y Pilares', desc: 'Objetivos y narrativa' },
+                { id: 'colors', label: '5. Paleta (Auto RGB/CMYK)', desc: `${colors.length} colores activos` },
+                { id: 'typography', label: '6. Tipografía & Tester', desc: `${typography[0]?.fontFamily || 'Inter'}` },
+                { id: 'mockups', label: '7. Drive Kit & Web', desc: driveFolderName ? 'Drive vinculado' : 'Entregables y URLs' },
+                { id: 'steps', label: '8. Próximos Pasos', desc: `${nextSteps.length} etapas de cierre` },
               ].map((tab) => {
                 const isActive = activeTab === tab.id;
                 return (
@@ -1150,9 +1530,20 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
               {/* Datos de la Marca */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                    Nombre de la Marca *
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                      Nombre de la Marca *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleAutoFillFromBrandName}
+                      className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer"
+                      title="Genera automáticamente eslogan, narrativa, brief y pilares adaptados a este nombre"
+                    >
+                      <Wand2 className="w-3.5 h-3.5" />
+                      <span>✨ Auto-rellenar todo el manual</span>
+                    </button>
+                  </div>
                   <input
                     type="text"
                     required
@@ -1322,7 +1713,7 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
                   {/* 1. Logo Principal Claro (Sobre fondo oscuro) */}
                   <div
                     tabIndex={0}
@@ -1594,6 +1985,74 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
                       )}
                     </div>
                   </div>
+
+                  {/* 5. Favicon Oficial (16x16 / 32x32) */}
+                  <div
+                    tabIndex={0}
+                    onFocus={() => setActivePasteSlot('favicon')}
+                    onPaste={(e) => handleClipboardPasteEvent(e, setLogoFaviconUrl, 'Favicon Oficial')}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => handleDropFile(e, setLogoFaviconUrl, 'Favicon Oficial')}
+                    className={`p-3.5 rounded-2xl border transition bg-zinc-950 text-white space-y-2.5 outline-none ${
+                      activePasteSlot === 'favicon'
+                        ? 'border-cyan-400 ring-2 ring-cyan-400/30'
+                        : 'border-zinc-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-cyan-400">Favicon Oficial</span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300">
+                        16×16 / Web
+                      </span>
+                    </div>
+                    <div
+                      onClick={() => setActivePasteSlot('favicon')}
+                      className="h-24 rounded-xl border border-dashed border-cyan-500/40 hover:border-cyan-400 flex flex-col items-center justify-center p-2 bg-[#111111] cursor-pointer"
+                    >
+                      {logoFaviconUrl ? (
+                        <img src={logoFaviconUrl} alt="Favicon" className="max-h-12 max-w-12 object-contain" />
+                      ) : (
+                        <div className="text-center space-y-1">
+                          <span className="text-[10px] font-mono text-cyan-400 block font-bold">
+                            Pegar Favicon (Ctrl+V)
+                          </span>
+                          <span className="text-[9px] text-zinc-500 block">
+                            Icono Web &amp; PWA
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <label className="flex-1 py-1.5 px-2 rounded-xl bg-cyan-500 text-zinc-950 text-[11px] font-bold text-center cursor-pointer hover:bg-cyan-400 transition flex items-center justify-center gap-1">
+                        <Upload className="w-3 h-3" />
+                        <span>Subir</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleFileUpload(e, setLogoFaviconUrl)}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handlePasteButtonClick(setLogoFaviconUrl, 'Favicon Oficial')}
+                        className="py-1.5 px-2.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                        title="Pegar icono desde Illustrator o captura"
+                      >
+                        <ClipboardPaste className="w-3 h-3" />
+                        <span>Pegar</span>
+                      </button>
+                      {logoFaviconUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setLogoFaviconUrl('')}
+                          className="p-1.5 rounded-xl bg-zinc-800 text-rose-400 hover:bg-zinc-700 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Logo Anterior (Solo visible si es Rebranding) */}
@@ -1643,470 +2102,168 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
               </div>
 
               {/* =========================================================== */}
-              {/* 2. CONFIGURACIÓN + VISUALIZADOR EN VIVO DE MOCKUPS          */}
+              {/* 2. VERSIONES PERSONALIZADAS DEL LOGO & SUBMARCAS            */}
               {/* =========================================================== */}
-              <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/80 space-y-5">
+              <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/80 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white flex items-center gap-1.5">
-                      <Eye className="w-4 h-4 text-amber-500" />
-                      <span>2. Visualizador en Vivo de Mockups &amp; Control de Estampado</span>
+                      <Layers className="w-4 h-4 text-amber-500" />
+                      <span>2. Versiones Personalizadas del Logo &amp; Submarcas ({logoVersions.length})</span>
                     </h4>
                     <p className="text-[11px] text-zinc-500 mt-0.5">
-                      Ajusta cómo se estampa el <strong>Icono / Isotipo</strong> o el <strong>Logo Completo</strong> y previsualízalo aquí mismo antes de guardar.
+                      Agrega cuantas versiones adicionales necesites (ej. Versión Monocroma 1 Tinta, Versión Emblema Circular, Submarcas, Bordado). Podrás asignarlas a cualquier mockup de la galería.
                     </p>
                   </div>
 
-                  {/* Selector de Colorway del Visualizador */}
-                  <div className="flex items-center gap-1.5 bg-zinc-200/70 dark:bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-300 dark:border-zinc-800">
-                    <span className="text-[10px] font-mono text-zinc-500 mr-1">Color Prenda:</span>
-                    <button
-                      type="button"
-                      onClick={() => setLivePreviewColorway('obsidian')}
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer ${
-                        livePreviewColorway === 'obsidian'
-                          ? 'bg-zinc-950 text-white'
-                          : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
-                      }`}
-                    >
-                      Negro
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLivePreviewColorway('offwhite')}
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer ${
-                        livePreviewColorway === 'offwhite'
-                          ? 'bg-white text-zinc-950 shadow-xs'
-                          : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
-                      }`}
-                    >
-                      Blanco
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLivePreviewColorway('brand')}
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer ${
-                        livePreviewColorway === 'brand'
-                          ? 'bg-amber-400 text-zinc-950'
-                          : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
-                      }`}
-                    >
-                      Color Marca
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextId = `lv_${Date.now()}`;
+                      setLogoVersions([
+                        ...logoVersions,
+                        {
+                          id: nextId,
+                          name: `Versión Personalizada ${logoVersions.length + 1}`,
+                          tag: '1 Tinta',
+                          url: '',
+                        },
+                      ]);
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-xs font-bold flex items-center gap-1.5 cursor-pointer hover:opacity-90 transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Agregar Versión Personalizada</span>
+                  </button>
                 </div>
 
-                {/* Controles de Modo de Estampado, Posición, Escala y Escena */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mb-1">
-                      ¿Qué Estampar en Mockups?
-                    </label>
-                    <select
-                      value={mockupStampMode}
-                      onChange={(e) => setMockupStampMode(e.target.value as any)}
-                      className="w-full px-2.5 py-2 rounded-xl border border-emerald-500/40 bg-white dark:bg-zinc-900 text-xs font-bold"
-                    >
-                      <option value="auto">✨ Auto (Icono en Gorra/App + Logo en Ropa)</option>
-                      <option value="symbol_only">★ Solo Icono / Isotipo en Todo</option>
-                      <option value="full_logo">Logo Completo en Todo</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                      Posición en Prendas
-                    </label>
-                    <select
-                      value={stampPosition}
-                      onChange={(e) => setStampPosition(e.target.value as any)}
-                      className="w-full px-2.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-bold"
-                    >
-                      <option value="chest_left">Pecho Izquierdo (Escudo)</option>
-                      <option value="center_large">Pecho Central Grande</option>
-                      <option value="back_print">Espalda Completa (Back)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                      Escala del Estampado ({stampScale}%)
-                    </label>
-                    <input
-                      type="range"
-                      min={65}
-                      max={145}
-                      value={stampScale}
-                      onChange={(e) => setStampScale(Number(e.target.value))}
-                      className="w-full accent-amber-500 cursor-pointer mt-2"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                      Escena Fotográfica
-                    </label>
-                    <select
-                      value={photoSceneMode}
-                      onChange={(e) => setPhotoSceneMode(e.target.value as any)}
-                      className="w-full px-2.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-bold"
-                    >
-                      <option value="studio_3d">Estudio 3D + Displacement</option>
-                      <option value="urban_model">Lookbook Urbano</option>
-                      <option value="coffee_shop">Cafetería / Gastro</option>
-                      <option value="creative_office">Estudio Arquitectónico</option>
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <div>
-                      <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                        Trazo
-                      </label>
-                      <select
-                        value={iconStrokeWidth}
-                        onChange={(e) => setIconStrokeWidth(e.target.value)}
-                        className="w-full px-2 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[11px] font-mono"
-                      >
-                        <option value="1.5px">1.5px</option>
-                        <option value="2px">2.0px</option>
-                        <option value="2.5px">2.5px</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                        Radio
-                      </label>
-                      <select
-                        value={iconCornerRadius}
-                        onChange={(e) => setIconCornerRadius(e.target.value)}
-                        className="w-full px-2 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[11px] font-mono"
-                      >
-                        <option value="0px">0px</option>
-                        <option value="6px">6px</option>
-                        <option value="12px">12px</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ========================================================= */}
-                {/* LIENZO VISUALIZADOR EN VIVO (4 MOCKUPS EN TIEMPO REAL)    */}
-                {/* ========================================================= */}
-                {(() => {
-                  const isLightGarment = livePreviewColorway === 'offwhite';
-                  const garmentFill =
-                    livePreviewColorway === 'offwhite'
-                      ? '#EFECE6'
-                      : livePreviewColorway === 'brand'
-                      ? colors[0]?.hex || '#4F46E5'
-                      : '#18181B';
-                  const garmentStroke = isLightGarment ? '#C7C3B8' : '#3F3F46';
-
-                  // Selección inteligente de imagen para Prendas vs Símbolos/Iconos
-                  const lightSymbol = logoSymbolUrl || logoPrimaryUrl || logoSymbolDarkUrl || logoSecondaryUrl;
-                  const darkSymbol = logoSymbolDarkUrl || logoSymbolUrl || logoSecondaryUrl || logoPrimaryUrl;
-                  const lightFull = logoPrimaryUrl || logoSymbolUrl || logoSecondaryUrl;
-                  const darkFull = logoSecondaryUrl || logoSymbolDarkUrl || logoPrimaryUrl;
-
-                  const garmentStampUrl =
-                    mockupStampMode === 'symbol_only'
-                      ? isLightGarment
-                        ? darkSymbol
-                        : lightSymbol
-                      : isLightGarment
-                      ? darkFull
-                      : lightFull;
-
-                  const badgeIconUrl =
-                    mockupStampMode === 'full_logo'
-                      ? isLightGarment
-                        ? darkFull
-                        : lightFull
-                      : isLightGarment
-                      ? darkSymbol
-                      : lightSymbol;
-
-                  const scaleMul = (stampScale || 100) / 100;
-                  const garmentPosStyle =
-                    stampPosition === 'center_large'
-                      ? {
-                          top: '46%',
-                          left: '50%',
-                          transform: `translate(-50%, -50%) scale(${(1.05 * scaleMul).toFixed(2)})`,
-                        }
-                      : stampPosition === 'back_print'
-                      ? {
-                          top: '44%',
-                          left: '50%',
-                          transform: `translate(-50%, -50%) scale(${(1.25 * scaleMul).toFixed(2)})`,
-                        }
-                      : {
-                          top: '40%',
-                          left: '54%',
-                          transform: `scale(${(0.75 * scaleMul).toFixed(2)})`,
-                          transformOrigin: 'left center',
-                        };
-
-                  return (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-1">
-                      {/* Vista Previa 1: Hoodie / Sudadera */}
-                      <div className="rounded-2xl p-3 bg-gradient-to-b from-zinc-900 to-zinc-950 text-white border border-zinc-800 flex flex-col items-center justify-between min-h-[175px] relative overflow-hidden">
-                        <div className="w-full flex justify-between items-center text-[9px] font-mono text-zinc-400">
-                          <span>PRENDA ({stampPosition === 'chest_left' ? 'Pecho Izq' : stampPosition === 'center_large' ? 'Centro' : 'Espalda'})</span>
-                          <span>{stampScale}%</span>
-                        </div>
-                        <div className="my-auto relative flex items-center justify-center">
-                          <svg viewBox="0 0 220 195" className="w-32 h-28 drop-shadow-xl">
-                            <path
-                              d="M72,22 C90,30 130,30 148,22 L192,50 C197,54 198,60 195,68 L176,162 L152,162 L155,76 L146,72 L146,168 L74,168 L74,72 L65,76 L68,162 L44,162 L25,68 C22,60 23,54 28,50 Z"
-                              fill={garmentFill}
-                              stroke={garmentStroke}
-                              strokeWidth="1.5"
-                            />
-                            {stampPosition !== 'back_print' && (
-                              <polygon points="102,34 118,34 110,48" fill={garmentStroke} />
-                            )}
-                          </svg>
-                          <div className="absolute flex items-center justify-center" style={garmentPosStyle}>
-                            {garmentStampUrl ? (
-                              <img src={garmentStampUrl} alt="Preview" className="h-3.5 max-w-[44px] object-contain" />
-                            ) : (
-                              <span
-                                className={`text-[8px] font-bold ${
-                                  isLightGarment ? 'text-zinc-900' : 'text-white'
-                                }`}
-                              >
-                                {brandName || 'BRAND'}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-[9px] font-mono text-zinc-400">
-                          {mockupStampMode === 'symbol_only' ? 'Estampando: Icono' : 'Estampando: Logo'}
-                        </span>
-                      </div>
-
-                      {/* Vista Previa 2: Gorra Bordada (Usa el Icono / Isotipo) */}
-                      <div className="rounded-2xl p-3 bg-gradient-to-b from-zinc-900 to-zinc-950 text-white border border-zinc-800 flex flex-col items-center justify-between min-h-[175px] relative overflow-hidden">
-                        <div className="w-full flex justify-between items-center text-[9px] font-mono text-emerald-400">
-                          <span>GORRA 3D</span>
-                          <span>ICONO / SÍMBOLO</span>
-                        </div>
-                        <div className="my-auto relative flex items-center justify-center">
-                          <svg viewBox="0 0 220 175" className="w-32 h-26 drop-shadow-xl">
-                            <path
-                              d="M42,102 C40,32 180,32 178,102 Z"
-                              fill={garmentFill}
-                              stroke={garmentStroke}
-                              strokeWidth="1.5"
-                            />
-                            <path
-                              d="M34,99 C75,114 145,114 186,99 L180,131 C142,116 78,116 40,131 Z"
-                              fill={garmentFill}
-                              stroke={garmentStroke}
-                              strokeWidth="1.5"
-                            />
-                          </svg>
-                          <div
-                            className="absolute top-[41%] left-1/2 -translate-x-1/2 flex items-center justify-center"
-                            style={{ transform: `translate(-50%, -20%) scale(${scaleMul.toFixed(2)})` }}
-                          >
-                            {badgeIconUrl ? (
-                              <img src={badgeIconUrl} alt="Cap icon" className="h-5 max-w-[42px] object-contain" />
-                            ) : (
-                              <span
-                                className={`text-[9px] font-bold ${
-                                  isLightGarment ? 'text-zinc-900' : 'text-white'
-                                }`}
-                              >
-                                {(brandName || 'BR').slice(0, 3).toUpperCase()}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-[9px] font-mono text-zinc-400">
-                          {logoSymbolUrl || logoSymbolDarkUrl ? '✓ Usando tu Icono' : 'Sube el Icono arriba'}
-                        </span>
-                      </div>
-
-                      {/* Vista Previa 3: App Icon iOS + Retícula Áurea */}
-                      <div className="rounded-2xl p-3 bg-gradient-to-b from-zinc-900 to-zinc-950 text-white border border-zinc-800 flex flex-col items-center justify-between min-h-[175px] relative overflow-hidden">
-                        <div className="w-full flex justify-between items-center text-[9px] font-mono text-cyan-400">
-                          <span>APP ICON &amp; FAVICON</span>
-                          <span>ISOTIPO</span>
-                        </div>
-                        <div className="my-auto flex items-center justify-center">
-                          <div
-                            className="w-20 h-20 rounded-[22px] border border-white/20 shadow-2xl flex items-center justify-center relative overflow-hidden p-3"
-                            style={{ backgroundColor: garmentFill }}
-                          >
-                            <div className="absolute inset-2 rounded-2xl border border-cyan-400/25 pointer-events-none" />
-                            <div className="absolute inset-4 rounded-full border border-cyan-400/25 pointer-events-none" />
-                            {badgeIconUrl ? (
-                              <img
-                                src={badgeIconUrl}
-                                alt="App Icon"
-                                className="max-h-11 max-w-11 object-contain z-10"
-                                style={{ transform: `scale(${scaleMul.toFixed(2)})` }}
-                              />
-                            ) : (
-                              <span
-                                className={`text-sm font-bold z-10 ${
-                                  isLightGarment ? 'text-zinc-900' : 'text-white'
-                                }`}
-                              >
-                                {(brandName || 'B').slice(0, 2).toUpperCase()}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-[9px] font-mono text-zinc-400">
-                          App Icon, Avatar &amp; Retícula
-                        </span>
-                      </div>
-
-                      {/* Vista Previa 4: Packaging / Vaso & Sticker */}
-                      <div className="rounded-2xl p-3 bg-gradient-to-b from-zinc-900 to-zinc-950 text-white border border-zinc-800 flex flex-col items-center justify-between min-h-[175px] relative overflow-hidden">
-                        <div className="w-full flex justify-between items-center text-[9px] font-mono text-amber-400">
-                          <span>PACKAGING &amp; MERCH</span>
-                          <span>SELLO</span>
-                        </div>
-                        <div className="my-auto relative flex items-center justify-center">
-                          <svg viewBox="0 0 140 160" className="w-24 h-26 drop-shadow-xl">
-                            <rect x="34" y="12" width="72" height="10" rx="3" fill="#27272A" />
-                            <polygon points="38,24 102,24 94,145 46,145" fill="#F4F4F5" />
-                            <polygon points="41,58 99,58 96,108 44,108" fill={garmentFill} />
-                          </svg>
-                          <div
-                            className="absolute top-[52%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center"
-                            style={{ transform: `translate(-50%, -50%) scale(${scaleMul.toFixed(2)})` }}
-                          >
-                            {badgeIconUrl ? (
-                              <img src={badgeIconUrl} alt="Cup icon" className="h-4 max-w-[34px] object-contain" />
-                            ) : (
-                              <span
-                                className={`text-[8px] font-bold ${
-                                  isLightGarment ? 'text-zinc-900' : 'text-white'
-                                }`}
-                              >
-                                {(brandName || 'BR').slice(0, 3).toUpperCase()}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-[9px] font-mono text-zinc-400">
-                          Vaso, Termo, Sticker &amp; Caja
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* =========================================================== */}
-              {/* 3. SISTEMA DE ICONOS Y VARIACIONES DEL SÍMBOLO (6 SLOTS)    */}
-              {/* =========================================================== */}
-              <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-950/60 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
-                      3. Iconos de la Marca / Variaciones del Símbolo (Opcional • 6 Slots con Ctrl+V)
-                    </h4>
-                    <p className="text-[11px] text-zinc-500">
-                      Sube o pega desde Illustrator (Ctrl+V) los iconos de tu sistema visual para que reemplacen los iconos genéricos en las láminas de <strong>Sistema Iconográfico</strong> y <strong>Exploración de Símbolos</strong>.
+                {logoVersions.length === 0 ? (
+                  <div className="p-6 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800 text-center space-y-1.5 bg-white/40 dark:bg-zinc-900/40">
+                    <p className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
+                      No hay versiones personalizadas adicionales creadas.
+                    </p>
+                    <p className="text-[11px] text-zinc-400">
+                      Haz clic en <strong>+ Agregar Versión Personalizada</strong> si tienes variantes del logo (horizontales, sellos, submarcas o bordados).
                     </p>
                   </div>
-                </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    {logoVersions.map((ver, vIdx) => {
+                      const updateVerUrl = (newUrl: string) => {
+                        const next = [...logoVersions];
+                        next[vIdx] = { ...next[vIdx], url: newUrl };
+                        setLogoVersions(next);
+                      };
+                      const updateVerName = (newName: string) => {
+                        const next = [...logoVersions];
+                        next[vIdx] = { ...next[vIdx], name: newName };
+                        setLogoVersions(next);
+                      };
+                      const updateVerTag = (newTag: string) => {
+                        const next = [...logoVersions];
+                        next[vIdx] = { ...next[vIdx], tag: newTag };
+                        setLogoVersions(next);
+                      };
+                      const removeVer = () => {
+                        setLogoVersions(logoVersions.filter((_, i) => i !== vIdx));
+                      };
+                      const slotId = `custom_ver_${ver.id}`;
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                  {otherIdeas.slice(0, 6).map((idea, idx) => {
-                    const updateIdeaImage = (url: string) => {
-                      const next = [...otherIdeas];
-                      next[idx] = { ...next[idx], imageUrl: url };
-                      setOtherIdeas(next);
-                    };
-                    const updateIdeaTitle = (title: string) => {
-                      const next = [...otherIdeas];
-                      next[idx] = { ...next[idx], title };
-                      setOtherIdeas(next);
-                    };
-                    const slotId = `idea_${idx}`;
-
-                    return (
-                      <div
-                        key={idea.id || idx}
-                        tabIndex={0}
-                        onFocus={() => setActivePasteSlot(slotId)}
-                        onPaste={(e) => handleClipboardPasteEvent(e, updateIdeaImage, `Icono 0${idx + 1}`)}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => handleDropFile(e, updateIdeaImage, `Icono 0${idx + 1}`)}
-                        className={`p-2.5 rounded-xl border bg-zinc-900 text-white space-y-2 outline-none transition ${
-                          activePasteSlot === slotId
-                            ? 'border-amber-400 ring-2 ring-amber-400/25'
-                            : 'border-zinc-800'
-                        }`}
-                      >
+                      return (
                         <div
-                          onClick={() => setActivePasteSlot(slotId)}
-                          className="h-16 rounded-lg border border-dashed border-zinc-700 hover:border-amber-400/60 bg-zinc-950 flex items-center justify-center p-2 cursor-pointer"
+                          key={ver.id}
+                          tabIndex={0}
+                          onFocus={() => setActivePasteSlot(slotId)}
+                          onPaste={(e) => handleClipboardPasteEvent(e, updateVerUrl, ver.name)}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => handleDropFile(e, updateVerUrl, ver.name)}
+                          className={`p-3.5 rounded-2xl border transition bg-zinc-950 text-white space-y-2.5 outline-none ${
+                            activePasteSlot === slotId
+                              ? 'border-amber-400 ring-2 ring-amber-400/25'
+                              : 'border-zinc-800'
+                          }`}
                         >
-                          {idea.imageUrl ? (
-                            <img
-                              src={idea.imageUrl}
-                              alt={idea.title}
-                              className="max-h-12 max-w-full object-contain"
-                            />
-                          ) : (
-                            <span className="text-[9px] font-mono text-zinc-500 text-center">
-                              Icono 0{idx + 1}
-                              <br />
-                              (Clic + Ctrl+V)
-                            </span>
-                          )}
-                        </div>
-                        <input
-                          type="text"
-                          value={idea.title}
-                          onChange={(e) => updateIdeaTitle(e.target.value)}
-                          placeholder={`Icono 0${idx + 1}`}
-                          className="w-full px-2 py-1 rounded bg-zinc-950 border border-zinc-800 text-[10px] text-zinc-200"
-                        />
-                        <div className="flex items-center gap-1">
-                          <label className="flex-1 py-1 px-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-[10px] font-bold text-center cursor-pointer">
-                            Subir
+                          <div className="flex items-center justify-between gap-2">
                             <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => handleFileUpload(e, updateIdeaImage)}
+                              type="text"
+                              value={ver.name}
+                              onChange={(e) => updateVerName(e.target.value)}
+                              placeholder="Nombre de la versión"
+                              className="px-2 py-1 rounded bg-zinc-900 border border-zinc-700 text-xs font-bold text-white flex-1 min-w-0"
                             />
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => handlePasteButtonClick(updateIdeaImage, `Icono 0${idx + 1}`)}
-                            className="py-1 px-1.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold cursor-pointer"
-                            title="Pegar desde Illustrator o Captura"
-                          >
-                            Pegar
-                          </button>
-                          {idea.imageUrl && (
+                            <input
+                              type="text"
+                              value={ver.tag || ''}
+                              onChange={(e) => updateVerTag(e.target.value)}
+                              placeholder="Tag / Tipo"
+                              className="w-20 px-2 py-1 rounded bg-zinc-900 border border-zinc-700 text-[10px] font-mono text-amber-300 text-center"
+                            />
                             <button
                               type="button"
-                              onClick={() => updateIdeaImage('')}
-                              className="p-1 rounded bg-zinc-800 text-rose-400 cursor-pointer"
+                              onClick={removeVer}
+                              className="p-1 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 cursor-pointer"
+                              title="Eliminar versión"
                             >
-                              <Trash2 className="w-3 h-3" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                          )}
+                          </div>
+
+                          <div
+                            onClick={() => setActivePasteSlot(slotId)}
+                            className="h-24 rounded-xl border border-dashed border-zinc-700 hover:border-amber-400/60 bg-[#111111] flex items-center justify-center p-2 cursor-pointer relative"
+                          >
+                            {ver.url ? (
+                              <img src={ver.url} alt={ver.name} className="max-h-16 max-w-full object-contain" />
+                            ) : (
+                              <div className="text-center space-y-1">
+                                <span className="text-[10px] font-mono text-zinc-400 block font-bold">
+                                  Clic + Ctrl+V
+                                </span>
+                                <span className="text-[9px] text-zinc-500 block">
+                                  (Illustrator / Captura / Archivo)
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <label className="flex-1 py-1.5 px-2 rounded-xl bg-white text-zinc-950 text-[11px] font-bold text-center cursor-pointer hover:bg-zinc-200 transition flex items-center justify-center gap-1">
+                              <Upload className="w-3 h-3" />
+                              <span>Subir</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => handleFileUpload(e, updateVerUrl)}
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => handlePasteButtonClick(updateVerUrl, ver.name)}
+                              className="py-1.5 px-2.5 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/30 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                              title="Pegar desde portapapeles"
+                            >
+                              <ClipboardPaste className="w-3 h-3" />
+                              <span>Pegar</span>
+                            </button>
+                            {ver.url && (
+                              <button
+                                type="button"
+                                onClick={() => updateVerUrl('')}
+                                className="p-1.5 rounded-xl bg-zinc-800 text-rose-400 hover:bg-zinc-700 cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
-              {/* Concepto y Área de Resguardo */}
+              {/* Concepto y Área de Resguardo */}              {/* Concepto y Área de Resguardo */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
@@ -2163,7 +2320,608 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
           )}
 
           {/* =============================================================== */}
-          {/* TAB 3: BRIEF Y PILARES                                         */}
+          {/* TAB 3: GALERÍA DE MOCKUPS FOTOGRÁFICOS REALES (MOCKUP STUDIO)   */}
+          {/* =============================================================== */}
+          {activeTab === 'mockup_gallery' && (
+            <div className="space-y-6">
+              {/* Header de la Galería */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-zinc-900 to-zinc-950 border border-zinc-800 text-white">
+                <div>
+                  <h4 className="text-base font-bold flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-amber-400" />
+                    <span>Galería de Mockups Fotográficos Reales</span>
+                  </h4>
+                  <p className="text-xs text-zinc-400 mt-1 max-w-2xl">
+                    Selecciona plantillas fotográficas de estudio de alta resolución o sube tus propias fotos. Elige exactamente qué logo estampar en cada una y agrégalas a la presentación pública.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <label className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold flex items-center gap-2 cursor-pointer transition shadow-md">
+                    <Upload className="w-4 h-4" />
+                    <span>+ Subir Mockup Personalizado</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                          if (typeof reader.result === 'string') {
+                            const newCustom: BrandGuidelineCustomMockup = {
+                              id: `cm_${Date.now()}`,
+                              title: file.name.replace(/\.[^/.]+$/, ''),
+                              category: 'textil',
+                              mockupImageUrl: reader.result,
+                              assignedLogoType: 'primary',
+                              stampPositionPreset: 'center_large',
+                              stampScale: 100,
+                              blendMode: 'normal',
+                            };
+                            setActiveMockupConfig(newCustom);
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* Barra de Búsqueda y Filtros de Categoría */}
+              <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={mockupSearchQuery}
+                    onChange={(e) => setMockupSearchQuery(e.target.value)}
+                    placeholder="Buscar mockup (ej. polo, chaleco, carro, llavero, termo, taza)..."
+                    className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs"
+                  />
+                  {mockupSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setMockupSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-white"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+                  {[
+                    { id: 'todos', label: 'Todos' },
+                    { id: 'textil', label: 'Textil & Indumentaria' },
+                    { id: 'vehiculos', label: 'Vehículos & Flota' },
+                    { id: 'promocional', label: 'Promocionales & Merch' },
+                    { id: 'packaging', label: 'Packaging & Bolsas' },
+                    { id: 'papeleria', label: 'Papelería' },
+                    { id: 'outdoor', label: 'Exterior OOH' },
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setMockupCategoryFilter(cat.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                        mockupCategoryFilter === cat.id
+                          ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-sm'
+                          : 'bg-zinc-100 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* MOCKUPS ACTIVOS EN LA PRESENTACIÓN */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-2">
+                    <span>Mockups Activos en la Presentación ({mockupGalleryItems.length})</span>
+                    <span className="text-[10px] font-normal text-zinc-400">
+                      (Se mostrarán en la lámina de Galería Fotográfica del Brand Book)
+                    </span>
+                  </h4>
+                  {mockupGalleryItems.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setMockupGalleryItems([])}
+                      className="text-rose-500 hover:text-rose-600 text-xs font-bold cursor-pointer"
+                    >
+                      Limpiar Todos
+                    </button>
+                  )}
+                </div>
+
+                {mockupGalleryItems.length === 0 ? (
+                  <div className="p-8 rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800 text-center space-y-2 bg-zinc-50 dark:bg-zinc-950/40">
+                    <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                      No hay mockups añadidos a la presentación todavía.
+                    </p>
+                    <p className="text-[11px] text-zinc-500 max-w-md mx-auto">
+                      Elige abajo cualquiera de las plantillas fotográficas (chalecos, polos, furgonetas, llaveros, termos, etc.) o sube tus propias fotos para estampar tu logo y agregarlas.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {mockupGalleryItems.map((item, idx) => {
+                      const logoSrc = resolveMockupLogoUrl(item.assignedLogoType, item.customLogoVersionId);
+                      const stampStyle = getMockupStampStyle(
+                        item.stampPositionPreset,
+                        item.stampScale,
+                        item.blendMode
+                      );
+
+                      return (
+                        <div
+                          key={item.id || idx}
+                          className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-sm flex flex-col justify-between group"
+                        >
+                          {/* Preview Fotográfico con el logo estampado en tiempo real */}
+                          <div className="relative aspect-[4/3] bg-zinc-950 overflow-hidden">
+                            <img
+                              src={item.mockupImageUrl}
+                              alt={item.title}
+                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            />
+                            {/* Logo estampado */}
+                            <div style={stampStyle}>
+                              {logoSrc ? (
+                                <img
+                                  src={logoSrc}
+                                  alt="Logo"
+                                  className="max-h-full max-w-full object-contain filter drop-shadow-md"
+                                />
+                              ) : (
+                                <span className="text-[10px] font-bold text-white uppercase px-2 py-1 bg-black/60 rounded">
+                                  {brandName || 'LOGO'}
+                                </span>
+                              )}
+                            </div>
+                            {/* Pill categoría */}
+                            <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-md text-[9px] font-mono text-white uppercase border border-white/10">
+                              {item.category}
+                            </span>
+                            {/* Botón eliminar */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMockupGalleryItems(mockupGalleryItems.filter((_, i) => i !== idx));
+                                toast('Mockup retirado de la presentación', 'success');
+                              }}
+                              className="absolute top-2.5 right-2.5 p-1.5 rounded-lg bg-black/70 text-rose-400 hover:bg-rose-600 hover:text-white backdrop-blur-md cursor-pointer transition"
+                              title="Eliminar este mockup"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Controles del mockup en la tarjeta */}
+                          <div className="p-3.5 space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-zinc-900 dark:text-white truncate">
+                                {item.title}
+                              </span>
+                              <span className="text-[10px] font-mono text-zinc-400">
+                                {item.stampScale || 100}%
+                              </span>
+                            </div>
+
+                            {/* Selector rápido de qué logo estampar */}
+                            <div>
+                              <label className="block text-[10px] font-mono text-zinc-500 dark:text-zinc-400 mb-1">
+                                Logo asignado:
+                              </label>
+                              <select
+                                value={
+                                  item.assignedLogoType === 'custom_version'
+                                    ? `custom_${item.customLogoVersionId}`
+                                    : item.assignedLogoType
+                                }
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const updated = [...mockupGalleryItems];
+                                  if (val.startsWith('custom_')) {
+                                    const cId = val.replace('custom_', '');
+                                    const cVer = logoVersions.find((v) => v.id === cId);
+                                    updated[idx] = {
+                                      ...updated[idx],
+                                      assignedLogoType: 'custom_version',
+                                      customLogoVersionId: cId,
+                                      customLogoVersionName: cVer?.name || 'Versión Personalizada',
+                                    };
+                                  } else {
+                                    updated[idx] = {
+                                      ...updated[idx],
+                                      assignedLogoType: val as any,
+                                      customLogoVersionId: undefined,
+                                      customLogoVersionName: undefined,
+                                    };
+                                  }
+                                  setMockupGalleryItems(updated);
+                                }}
+                                className="w-full px-2.5 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs font-semibold"
+                              >
+                                <option value="primary">Logo Principal (Claro)</option>
+                                <option value="secondary">Logo Secundario (Oscuro)</option>
+                                <option value="symbol">★ Icono / Isotipo Claro</option>
+                                <option value="symbol_dark">★ Icono / Isotipo Oscuro</option>
+                                {logoFaviconUrl && <option value="favicon">Favicon Oficial</option>}
+                                {logoVersions.map((v) => (
+                                  <option key={v.id} value={`custom_${v.id}`}>
+                                    {v.name} ({v.tag || 'Versión'})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* Selector de posición y botón editar */}
+                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                              <select
+                                value={item.stampPositionPreset || 'center_large'}
+                                onChange={(e) => {
+                                  const updated = [...mockupGalleryItems];
+                                  updated[idx] = { ...updated[idx], stampPositionPreset: e.target.value as any };
+                                  setMockupGalleryItems(updated);
+                                }}
+                                className="px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[10px]"
+                              >
+                                <option value="chest_left">Pecho Izq</option>
+                                <option value="center_large">Centro Grande</option>
+                                <option value="back_print">Espalda</option>
+                                <option value="full">Completo</option>
+                                <option value="subtle">Sutil</option>
+                              </select>
+
+                              <button
+                                type="button"
+                                onClick={() => setActiveMockupConfig(item)}
+                                className="px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-[11px] font-bold text-zinc-700 dark:text-zinc-300 cursor-pointer"
+                              >
+                                Ajustar
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* CATÁLOGO DE PLANTILLAS FOTOGRÁFICAS DE ESTUDIO */}
+              <div className="space-y-3 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                    Catálogo de Plantillas Fotográficas de Estudio
+                  </h4>
+                  <p className="text-[11px] text-zinc-400">
+                    Haz clic en &quot;Elegir y Configurar Logo&quot; para seleccionar qué versión de tu identidad irá sobre esta prenda o soporte.
+                  </p>
+                </div>
+
+                {(() => {
+                  const filtered = MOCKUP_CATALOG_TEMPLATES.filter((tpl) => {
+                    const matchCat =
+                      mockupCategoryFilter === 'todos' || tpl.category === mockupCategoryFilter;
+                    const matchQ =
+                      !mockupSearchQuery.trim() ||
+                      tpl.title.toLowerCase().includes(mockupSearchQuery.toLowerCase()) ||
+                      tpl.description.toLowerCase().includes(mockupSearchQuery.toLowerCase());
+                    return matchCat && matchQ;
+                  });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="p-8 text-center text-xs text-zinc-500 border border-dashed border-zinc-300 dark:border-zinc-800 rounded-2xl">
+                        No se encontraron plantillas con &quot;{mockupSearchQuery}&quot;. Intenta otra búsqueda o sube tu propia foto arriba.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {filtered.map((tpl) => {
+                        return (
+                          <div
+                            key={tpl.id}
+                            className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-xs hover:shadow-md transition flex flex-col justify-between group"
+                          >
+                            <div className="relative aspect-[4/3] bg-zinc-950 overflow-hidden">
+                              <img
+                                src={tpl.mockupImageUrl}
+                                alt={tpl.title}
+                                className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                              />
+                              <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-md text-[9px] font-mono text-white uppercase border border-white/10">
+                                {tpl.categoryLabel}
+                              </span>
+                            </div>
+
+                            <div className="p-3.5 space-y-2 flex-1 flex flex-col justify-between">
+                              <div>
+                                <h5 className="text-xs font-bold text-zinc-900 dark:text-white leading-tight">
+                                  {tpl.title}
+                                </h5>
+                                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 line-clamp-2">
+                                  {tpl.description}
+                                </p>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newItem: BrandGuidelineCustomMockup = {
+                                    id: `cm_${Date.now()}`,
+                                    title: tpl.title,
+                                    category: tpl.category,
+                                    mockupImageUrl: tpl.mockupImageUrl,
+                                    assignedLogoType: tpl.defaultLogoType,
+                                    stampPositionPreset: tpl.defaultPosition,
+                                    stampScale: tpl.defaultScale,
+                                    blendMode: tpl.defaultBlendMode,
+                                  };
+                                  setActiveMockupConfig(newItem);
+                                }}
+                                className="w-full mt-2 py-2 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-950 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Elegir y Configurar Logo</span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* MODAL / DRAWER INTERACTIVO DE CONFIGURACIÓN DEL MOCKUP */}
+              {activeMockupConfig && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
+                  <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[90vh]">
+                    {/* Visualizador en vivo con el logo */}
+                    <div className="w-full md:w-1/2 bg-zinc-950 p-6 flex flex-col items-center justify-center relative overflow-hidden min-h-[300px]">
+                      <img
+                        src={activeMockupConfig.mockupImageUrl}
+                        alt="Mockup"
+                        className="max-h-72 w-full object-cover rounded-2xl shadow-lg"
+                      />
+                      <div
+                        style={getMockupStampStyle(
+                          activeMockupConfig.stampPositionPreset,
+                          activeMockupConfig.stampScale,
+                          activeMockupConfig.blendMode
+                        )}
+                      >
+                        {resolveMockupLogoUrl(
+                          activeMockupConfig.assignedLogoType,
+                          activeMockupConfig.customLogoVersionId
+                        ) ? (
+                          <img
+                            src={resolveMockupLogoUrl(
+                              activeMockupConfig.assignedLogoType,
+                              activeMockupConfig.customLogoVersionId
+                            )}
+                            alt="Logo estampado"
+                            className="max-h-full max-w-full object-contain filter drop-shadow-md"
+                          />
+                        ) : (
+                          <span className="text-xs font-bold text-white bg-black/60 px-2.5 py-1 rounded">
+                            {brandName || 'TU LOGO'}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] font-mono text-zinc-400 mt-3">
+                        Vista previa con logo estampado en tiempo real
+                      </span>
+                    </div>
+
+                    {/* Controles de Configuración */}
+                    <div className="w-full md:w-1/2 p-6 flex flex-col justify-between space-y-4 overflow-y-auto">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
+                          <div>
+                            <h4 className="text-sm font-bold text-zinc-900 dark:text-white">
+                              Configurar Estampado del Mockup
+                            </h4>
+                            <p className="text-[11px] text-zinc-500">
+                              Define qué logo usar y su posición en este soporte.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setActiveMockupConfig(null)}
+                            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-white cursor-pointer"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Título del Mockup */}
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                            Título en la Lámina
+                          </label>
+                          <input
+                            type="text"
+                            value={activeMockupConfig.title}
+                            onChange={(e) =>
+                              setActiveMockupConfig({
+                                ...activeMockupConfig,
+                                title: e.target.value,
+                              })
+                            }
+                            className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-bold"
+                          />
+                        </div>
+
+                        {/* ¿Qué logo estampar? */}
+                        <div>
+                          <label className="block text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-1">
+                            ¿Qué Logo Estampar en este Mockup?
+                          </label>
+                          <select
+                            value={
+                              activeMockupConfig.assignedLogoType === 'custom_version'
+                                ? `custom_${activeMockupConfig.customLogoVersionId}`
+                                : activeMockupConfig.assignedLogoType
+                            }
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val.startsWith('custom_')) {
+                                const cId = val.replace('custom_', '');
+                                const cVer = logoVersions.find((v) => v.id === cId);
+                                setActiveMockupConfig({
+                                  ...activeMockupConfig,
+                                  assignedLogoType: 'custom_version',
+                                  customLogoVersionId: cId,
+                                  customLogoVersionName: cVer?.name || 'Versión Personalizada',
+                                });
+                              } else {
+                                setActiveMockupConfig({
+                                  ...activeMockupConfig,
+                                  assignedLogoType: val as any,
+                                  customLogoVersionId: undefined,
+                                  customLogoVersionName: undefined,
+                                });
+                              }
+                            }}
+                            className="w-full px-3 py-2 rounded-xl border border-emerald-500/50 bg-white dark:bg-zinc-800 text-xs font-bold text-zinc-900 dark:text-white"
+                          >
+                            <option value="primary">Logo Principal (Claro / Fondo Oscuro)</option>
+                            <option value="secondary">Logo Secundario (Oscuro / Fondo Claro)</option>
+                            <option value="symbol">★ Icono / Isotipo Claro</option>
+                            <option value="symbol_dark">★ Icono / Isotipo Oscuro</option>
+                            {logoFaviconUrl && <option value="favicon">Favicon Oficial</option>}
+                            {logoVersions.map((v) => (
+                              <option key={v.id} value={`custom_${v.id}`}>
+                                {v.name} ({v.tag || 'Versión Personalizada'})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Posición y Escala */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                              Posición del Logo
+                            </label>
+                            <select
+                              value={activeMockupConfig.stampPositionPreset || 'center_large'}
+                              onChange={(e) =>
+                                setActiveMockupConfig({
+                                  ...activeMockupConfig,
+                                  stampPositionPreset: e.target.value as any,
+                                })
+                              }
+                              className="w-full px-2.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-semibold"
+                            >
+                              <option value="chest_left">Pecho Izq (Escudo)</option>
+                              <option value="center_large">Pecho Centro Grande</option>
+                              <option value="back_print">Espalda Completa</option>
+                              <option value="full">Completo</option>
+                              <option value="subtle">Sutil / Pequeño</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                              Modo de Fusión
+                            </label>
+                            <select
+                              value={activeMockupConfig.blendMode || 'normal'}
+                              onChange={(e) =>
+                                setActiveMockupConfig({
+                                  ...activeMockupConfig,
+                                  blendMode: e.target.value as any,
+                                })
+                              }
+                              className="w-full px-2.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-semibold"
+                            >
+                              <option value="normal">Normal (Directo)</option>
+                              <option value="multiply">Multiply (Sombras / Telas Claras)</option>
+                              <option value="screen">Screen (Telas Oscuras)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between text-xs font-bold mb-1">
+                            <span className="text-zinc-700 dark:text-zinc-300">
+                              Escala del Estampado
+                            </span>
+                            <span className="font-mono text-amber-500">
+                              {activeMockupConfig.stampScale || 100}%
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            min={40}
+                            max={160}
+                            value={activeMockupConfig.stampScale || 100}
+                            onChange={(e) =>
+                              setActiveMockupConfig({
+                                ...activeMockupConfig,
+                                stampScale: Number(e.target.value),
+                              })
+                            }
+                            className="w-full accent-amber-500 cursor-pointer"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Botones de acción */}
+                      <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+                        <button
+                          type="button"
+                          onClick={() => setActiveMockupConfig(null)}
+                          className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const existsIdx = mockupGalleryItems.findIndex(
+                              (m) => m.id === activeMockupConfig.id
+                            );
+                            if (existsIdx >= 0) {
+                              const updated = [...mockupGalleryItems];
+                              updated[existsIdx] = activeMockupConfig;
+                              setMockupGalleryItems(updated);
+                              toast(`Mockup "${activeMockupConfig.title}" actualizado`, 'success');
+                            } else {
+                              setMockupGalleryItems([...mockupGalleryItems, activeMockupConfig]);
+                              toast(
+                                `✨ Mockup "${activeMockupConfig.title}" agregado a la presentación`,
+                                'success'
+                              );
+                            }
+                            setActiveMockupConfig(null);
+                          }}
+                          className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold shadow-md cursor-pointer transition flex items-center gap-1.5"
+                        >
+                          <Check className="w-4 h-4" />
+                          <span>Guardar en Presentación</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* TAB 4: BRIEF Y PILARES                                         */}
           {/* =============================================================== */}
           {activeTab === 'pillars' && (
             <div className="space-y-6">
@@ -2306,7 +3064,7 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
           )}
 
           {/* =============================================================== */}
-          {/* TAB 4: PALETA DE COLOR CON CONVERSIÓN AUTOMÁTICA HEX->RGB/CMYK  */}
+          {/* TAB 5: PALETA DE COLOR CON CONVERSIÓN AUTOMÁTICA HEX->RGB/CMYK  */}
           {/* =============================================================== */}
           {activeTab === 'colors' && (
             <div className="space-y-4">
@@ -2413,7 +3171,7 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
           )}
 
           {/* =============================================================== */}
-          {/* TAB 5: TIPOGRAFÍA Y GOOGLE FONTS                                */}
+          {/* TAB 6: TIPOGRAFÍA Y GOOGLE FONTS                                */}
           {/* =============================================================== */}
           {activeTab === 'typography' && (
             <div className="space-y-4">
@@ -2499,7 +3257,7 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
           )}
 
           {/* =============================================================== */}
-          {/* TAB 6: KIT DE DESCARGA GOOGLE DRIVE, CAPTURAS Y MÉTRICA KPI     */}
+          {/* TAB 7: KIT DE DESCARGA GOOGLE DRIVE, CAPTURAS Y MÉTRICA KPI     */}
           {/* =============================================================== */}
           {activeTab === 'mockups' && (
             <div className="space-y-6">
@@ -2606,7 +3364,7 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
           )}
 
           {/* =============================================================== */}
-          {/* TAB 7: PRÓXIMOS PASOS (HOJA DE RUTA EDITABLE Y ELIMINABLE)      */}
+          {/* TAB 8: PRÓXIMOS PASOS (HOJA DE RUTA EDITABLE Y ELIMINABLE)      */}
           {/* =============================================================== */}
           {activeTab === 'steps' && (
             <div className="space-y-4">
