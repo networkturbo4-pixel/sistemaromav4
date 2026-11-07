@@ -85,6 +85,7 @@ import {
   LayoutDashboard,
 } from 'lucide-react';
 import { GoogleDriveSettingsTab } from '../components/GoogleDriveSettingsTab';
+import { ConnectionsSettingsTab } from '../components/ConnectionsSettingsTab';
 import { copyTextToClipboard } from '../utils/clipboard';
 
 export type SettingsTab =
@@ -96,7 +97,8 @@ export type SettingsTab =
   | 'roles'
   | 'tenants'
   | 'system-update'
-  | 'drive';
+  | 'drive'
+  | 'connections';
 
 interface SettingsModuleProps {
   initialTab?: string;
@@ -273,7 +275,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       tabStr === 'roles' ||
       tabStr === 'tenants' ||
       tabStr === 'system-update' ||
-      tabStr === 'drive'
+      tabStr === 'drive' ||
+      tabStr === 'connections'
     ) {
       return tabStr as SettingsTab;
     }
@@ -1443,6 +1446,14 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       icon: <HardDrive className="w-4 h-4 text-amber-500" />,
       iconBg: 'bg-amber-500/10 dark:bg-amber-500/20',
       badge: 'CLOUD',
+    },
+    {
+      id: 'connections',
+      title: 'Conexiones & IA',
+      subtitle: 'Google Gemini, Tokens y Agentes',
+      icon: <Sparkles className="w-4 h-4 text-sky-500" />,
+      iconBg: 'bg-sky-500/10 dark:bg-sky-500/20',
+      badge: 'GEMINI',
     },
     {
       id: 'system-update',
@@ -4508,6 +4519,11 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
               8. GOOGLE DRIVE & APIS CLOUD
              ================================================================= */}
           {activeTab === 'drive' && <GoogleDriveSettingsTab />}
+
+          {/* =================================================================
+              8.1 CONEXIONES & APIS DE INTELIGENCIA ARTIFICIAL (GEMINI)
+             ================================================================= */}
+          {activeTab === 'connections' && <ConnectionsSettingsTab />}
 
           {/* =================================================================
               9. ACTUALIZACIONES DEL SISTEMA EN TIEMPO REAL (1 SOLO CLIC)

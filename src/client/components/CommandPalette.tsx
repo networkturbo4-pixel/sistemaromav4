@@ -63,6 +63,7 @@ interface CommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenCreator: () => void;
+  onOpenRomita?: () => void;
   onSelectModule: (module: ActiveModule) => void;
   onSelectSettingsTab?: (tab: SettingsTab) => void;
   onCycleTheme: () => void;
@@ -73,6 +74,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   isOpen,
   onClose,
   onOpenCreator,
+  onOpenRomita,
   onSelectModule,
   onSelectSettingsTab,
   onCycleTheme,
@@ -416,9 +418,25 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     });
 
     // =========================================================================
-    // 6. CREADORES RÁPIDOS
+    // 6. CREADORES RÁPIDOS & AGENTE IA
     // =========================================================================
     list.push(
+      {
+        id: 'agent-romita',
+        type: 'action',
+        title: 'Abrir Agente Romita IA (Ctrl + J)',
+        subtitle: 'Asistente de IA con permisos de acción: crear, editar o eliminar clientes, tareas y cotizaciones',
+        category: 'creators',
+        categoryLabel: 'Inteligencia Artificial',
+        icon: <Sparkles className="w-4 h-4 text-sky-400" />,
+        badge: '✨ Romita IA',
+        badgeClass: 'bg-sky-500/20 text-sky-600 dark:text-sky-300 border border-sky-500/30',
+        keywords: ['romita', 'ia', 'ai', 'agente', 'crear', 'eliminar', 'editar', 'gemini', 'inteligencia', 'chat', 'asistente'],
+        perform: () => {
+          onClose();
+          onOpenRomita?.();
+        },
+      },
       {
         id: 'creator-integral',
         type: 'action',

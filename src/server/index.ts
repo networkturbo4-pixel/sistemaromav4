@@ -38,6 +38,7 @@ import { PERMISSIONS_CATALOG, hasPermission, hasAnyPermission } from '../shared/
 import driveRouter from './routes/drive.routes';
 import whiteboardRouter from './routes/whiteboards.routes';
 import brandGuidelinesRouter from './routes/brand-guidelines.routes';
+import romitaRouter from './routes/romita.routes';
 import { googleDriveService } from './services/googleDriveService';
 import { generateTotpSecret, generateTotpCode, verifyTotpCode, buildOtpAuthUri } from './utils/totp';
 import { notificationService, notifyEvent } from './services/notificationService';
@@ -74,6 +75,9 @@ app.use('/api/workspace/whiteboards', whiteboardRouter);
 // Submódulo: Brand Guidelines / Pitch Decks (Público y Privado)
 app.use('/api/workspace/brand-guidelines', brandGuidelinesRouter);
 app.use('/api/brand-guidelines', brandGuidelinesRouter);
+
+// Agente de IA Asistente ROMITA (con Tool Calling y ejecuciones CRUD)
+app.use('/api/romita', romitaRouter);
 
 // =============================================================================
 // 1. ENDPOINTS PÚBLICOS Y AUTENTICACIÓN POR PIN DE 8 DÍGITOS

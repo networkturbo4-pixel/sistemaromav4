@@ -46,6 +46,7 @@ import { CommandPalette } from './CommandPalette';
 import { ErrorBoundary } from './ErrorBoundary';
 import { QuickOnboardingCreatorModal } from './QuickOnboardingCreatorModal';
 import { NotificationCenterModal } from './NotificationCenterModal';
+import { RomitaAgentModal } from './RomitaAgentModal';
 
 export type ActiveModule =
   | 'dashboard'
@@ -77,6 +78,7 @@ const SETTINGS_TAB_NAMES: Record<SettingsTab, string> = {
   tenants: 'Tenants & Agencias',
   'system-update': 'Actualización del Sistema',
   drive: 'Google Drive & APIs',
+  connections: 'Conexiones & IA',
 };
 
 export const AppShell: React.FC<AppShellProps> = ({
@@ -165,14 +167,23 @@ export const AppShell: React.FC<AppShellProps> = ({
   const [mobileWorkspaceSheetOpen, setMobileWorkspaceSheetOpen] = useState(false);
   const [mobileMoreSheetOpen, setMobileMoreSheetOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [romitaOpen, setRomitaOpen] = useState(false);
   const [creatorModalOpen, setCreatorModalOpen] = useState(false);
 
-  // Atajo de teclado global para abrir Command Palette (Ctrl + K / Cmd + K)
+  // Atajos de teclado globales:
+  // - Ctrl + K / Cmd + K : Command Palette
+  // - Ctrl + J / Cmd + J : Asistente IA Romita
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      const isCmdOrCtrl = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+
+      if (isCmdOrCtrl && key === 'k') {
         e.preventDefault();
         setCommandPaletteOpen((prev) => !prev);
+      } else if (isCmdOrCtrl && key === 'j') {
+        e.preventDefault();
+        setRomitaOpen((prev) => !prev);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -824,6 +835,27 @@ export const AppShell: React.FC<AppShellProps> = ({
               </div>
               <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-500/10 text-slate-500 dark:text-slate-400 border border-slate-500/15 shrink-0 ml-1">
                 Ctrl K
+              </kbd>
+            </button>
+
+            {/* BOTÓN ASISTENTE IA ROMITA (CTRL + J) ACORDE AL SISTEMA */}
+            <button
+              type="button"
+              onClick={() => setRomitaOpen(true)}
+              className="relative p-2 sm:px-3 sm:py-2 rounded-xl border hover:border-sky-500/40 transition cursor-pointer shadow-2xs group flex items-center gap-1.5 shrink-0"
+              style={{
+                borderColor: 'var(--app-border)',
+                backgroundColor: 'var(--app-bg)',
+              }}
+              title="Abrir Asistente de IA Romita (Ctrl + J)"
+              aria-label="Abrir Asistente Romita IA"
+            >
+              <Sparkles className="w-4 h-4 text-sky-500 group-hover:text-sky-400 group-hover:rotate-12 transition transform shrink-0" />
+              <span className="hidden sm:inline font-bold text-xs" style={{ color: 'var(--app-text)' }}>
+                Romita
+              </span>
+              <kbd className="hidden md:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                Ctrl J
               </kbd>
             </button>
 
@@ -1609,6 +1641,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           isOpen={commandPaletteOpen}
           onClose={() => setCommandPaletteOpen(false)}
           onOpenCreator={() => setCreatorModalOpen(true)}
+          onOpenRomita={() => setRomitaOpen(true)}
           onSelectModule={onSelectModule}
           onSelectSettingsTab={onSelectSettingsTab}
           onCycleTheme={cycleTheme}
@@ -1628,6 +1661,13 @@ export const AppShell: React.FC<AppShellProps> = ({
         isOpen={notificationModalOpen}
         onClose={() => setNotificationModalOpen(false)}
         onNavigateModule={onSelectModule}
+      />
+
+      {/* 8. AGENTE DE IA GLOBAL: ROMITA (CTRL + J) */}
+      <RomitaAgentModal
+        isOpen={romitaOpen}
+        onClose={() => setRomitaOpen(false)}
+        activeModule={activeModule}
       />
     </div>
   );

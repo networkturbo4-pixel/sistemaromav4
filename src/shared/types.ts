@@ -98,6 +98,13 @@ export interface TenantDriveConfig {
   updatedAt?: string;
 }
 
+export interface TenantAiConfig {
+  geminiApiKey?: string;
+  preferredModel?: string;
+  isActive?: boolean;
+  updatedAt?: string;
+}
+
 export interface Tenant {
   id: string;
   slug: string;
@@ -106,6 +113,7 @@ export interface Tenant {
   customization: TenantCustomization;
   companyInfo: CompanyInfo;
   driveConfig?: TenantDriveConfig;
+  aiConfig?: TenantAiConfig;
   createdAt: string;
   updatedAt: string;
 }

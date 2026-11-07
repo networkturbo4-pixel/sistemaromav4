@@ -40,6 +40,7 @@ import {
   DriveFolder,
   DriveFolderBlueprint,
   TenantDriveConfig,
+  TenantAiConfig,
   AppNotification,
   PushSubscriptionRecord,
   BiolinkProfile,
@@ -621,6 +622,20 @@ export class DatabaseManager {
     current.driveConfig = {
       ...(current.driveConfig || { authType: 'none' }),
       ...driveConfig,
+      updatedAt: new Date().toISOString(),
+    };
+    current.updatedAt = new Date().toISOString();
+    this.saveLocalState();
+    return await this.getTenantById(tenantId);
+  }
+
+  public async updateTenantAiConfig(tenantId: string, aiConfig: Partial<TenantAiConfig>): Promise<Tenant | null> {
+    const idx = this.localState.tenants.findIndex((t) => t.id === tenantId);
+    if (idx === -1) return null;
+    const current = this.localState.tenants[idx];
+    current.aiConfig = {
+      ...(current.aiConfig || {}),
+      ...aiConfig,
       updatedAt: new Date().toISOString(),
     };
     current.updatedAt = new Date().toISOString();

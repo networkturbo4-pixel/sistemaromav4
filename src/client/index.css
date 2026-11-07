@@ -181,3 +181,47 @@ dialog.offcanvas-right[open] {
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
+
+/* ==========================================================================
+   ANIMACIÓN DEL HALO LUMINOSO DE ROMITA AI (Estilo Antigravity / Gemini)
+   ========================================================================== */
+@keyframes romita-halo-pulse {
+  0%, 100% {
+    transform: scale(1) translateY(0);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.06) translateY(-4px);
+    opacity: 1;
+  }
+}
+
+@keyframes romita-halo-drift {
+  0% {
+    filter: blur(50px) saturate(1.4) hue-rotate(0deg);
+  }
+  50% {
+    filter: blur(65px) saturate(1.8) hue-rotate(20deg);
+  }
+  100% {
+    filter: blur(50px) saturate(1.4) hue-rotate(0deg);
+  }
+}
+
+@keyframes romita-shimmer-sweep {
+  0% {
+    transform: translateX(-100%) rotate(25deg);
+  }
+  100% {
+    transform: translateX(200%) rotate(25deg);
+  }
+}
+
+.animate-romita-halo {
+  animation: romita-halo-pulse 5s ease-in-out infinite, romita-halo-drift 8s ease-in-out infinite;
+  will-change: transform, opacity, filter;
+}
+
+.animate-romita-shimmer {
+  animation: romita-shimmer-sweep 3s ease-in-out infinite;
+}

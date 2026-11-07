@@ -534,6 +534,20 @@ class DatabaseManager {
         this.saveLocalState();
         return await this.getTenantById(tenantId);
     }
+    async updateTenantAiConfig(tenantId, aiConfig) {
+        const idx = this.localState.tenants.findIndex((t) => t.id === tenantId);
+        if (idx === -1)
+            return null;
+        const current = this.localState.tenants[idx];
+        current.aiConfig = {
+            ...(current.aiConfig || {}),
+            ...aiConfig,
+            updatedAt: new Date().toISOString(),
+        };
+        current.updatedAt = new Date().toISOString();
+        this.saveLocalState();
+        return await this.getTenantById(tenantId);
+    }
     async deleteTenant(id) {
         const before = this.localState.tenants.length;
         this.localState.tenants = this.localState.tenants.filter((t) => t.id !== id);
