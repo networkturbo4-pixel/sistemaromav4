@@ -384,9 +384,9 @@ export const EmailComposerModal: React.FC<EmailComposerModalProps> = ({
             <button
               type="button"
               onClick={() => setShowRomita(!showRomita)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white shadow-xs cursor-pointer active:scale-95 transition-all"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs cursor-pointer active:scale-95 transition-colors"
             >
-              <Bot className="w-3.5 h-3.5 text-sky-200" />
+              <Bot className="w-3.5 h-3.5 text-indigo-100" />
               <span>Romita AI</span>
             </button>
 
@@ -414,9 +414,9 @@ export const EmailComposerModal: React.FC<EmailComposerModalProps> = ({
           <form onSubmit={handleSend} className="p-3 sm:p-4 flex flex-col flex-1 overflow-y-auto space-y-3">
             {/* Panel Desplegable de Romita AI */}
             {showRomita && (
-              <div className="bg-gradient-to-br from-indigo-50/80 via-blue-50/60 to-purple-50/80 dark:from-indigo-950/40 dark:via-slate-900/60 dark:to-purple-950/40 border border-indigo-200/80 dark:border-indigo-800/60 rounded-2xl p-3 sm:p-4 space-y-2.5 animate-scaleIn shadow-xs shrink-0">
+              <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 sm:p-4 space-y-2.5 animate-scaleIn shadow-xs shrink-0">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-bold text-indigo-900 dark:text-indigo-200">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-900 dark:text-white">
                     <Bot className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                     <span>Romita Copilot de Redacción</span>
                   </div>
