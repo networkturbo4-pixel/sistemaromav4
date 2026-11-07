@@ -133,6 +133,47 @@ const romitaToolsDeclarations = [
     }
 ];
 /**
+ * Ejecutor resiliente de llamadas a Google Gemini:
+ * Si un modelo específico sufre picos de demanda temporales (503 / high demand) en Google Cloud,
+ * prueba automáticamente con los modelos hermanos de la familia Gemini (2.5-flash, 1.5-flash, etc.)
+ */
+async function generateContentWithResilience(client, preferredModel, requestParams) {
+    const modelsToTry = [
+        preferredModel,
+        'gemini-2.5-flash',
+        'gemini-1.5-flash',
+        'gemini-2.0-flash',
+        'gemini-3.8-flash',
+        'gemini-3.5-flash-lite',
+    ].filter((m, i, arr) => Boolean(m) && arr.indexOf(m) === i);
+    let lastError = null;
+    for (const model of modelsToTry) {
+        try {
+            const res = await client.models.generateContent({
+                ...requestParams,
+                model,
+            });
+            return { response: res, modelUsed: model };
+        }
+        catch (err) {
+            lastError = err;
+            const msg = String(err?.message || err);
+            // Solo intentamos fallback si Google informa sobrecarga temporal de tráfico
+            if (msg.includes('high demand') ||
+                msg.includes('Spikes in demand') ||
+                msg.includes('UNAVAILABLE') ||
+                msg.includes('503') ||
+                msg.includes('429') ||
+                msg.includes('RESOURCE_EXHAUSTED')) {
+                console.warn(`[Romita AI] Modelo "${model}" con alta demanda temporal, cambiando automáticamente al siguiente modelo disponible...`);
+                continue;
+            }
+            throw err;
+        }
+    }
+    throw lastError;
+}
+/**
  * Endpoint de Chat con Romita AI:
  * Interpreta lenguaje natural y devuelve respuesta conversacional
  * con una acción propuesta (pendingAction) si detecta intención CRUD.
@@ -160,8 +201,7 @@ Tus capacidades incluyen:
 3. Sé concisa, profesional, amable y con tono ágil.
 4. Cuando el usuario te pida crear, editar o eliminar, SIEMPRE invoca la herramienta correspondiente con los parámetros extraídos.
 5. NO realices acciones destructivas sin usar la herramienta respectiva para que el usuario pueda validarlas en su pantalla.`;
-                const response = await gemini.models.generateContent({
-                    model: modelPreference || 'gemini-3.8-flash',
+                const { response, modelUsed } = await generateContentWithResilience(gemini, modelPreference || 'gemini-2.5-flash', {
                     contents: trimmed,
                     config: {
                         systemInstruction: systemPrompt,
@@ -563,6 +603,12 @@ function formatGeminiError(err) {
     if (msg.includes('CONSUMER_SUSPENDED') || msg.includes('has been suspended')) {
         return 'El proyecto de Google Cloud asociado a esta API Key ha sido suspendido por Google. Genera una nueva API Key en Google AI Studio (aistudio.google.com/app/apikey) o verifica el estado de tu cuenta de Google.';
     }
+    if (msg.includes('high demand') ||
+        msg.includes('Spikes in demand') ||
+        msg.includes('503') ||
+        msg.includes('UNAVAILABLE')) {
+        return 'Google Gemini experimenta alta demanda en este instante. Selecciona Gemini 2.5 Flash o Gemini 1.5 Flash en el menú para una conexión inmediata con alta disponibilidad.';
+    }
     if (msg.includes('API_KEY_INVALID') || msg.includes('API key not valid')) {
         return 'La API Key ingresada no es válida. Copia la clave completa desde Google AI Studio (suele iniciar con "AIzaSy...").';
     }
@@ -579,7 +625,7 @@ function formatGeminiError(err) {
  */
 router.post('/test-connection', auth_1.requireAuth, async (req, res) => {
     try {
-        const { apiKey, model = 'gemini-3.8-flash' } = req.body;
+        const { apiKey, model = 'gemini-2.5-flash' } = req.body;
         const tenantId = req.auth?.tenant?.id;
         let keyToTest = apiKey;
         if (!keyToTest || keyToTest.includes('...')) {
@@ -594,18 +640,18 @@ router.post('/test-connection', auth_1.requireAuth, async (req, res) => {
         }
         const client = new genai_1.GoogleGenAI({ apiKey: keyToTest });
         const startTime = Date.now();
-        const response = await client.models.generateContent({
-            model: model || 'gemini-3.8-flash',
+        const { response, modelUsed } = await generateContentWithResilience(client, model || 'gemini-2.5-flash', {
             contents: 'Responde únicamente con la palabra "ROMA_OK" para verificar la conexión.',
         });
         const latencyMs = Date.now() - startTime;
         const replyText = response.text || '';
+        const note = modelUsed !== model ? ` (resuelto con ${modelUsed} por alta disponibilidad)` : '';
         return res.json({
             ok: true,
             latencyMs,
             reply: replyText.trim(),
-            model,
-            message: `¡Conexión exitosa con Google Gemini (${model})! Tiempo de respuesta: ${latencyMs}ms.`,
+            model: modelUsed,
+            message: `¡Conexión exitosa con Google Gemini (${modelUsed})!${note} Tiempo de respuesta: ${latencyMs}ms.`,
         });
     }
     catch (err) {

@@ -47,7 +47,9 @@ interface RomitaAgentModalProps {
 }
 
 const AVAILABLE_MODELS = [
-  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', badge: 'Recomendado' },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', badge: 'Alta Disponibilidad' },
+  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', badge: 'Estable' },
+  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', badge: '1M Tokens' },
   { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite', badge: 'Rápido' },
   { id: 'romita-turbo', name: 'Motor Local ROMA', badge: 'Instantáneo' },
 ];
