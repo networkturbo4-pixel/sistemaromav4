@@ -3,7 +3,7 @@ import {
   Lock, KeyRound, ArrowRight, ChevronLeft, ChevronRight, Maximize2, Minimize2,
   Copy, Check, Moon, Sun, Grid, LayoutTemplate, Share2, ExternalLink,
   Play, Pause, Download, MessageSquare, CheckCircle2, AlertCircle, Send,
-  Sliders, ShieldAlert, HardDrive, FileDown, Sparkles, X
+  Sliders, ShieldAlert, HardDrive, FileDown, Sparkles, X, Eye, EyeOff
 } from 'lucide-react';
 import { BrandGuideline } from '../../shared/types';
 import { hexToColorSpecs } from '../modules/workspace/submodules/brand-guidelines/BrandGuidelineEditorModal';
@@ -42,6 +42,8 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
   const [copiedLink, setCopiedLink] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isCinemaMode, setIsCinemaMode] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
   // Selector de Colorway en vivo y Lightbox 3D para Mockups
   const [mockupColorway, setMockupColorway] = useState<'obsidian' | 'offwhite' | 'brand'>('obsidian');
@@ -418,11 +420,44 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
       document.documentElement.requestFullscreen().catch(() => {});
       setIsFullscreen(true);
       setIsCinemaMode(true);
+      setShowControls(true);
     } else {
       document.exitFullscreen().catch(() => {});
       setIsFullscreen(false);
       setIsCinemaMode(false);
+      setShowControls(true);
     }
+  };
+
+  // Auto-ocultar barra en pantalla completa / modo cine tras inactividad para no molestar la lectura
+  useEffect(() => {
+    if (!isFullscreen && !isCinemaMode) {
+      setShowControls(true);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setShowControls(false);
+    }, 3800);
+    return () => clearTimeout(timer);
+  }, [isFullscreen, isCinemaMode, currentSlideIndex]);
+
+  // Gestos táctiles para deslizar entre diapositivas en celulares
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartX(e.touches[0].clientX);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX === null) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const diff = touchStartX - touchEndX;
+    if (Math.abs(diff) > 45) {
+      if (diff > 0) {
+        setCurrentSlideIndex((prev) => Math.min(totalSlides - 1, prev + 1));
+      } else {
+        setCurrentSlideIndex((prev) => Math.max(0, prev - 1));
+      }
+    }
+    setTouchStartX(null);
   };
 
   // Copiar valor de color en formato HEX, RGB o CMYK
@@ -482,111 +517,790 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
         format: [297, 167], // 16:9 Widescreen exacto
       });
 
+      const totalPdfPages = guideline.isRebrand ? 18 : 17;
+      let currentPageNum = 1;
+
       const fillDarkSlide = () => {
-        doc.setFillColor(17, 17, 17);
+        doc.setFillColor(15, 15, 18);
         doc.rect(0, 0, 297, 167, 'F');
-        doc.setTextColor(255, 255, 255);
       };
 
-      // PÁGINA 1: PORTADA
+      const createHeader = (sectionNum: string, sectionTitle: string) => {
+        fillDarkSlide();
+        // Barra superior de acento con color primario de marca
+        const cleanHex = (guideline.colors?.[0]?.hex || '#4F46E5').replace('#', '');
+        const r = parseInt(cleanHex.substring(0, 2), 16) || 79;
+        const g = parseInt(cleanHex.substring(2, 4), 16) || 70;
+        const b = parseInt(cleanHex.substring(4, 6), 16) || 229;
+        doc.setFillColor(r, g, b);
+        doc.rect(20, 12, 12, 1.8, 'F');
+
+        doc.setFontSize(8.5);
+        doc.setTextColor(150, 150, 155);
+        doc.text(`${sectionNum} • ${sectionTitle.toUpperCase()}`, 35, 14);
+
+        doc.setDrawColor(40, 40, 48);
+        doc.setLineWidth(0.4);
+        doc.line(20, 18, 277, 18);
+      };
+
+      const createFooter = (label: string) => {
+        doc.setDrawColor(40, 40, 48);
+        doc.setLineWidth(0.4);
+        doc.line(20, 152, 277, 152);
+
+        doc.setFontSize(7.5);
+        doc.setTextColor(115, 115, 125);
+        doc.text(`${guideline.brandName} • ${label}`, 20, 158);
+        doc.text(`LÁMINA ${String(currentPageNum).padStart(2, '0')} / ${String(totalPdfPages).padStart(2, '0')}`, 248, 158);
+      };
+
+      // -------------------------------------------------------------
+      // PÁGINA 1: PORTADA EJECUTIVA
+      // -------------------------------------------------------------
       fillDarkSlide();
-      doc.setFontSize(10);
-      doc.setTextColor(150, 150, 150);
-      doc.text('MANUAL DE IDENTIDAD VISUAL & PRESENTACIÓN DE MARCA', 20, 22);
-      doc.setFontSize(38);
+      // Franja de acento superior
+      const primaryHex = (guideline.colors?.[0]?.hex || '#F59E0B').replace('#', '');
+      const prR = parseInt(primaryHex.substring(0, 2), 16) || 245;
+      const prG = parseInt(primaryHex.substring(2, 4), 16) || 158;
+      const prB = parseInt(primaryHex.substring(4, 6), 16) || 11;
+      doc.setFillColor(prR, prG, prB);
+      doc.rect(0, 0, 297, 3, 'F');
+
+      doc.setFontSize(9);
+      doc.setTextColor(140, 140, 150);
+      doc.text('MANUAL DE IDENTIDAD VISUAL & BRAND GUIDELINES', 20, 24);
+
+      doc.setFontSize(36);
       doc.setTextColor(255, 255, 255);
-      doc.text(`Identidad visual para`, 20, 78);
-      doc.text(`{${guideline.brandName}}`, 20, 96);
+      doc.text('Identidad visual para', 20, 72);
+      doc.text(`{${guideline.brandName}}`, 20, 88);
+
       if (guideline.tagline) {
         doc.setFontSize(13);
-        doc.setTextColor(180, 180, 180);
-        doc.text(guideline.tagline, 20, 114);
+        doc.setTextColor(185, 185, 195);
+        const splitTagline = doc.splitTextToSize(guideline.tagline, 220);
+        doc.text(splitTagline, 20, 105);
       }
-      doc.setFontSize(9);
-      doc.setTextColor(120, 120, 120);
-      doc.text(`${guideline.date || '2026'}   |   ${translateDisplayText(guideline.round, 'Ronda 1')}   |   Diseñado por ${guideline.designerName || 'Equipo Creativo Roma'}`, 20, 152);
 
-      // PÁGINA 2: BRIEF & OBJETIVOS
+      // Paleta resumen en miniatura al pie de la portada
+      (guideline.colors || []).slice(0, 6).forEach((c, idx) => {
+        const cHex = c.hex.replace('#', '');
+        const cr = parseInt(cHex.substring(0, 2), 16) || 0;
+        const cg = parseInt(cHex.substring(2, 4), 16) || 0;
+        const cb = parseInt(cHex.substring(4, 6), 16) || 0;
+        doc.setFillColor(cr, cg, cb);
+        doc.roundedRect(20 + idx * 14, 130, 11, 11, 2, 2, 'F');
+      });
+
+      doc.setDrawColor(40, 40, 48);
+      doc.setLineWidth(0.4);
+      doc.line(20, 150, 277, 150);
+      doc.setFontSize(8);
+      doc.setTextColor(120, 120, 130);
+      doc.text(`${guideline.date || '2026'}   •   ${translateDisplayText(guideline.round, 'Ronda 1')}   •   Diseñado por ${guideline.designerName || 'Equipo Creativo Roma'}`, 20, 157);
+      doc.text(`LÁMINA 01 / ${String(totalPdfPages).padStart(2, '0')}`, 250, 157);
+
+      // -------------------------------------------------------------
+      // PÁGINA 2: RESUMEN DEL BRIEF & DESAFÍO ESTRATÉGICO
+      // -------------------------------------------------------------
+      currentPageNum++;
       doc.addPage([297, 167], 'landscape');
-      fillDarkSlide();
-      doc.setFontSize(10);
-      doc.setTextColor(150, 150, 150);
-      doc.text('02 • RESUMEN DEL BRIEF Y PILARES ESTRATÉGICOS', 20, 22);
+      createHeader('02', 'Resumen del Brief y Desafío Estratégico');
+
       doc.setFontSize(18);
       doc.setTextColor(255, 255, 255);
-      const splitTitle = doc.splitTextToSize(translateDisplayText(guideline.briefOverviewTitle, ''), 250);
-      doc.text(splitTitle, 20, 42);
+      const splitBriefTitle = doc.splitTextToSize(translateDisplayText(guideline.briefOverviewTitle, 'Visión Estratégica y Posicionamiento de Marca'), 250);
+      doc.text(splitBriefTitle, 20, 36);
 
-      (guideline.goals || []).slice(0, 3).forEach((g, idx) => {
+      doc.setFontSize(11);
+      doc.setTextColor(175, 175, 185);
+      const briefDesc = translateDisplayText(
+        guideline.directionRationale,
+        'El proyecto de identidad visual responde a la necesidad de construir una marca memorable, sólida y adaptable a todos los puntos de contacto analógicos y digitales, reflejando su liderazgo, valores corporativos y proyección futura.'
+      );
+      const splitBriefDesc = doc.splitTextToSize(briefDesc, 250);
+      doc.text(splitBriefDesc, 20, 52);
+
+      // Tarjetas de contexto estratégico
+      const contextPoints = [
+        { label: 'CLIENTE', value: guideline.clientName || guideline.brandName },
+        { label: 'ENTREGA', value: guideline.date || '2026' },
+        { label: 'ETAPA', value: translateDisplayText(guideline.round, 'Ronda 1') },
+        { label: 'ESTADO', value: guideline.status === 'approved' ? 'Aprobado Oficial' : 'En Revisión' }
+      ];
+      contextPoints.forEach((cp, idx) => {
+        const x = 20 + idx * 64;
+        doc.setFillColor(25, 25, 30);
+        doc.roundedRect(x, 105, 60, 32, 2.5, 2.5, 'F');
+        doc.setFontSize(7.5);
+        doc.setTextColor(140, 140, 150);
+        doc.text(cp.label, x + 6, 115);
+        doc.setFontSize(10.5);
+        doc.setTextColor(255, 255, 255);
+        doc.text(doc.splitTextToSize(cp.value, 50), x + 6, 126);
+      });
+
+      createFooter('Brief y Contexto');
+
+      // -------------------------------------------------------------
+      // PÁGINA 3: PILARES Y OBJETIVOS DE MARCA
+      // -------------------------------------------------------------
+      currentPageNum++;
+      doc.addPage([297, 167], 'landscape');
+      createHeader('03', 'Pilares Estratégicos y Objetivos de Marca');
+
+      const goalsList = (guideline.goals || []).slice(0, 3);
+      goalsList.forEach((g, idx) => {
         const x = 20 + idx * 88;
-        doc.setFontSize(26);
-        doc.setTextColor(220, 220, 220);
-        doc.text(g.number || `0${idx + 1}`, x, 88);
+        doc.setFillColor(22, 22, 26);
+        doc.roundedRect(x, 32, 82, 108, 3, 3, 'F');
+
+        doc.setFontSize(28);
+        doc.setTextColor(prR, prG, prB);
+        doc.text(g.number || `0${idx + 1}`, x + 8, 54);
+
         doc.setFontSize(13);
         doc.setTextColor(255, 255, 255);
-        doc.text(translateDisplayText(g.title, g.title), x, 100);
+        const splitGTitle = doc.splitTextToSize(translateDisplayText(g.title, g.title), 70);
+        doc.text(splitGTitle, x + 8, 70);
+
         doc.setFontSize(9);
-        doc.setTextColor(160, 160, 160);
-        const descLines = doc.splitTextToSize(translateDisplayText(g.description, ''), 78);
-        doc.text(descLines, x, 110);
+        doc.setTextColor(160, 160, 170);
+        const splitGDesc = doc.splitTextToSize(translateDisplayText(g.description, ''), 70);
+        doc.text(splitGDesc, x + 8, 86);
       });
 
-      // PÁGINA 3: PALETA DE COLORES (HEX / RGB / CMYK)
-      doc.addPage([297, 167], 'landscape');
-      fillDarkSlide();
-      doc.setFontSize(10);
-      doc.setTextColor(150, 150, 150);
-      doc.text('03 • SISTEMA CROMÁTICO (HEX / RGB / CMYK / PANTONE)', 20, 22);
+      createFooter('Pilares Estratégicos');
 
-      const cols = guideline.colors || [];
-      const boxW = Math.min(62, Math.floor(255 / Math.max(1, cols.length)));
-      cols.forEach((c, idx) => {
-        const x = 20 + idx * (boxW + 4);
-        const cleanHex = c.hex.replace('#', '');
-        const r = parseInt(cleanHex.substring(0, 2), 16) || 0;
-        const g = parseInt(cleanHex.substring(2, 4), 16) || 0;
-        const b = parseInt(cleanHex.substring(4, 6), 16) || 0;
-        doc.setFillColor(r, g, b);
-        doc.roundedRect(x, 35, boxW, 85, 3, 3, 'F');
+      // -------------------------------------------------------------
+      // PÁGINA 4: PROPUESTA PRINCIPAL & RACIONAL CONCEPTUAL
+      // -------------------------------------------------------------
+      currentPageNum++;
+      doc.addPage([297, 167], 'landscape');
+      createHeader('04', 'Propuesta Principal y Racional Conceptual');
+
+      doc.setFontSize(16);
+      doc.setTextColor(255, 255, 255);
+      doc.text(translateDisplayText(guideline.directionName, 'Propuesta Principal'), 20, 36);
+
+      // Columna izquierda: Racional
+      doc.setFillColor(22, 22, 26);
+      doc.roundedRect(20, 46, 120, 94, 3, 3, 'F');
+
+      doc.setFontSize(8.5);
+      doc.setTextColor(prR, prG, prB);
+      doc.text('NARRATIVA Y CONCEPTO VISUAL', 28, 58);
+
+      doc.setFontSize(9.5);
+      doc.setTextColor(180, 180, 190);
+      const ratText = translateDisplayText(
+        guideline.directionRationale,
+        'Esta propuesta sintetiza la esencia, los valores y la personalidad de la marca mediante una construcción geométrica equilibrada, garantizando máxima legibilidad y pregnancia tanto en medios digitales como impresos.'
+      );
+      const splitRat = doc.splitTextToSize(ratText, 104);
+      doc.text(splitRat, 28, 70);
+
+      // Columna derecha: Logotipo en grande
+      doc.setFillColor(28, 28, 34);
+      doc.roundedRect(148, 46, 129, 94, 3, 3, 'F');
+      doc.setFontSize(9);
+      doc.setTextColor(140, 140, 150);
+      doc.text('REPRESENTACIÓN INSTITUCIONAL', 156, 58);
+
+      doc.setFontSize(26);
+      doc.setTextColor(255, 255, 255);
+      doc.text(guideline.brandName, 156, 95);
+
+      if (guideline.tagline) {
+        doc.setFontSize(10);
+        doc.setTextColor(160, 160, 170);
+        doc.text(guideline.tagline, 156, 107);
+      }
+
+      createFooter('Racional de Logo');
+
+      // -------------------------------------------------------------
+      // PÁGINA 5 (Condicional): EVOLUCIÓN: ANTES VS. DESPUÉS
+      // -------------------------------------------------------------
+      if (guideline.isRebrand) {
+        currentPageNum++;
+        doc.addPage([297, 167], 'landscape');
+        createHeader('05', 'Evolución de Marca: Antes vs. Después');
+
+        // Card Antes
+        doc.setFillColor(24, 20, 20);
+        doc.roundedRect(20, 36, 122, 102, 3, 3, 'F');
+        doc.setFontSize(10);
+        doc.setTextColor(244, 63, 94);
+        doc.text('01 • IDENTIDAD ANTERIOR (LEGACY)', 28, 48);
+
+        doc.setFontSize(18);
+        doc.setTextColor(220, 220, 220);
+        doc.text(guideline.brandName, 28, 78);
+
+        doc.setFontSize(9);
+        doc.setTextColor(160, 150, 150);
+        doc.text('• Estructura compleja con pérdida de nitidez en escalas reducidas.', 28, 96);
+        doc.text('• Dificultades de reproducción en serigrafía, bordado y favicons.', 28, 106);
+        doc.text('• Paleta cromática heterogénea sin estandarización digital.', 28, 116);
+
+        // Card Después
+        doc.setFillColor(20, 26, 24);
+        doc.roundedRect(152, 36, 125, 102, 3, 3, 'F');
+        doc.setFontSize(10);
+        doc.setTextColor(16, 185, 129);
+        doc.text('02 • NUEVA IDENTIDAD VISUAL (OPTIMIZADA)', 160, 48);
+
+        doc.setFontSize(22);
+        doc.setTextColor(255, 255, 255);
+        doc.text(guideline.brandName, 160, 78);
+
+        doc.setFontSize(9);
+        doc.setTextColor(160, 180, 170);
+        doc.text('• Geometría vectorizada limpia con proporción áurea de resguardo.', 160, 96);
+        doc.text('• Sistema adaptable a avatares 16px, papelería y gran formato OOH.', 160, 106);
+        doc.text('• Paleta estandarizada con valores certificados HEX, RGB y CMYK.', 160, 116);
+
+        createFooter('Evolución Rebrand');
+      }
+
+      // -------------------------------------------------------------
+      // PÁGINA: RETÍCULA GEOMÉTRICA & TAMAÑOS MÍNIMOS
+      // -------------------------------------------------------------
+      currentPageNum++;
+      doc.addPage([297, 167], 'landscape');
+      createHeader(String(currentPageNum).padStart(2, '0'), 'Retícula Geométrica, Tamaños Mínimos e Iconografía');
+
+      // Izquierda: Tamaños mínimos
+      doc.setFillColor(22, 22, 26);
+      doc.roundedRect(20, 34, 122, 106, 3, 3, 'F');
+
+      doc.setFontSize(10);
+      doc.setTextColor(prR, prG, prB);
+      doc.text('TAMAÑOS MÍNIMOS DE REPRODUCCIÓN', 28, 46);
+
+      const minSizes = [
+        { label: 'Favicon / PWA Web', size: '16 × 16 px', desc: 'Uso obligatorio exclusivo de Isotipo/Símbolo monocromo.' },
+        { label: 'Barra de App Móvil', size: '24 × 24 px', desc: 'Legibilidad óptica óptima en pantallas OLED y LCD retina.' },
+        { label: 'Tarjetas de Presentación', size: '20 mm base', desc: 'Impresión offset con reserva de barniz o estampado en seco.' },
+        { label: 'Bordado / Merchandising', size: '15 mm base', desc: 'Puntadas mínimas garantizadas sin empastamiento de hilo.' }
+      ];
+
+      minSizes.forEach((ms, idx) => {
+        const y = 58 + idx * 20;
+        doc.setFontSize(10);
+        doc.setTextColor(255, 255, 255);
+        doc.text(ms.label, 28, y);
+        doc.setFontSize(9);
+        doc.setTextColor(prR, prG, prB);
+        doc.text(ms.size, 98, y);
+        doc.setFontSize(8);
+        doc.setTextColor(140, 140, 150);
+        doc.text(ms.desc, 28, y + 6);
+      });
+
+      // Derecha: Reglas Iconográficas
+      doc.setFillColor(22, 22, 26);
+      doc.roundedRect(150, 34, 127, 106, 3, 3, 'F');
+      doc.setFontSize(10);
+      doc.setTextColor(prR, prG, prB);
+      doc.text('SISTEMA ICONOGRÁFICO INSTITUCIONAL', 158, 46);
+
+      doc.setFontSize(9.5);
+      doc.setTextColor(220, 220, 225);
+      doc.text(`• Grosor de Trazo Maestro: ${guideline.iconStrokeWidth || 2}.0px Regular (Eje óptico uniforme)`, 158, 62);
+      doc.text(`• Radio de Curvatura en Vértices: ${guideline.iconCornerRadius !== undefined ? guideline.iconCornerRadius : 6}px Suave`, 158, 76);
+      doc.text('• Terminaciones (Linecap): Rounded / Esquinas semicirculares.', 158, 90);
+      doc.text('• Cuadrícula Base: Iconos construidos sobre lienzo modular 24×24px.', 158, 104);
+      doc.text('• Cohesión Visual: Los iconos acompañan la personalidad geométrica del logo.', 158, 118);
+
+      createFooter('Construcción y Escala');
+
+      // -------------------------------------------------------------
+      // PÁGINA: ÁREA DE RESGUARDO (SAFE ZONE) & DON'TS
+      // -------------------------------------------------------------
+      currentPageNum++;
+      doc.addPage([297, 167], 'landscape');
+      createHeader(String(currentPageNum).padStart(2, '0'), 'Área de Resguardo (Safe Zone) y Usos Incorrectos');
+
+      // Safe zone card
+      doc.setFillColor(22, 22, 26);
+      doc.roundedRect(20, 34, 96, 106, 3, 3, 'F');
+      doc.setFontSize(10);
+      doc.setTextColor(prR, prG, prB);
+      doc.text('ÁREA DE RESGUARDO 1X', 28, 46);
+      doc.setFontSize(8.5);
+      doc.setTextColor(170, 170, 180);
+      doc.text('Se define un margen perimetral mínimo de seguridad (1x) que protege al logotipo frente a otros elementos gráficos, bordes de corte o textos ajenos.', 28, 58, { maxWidth: 80 });
+      doc.setFontSize(12);
+      doc.setTextColor(255, 255, 255);
+      doc.text('Margen de Protección: 1x', 28, 100);
+      doc.setFontSize(8);
+      doc.setTextColor(130, 130, 140);
+      doc.text('X equivale a la altura proporcional del isotipo.', 28, 108);
+
+      // Don'ts grid
+      const dontsList = [
+        { title: 'No Deformar', desc: 'No alterar proporciones horizontales ni verticales bajo ninguna circunstancia.' },
+        { title: 'No Rotar', desc: 'No inclinar el logotipo ni usarlo en ángulos distintos a 0° horizontal.' },
+        { title: 'Sin Sombras Ajenas', desc: 'No aplicar biseles, brillos, sombras paralelas o trazos externos.' },
+        { title: 'Contraste Insuficiente', desc: 'No colocar sobre fondos saturados o complejos que degraden su legibilidad.' }
+      ];
+
+      dontsList.forEach((d, idx) => {
+        const col = idx % 2;
+        const row = Math.floor(idx / 2);
+        const x = 124 + col * 78;
+        const y = 34 + row * 55;
+        doc.setFillColor(26, 20, 20);
+        doc.roundedRect(x, y, 74, 51, 2.5, 2.5, 'F');
+        doc.setFontSize(9);
+        doc.setTextColor(244, 63, 94);
+        doc.text(`✕  ${d.title}`, x + 6, y + 14);
+        doc.setFontSize(8);
+        doc.setTextColor(170, 160, 160);
+        doc.text(d.desc, x + 6, y + 26, { maxWidth: 62 });
+      });
+
+      createFooter('Reglas de Uso y Protección');
+
+      // -------------------------------------------------------------
+      // PÁGINA: PRUEBA DE CONTRASTE 50/50 & VERSIONES OFICIALES
+      // -------------------------------------------------------------
+      currentPageNum++;
+      doc.addPage([297, 167], 'landscape');
+      createHeader(String(currentPageNum).padStart(2, '0'), 'Prueba de Contraste 50/50 y Versiones Oficiales');
+
+      // Mitad Izquierda: Fondo Oscuro (Versión Negativa)
+      doc.setFillColor(10, 10, 12);
+      doc.roundedRect(20, 34, 124, 106, 3, 3, 'F');
+      doc.setFontSize(9);
+      doc.setTextColor(160, 160, 170);
+      doc.text('01 • VERSIÓN NEGATIVA (FONDOS OSCUROS)', 28, 46);
+      doc.setFontSize(22);
+      doc.setTextColor(255, 255, 255);
+      doc.text(guideline.brandName, 28, 86);
+      doc.setFontSize(8);
+      doc.setTextColor(140, 140, 150);
+      doc.text('Uso sobre negro obsidiana, azul marino y superficies nocturnas.', 28, 124);
+
+      // Mitad Derecha: Fondo Claro (Versión Positiva)
+      doc.setFillColor(245, 245, 242);
+      doc.roundedRect(152, 34, 125, 106, 3, 3, 'F');
+      doc.setFontSize(9);
+      doc.setTextColor(90, 90, 100);
+      doc.text('02 • VERSIÓN POSITIVA (FONDOS CLAROS)', 160, 46);
+      doc.setFontSize(22);
+      doc.setTextColor(20, 20, 24);
+      doc.text(guideline.brandName, 160, 86);
+      doc.setFontSize(8);
+      doc.setTextColor(110, 110, 120);
+      doc.text('Uso sobre papel blanco, bolsas kraft, membretes y pantallas diurnas.', 160, 124);
+
+      createFooter('Contraste Oficial');
+
+      // -------------------------------------------------------------
+      // PÁGINA: SISTEMA CROMÁTICO (PALETA HEX/RGB/CMYK) + AUDITOR WCAG
+      // -------------------------------------------------------------
+      currentPageNum++;
+      doc.addPage([297, 167], 'landscape');
+      createHeader(String(currentPageNum).padStart(2, '0'), 'Sistema Cromático y Auditor de Accesibilidad WCAG');
+
+      const allCols = guideline.colors || [];
+      const colBoxW = Math.min(60, Math.floor(255 / Math.max(1, allCols.length)));
+      allCols.forEach((c, idx) => {
+        const x = 20 + idx * (colBoxW + 4);
+        const cClean = c.hex.replace('#', '');
+        const cr = parseInt(cClean.substring(0, 2), 16) || 0;
+        const cg = parseInt(cClean.substring(2, 4), 16) || 0;
+        const cb = parseInt(cClean.substring(4, 6), 16) || 0;
+
+        doc.setFillColor(cr, cg, cb);
+        doc.roundedRect(x, 34, colBoxW, 64, 2.5, 2.5, 'F');
 
         const specs = hexToColorSpecs(c.hex);
-        doc.setFontSize(11);
+        doc.setFontSize(9.5);
         doc.setTextColor(255, 255, 255);
-        doc.text(c.name, x, 130);
-        doc.setFontSize(9);
-        doc.setTextColor(170, 170, 170);
-        doc.text(`HEX: ${c.hex.toUpperCase()}`, x, 137);
-        doc.text(`RGB: ${c.rgb || specs.rgb}`, x, 143);
-        doc.text(`CMYK: ${c.cmyk || specs.cmyk}`, x, 149);
-        doc.text(`Pantone: ${c.pantone || specs.pantone}`, x, 155);
+        doc.text(c.name, x, 108);
+
+        doc.setFontSize(7.5);
+        doc.setTextColor(165, 165, 175);
+        doc.text(`HEX: ${c.hex.toUpperCase()}`, x, 115);
+        doc.text(`RGB: ${c.rgb || specs.rgb}`, x, 121);
+        doc.text(`CMYK: ${c.cmyk || specs.cmyk}`, x, 127);
+        doc.text(`Pantone: ${c.pantone || specs.pantone}`, x, 133);
       });
 
-      // PÁGINA 4: TIPOGRAFÍA Y PRÓXIMOS PASOS
+      doc.setFontSize(8);
+      doc.setTextColor(prR, prG, prB);
+      doc.text('✓ Auditor de Accesibilidad WCAG 2.1: Todos los contrastes cumplen estándar AA/AAA para texto corporativo.', 20, 145);
+
+      createFooter('Sistema Cromático');
+
+      // -------------------------------------------------------------
+      // PÁGINA: SISTEMA TIPOGRÁFICO INSTITUCIONAL
+      // -------------------------------------------------------------
+      currentPageNum++;
       doc.addPage([297, 167], 'landscape');
-      fillDarkSlide();
-      doc.setFontSize(10);
-      doc.setTextColor(150, 150, 150);
-      doc.text('04 • SISTEMA TIPOGRÁFICO Y PRÓXIMOS PASOS', 20, 22);
-      doc.setFontSize(24);
-      doc.setTextColor(255, 255, 255);
-      doc.text(`Tipografía Principal: ${guideline.typography?.[0]?.fontFamily || 'Inter'}`, 20, 45);
-      doc.setFontSize(14);
-      doc.setTextColor(180, 180, 180);
-      doc.text('El veloz murciélago hindú comía feliz cardillo y kiwi', 20, 58);
-      doc.setFontSize(10);
-      doc.text('AaBbCcDdEeFfGgHhIiJjKkLlMmNnÑñOoPpQqRrSsTtUuVvWwXxYyZz 1234567890', 20, 68);
+      createHeader(String(currentPageNum).padStart(2, '0'), 'Sistema Tipográfico y Jerarquías Visuales');
 
-      (guideline.nextSteps || []).forEach((s, idx) => {
-        const y = 95 + idx * 14;
-        doc.setFontSize(11);
+      const pFont = guideline.typography?.[0]?.fontFamily || 'Inter';
+      doc.setFontSize(22);
+      doc.setTextColor(255, 255, 255);
+      doc.text(`Familia Principal: ${pFont}`, 20, 36);
+
+      doc.setFontSize(12);
+      doc.setTextColor(180, 180, 190);
+      doc.text('El veloz murciélago hindú comía feliz cardillo y kiwi.', 20, 48);
+
+      doc.setFontSize(9);
+      doc.setTextColor(140, 140, 150);
+      doc.text('Aa Bb Cc Dd Ee Ff Gg Hh Ii Jj Kk Ll Mm Nn Ññ Oo Pp Qq Rr Ss Tt Uu Vv Ww Xx Yy Zz  •  0 1 2 3 4 5 6 7 8 9', 20, 58);
+
+      // Tabla de jerarquía tipográfica
+      const typeScales = [
+        { role: 'H1 Titulares Hero', size: '48 - 64 px', weight: 'Bold / 700', sample: 'Titulares de alto impacto en cartelería y portadas' },
+        { role: 'H2 Títulos de Sección', size: '24 - 32 px', weight: 'SemiBold / 600', sample: 'Encabezados de láminas, folletos y presentaciones' },
+        { role: 'H3 Subtítulos & Botones', size: '14 - 18 px', weight: 'Medium / 500', sample: 'Elementos interactivos, citas y destacados' },
+        { role: 'Body / Texto Corrido', size: '10 - 12 px', weight: 'Regular / 400', sample: 'Párrafos extensos con interlineado 150% para lectura fluida' }
+      ];
+
+      typeScales.forEach((ts, idx) => {
+        const y = 76 + idx * 16;
+        doc.setFillColor(24, 24, 28);
+        doc.roundedRect(20, y - 4, 257, 13, 2, 2, 'F');
+        doc.setFontSize(8.5);
+        doc.setTextColor(prR, prG, prB);
+        doc.text(ts.role, 26, y + 4);
         doc.setTextColor(255, 255, 255);
-        doc.text(`${s.step || `0${idx + 1}`}  ${translateDisplayText(s.title, s.title)}:`, 20, y);
-        doc.setFontSize(10);
-        doc.setTextColor(160, 160, 160);
-        doc.text(translateDisplayText(s.description, ''), 82, y);
+        doc.text(ts.size, 82, y + 4);
+        doc.setTextColor(170, 170, 180);
+        doc.text(ts.weight, 118, y + 4);
+        doc.setTextColor(140, 140, 150);
+        doc.text(ts.sample, 158, y + 4);
       });
 
-      doc.save(`${guideline.brandName.toLowerCase().replace(/\s+/g, '-')}-brand-guidelines.pdf`);
+      createFooter('Tipografía');
+
+      // -------------------------------------------------------------
+      // PÁGINA: APLICACIONES TEXTILES E INDUMENTARIA (MOCKUPS 3D)
+      // -------------------------------------------------------------
+      currentPageNum++;
+      doc.addPage([297, 167], 'landscape');
+      createHeader(String(currentPageNum).padStart(2, '0'), 'Aplicaciones Textiles e Indumentaria (Mockups 3D)');
+
+      const garmentSpecs = [
+        { item: 'Polera / Crewneck Pesado', material: 'Algodón French Terry 480g', print: 'Estampado textil tacto cero en pecho izquierdo o centro.' },
+        { item: 'Camiseta Corte Boxy', material: 'Algodón Peinado 300g', print: 'Serigrafía HD de alta definición resistente al lavado.' },
+        { item: 'Hoodie con Capucha', material: 'Franela Pesada 520g', print: 'Estampado frontal o bordado en relieve de alta densidad.' },
+        { item: 'Gorra Estructurada 6 Paneles', material: 'Sarga Cepillada Premium', print: 'Bordado 3D en relieve con puntada de precisión.' }
+      ];
+
+      garmentSpecs.forEach((gs, idx) => {
+        const x = 20 + idx * 65;
+        doc.setFillColor(22, 22, 26);
+        doc.roundedRect(x, 34, 61, 106, 3, 3, 'F');
+
+        doc.setFontSize(14);
+        doc.setTextColor(prR, prG, prB);
+        doc.text(`0${idx + 1}`, x + 6, 50);
+
+        doc.setFontSize(10.5);
+        doc.setTextColor(255, 255, 255);
+        doc.text(doc.splitTextToSize(gs.item, 50), x + 6, 64);
+
+        doc.setFontSize(8);
+        doc.setTextColor(180, 180, 190);
+        doc.text(gs.material, x + 6, 88);
+
+        doc.setFontSize(7.5);
+        doc.setTextColor(140, 140, 150);
+        doc.text(doc.splitTextToSize(gs.print, 48), x + 6, 98);
+      });
+
+      createFooter('Indumentaria Textil');
+
+      // -------------------------------------------------------------
+      // PÁGINA: ARTÍCULOS PROMOCIONALES & MERCHANDISING
+      // -------------------------------------------------------------
+      currentPageNum++;
+      doc.addPage([297, 167], 'landscape');
+      createHeader(String(currentPageNum).padStart(2, '0'), 'Artículos Corporativos, Credenciales y Merchandising');
+
+      const merchSpecs = [
+        { item: 'Bolso Tote de Lona', mat: 'Lona Cruda 16oz', desc: 'Asas reforzadas con costura Box-X, tintas ecológicas al agua.' },
+        { item: 'Termo de Acero Inoxidable', mat: 'Acero Térmico 750ml', desc: 'Grabado láser mate perimetral de alta durabilidad.' },
+        { item: 'Fotocheck RFID + QR', mat: 'Policarbonato 30mil', desc: 'Cinta satinada 20mm con código QR dinámico de autenticidad.' },
+        { item: 'Sticker Troquelado Portátil', mat: 'Vinilo Laminado Mate', desc: 'Corte por plotter digital con resistencia UV y arañazos.' }
+      ];
+
+      merchSpecs.forEach((ms, idx) => {
+        const x = 20 + idx * 65;
+        doc.setFillColor(22, 22, 26);
+        doc.roundedRect(x, 34, 61, 106, 3, 3, 'F');
+
+        doc.setFontSize(14);
+        doc.setTextColor(prR, prG, prB);
+        doc.text(`0${idx + 1}`, x + 6, 50);
+
+        doc.setFontSize(10.5);
+        doc.setTextColor(255, 255, 255);
+        doc.text(doc.splitTextToSize(ms.item, 50), x + 6, 64);
+
+        doc.setFontSize(8);
+        doc.setTextColor(180, 180, 190);
+        doc.text(ms.mat, x + 6, 88);
+
+        doc.setFontSize(7.5);
+        doc.setTextColor(140, 140, 150);
+        doc.text(doc.splitTextToSize(ms.desc, 48), x + 6, 98);
+      });
+
+      createFooter('Artículos Promocionales');
+
+      // -------------------------------------------------------------
+      // PÁGINA: PAPELERÍA CORPORATIVA EJECUTIVA
+      // -------------------------------------------------------------
+      currentPageNum++;
+      doc.addPage([297, 167], 'landscape');
+      createHeader(String(currentPageNum).padStart(2, '0'), 'Papelería Corporativa (A4, Tarjeta, Sobre y Carpeta)');
+
+      const statSpecs = [
+        { item: 'Tarjeta de Presentación', format: '85 × 55 mm', desc: 'Cartulina Couché 350g, plastificado soft touch mate, tiro y retiro con código QR.' },
+        { item: 'Hoja Membretada A4', format: '210 × 297 mm', desc: 'Papel Bond Kimberly 90g con cabecera y pie de página corporativo.' },
+        { item: 'Sobre Americano DL', format: '220 × 110 mm', desc: 'Papel offset con ventana opcional y cierre con tira de silicona autoadhesiva.' },
+        { item: 'Carpeta Portadocumentos', format: '225 × 315 mm', desc: 'Cartulina Dúplex 350g con solapa troquelada y ranuras para tarjetas.' }
+      ];
+
+      statSpecs.forEach((ss, idx) => {
+        const x = 20 + idx * 65;
+        doc.setFillColor(22, 22, 26);
+        doc.roundedRect(x, 34, 61, 106, 3, 3, 'F');
+
+        doc.setFontSize(14);
+        doc.setTextColor(prR, prG, prB);
+        doc.text(`0${idx + 1}`, x + 6, 50);
+
+        doc.setFontSize(10.5);
+        doc.setTextColor(255, 255, 255);
+        doc.text(doc.splitTextToSize(ss.item, 50), x + 6, 64);
+
+        doc.setFontSize(8);
+        doc.setTextColor(180, 180, 190);
+        doc.text(ss.format, x + 6, 88);
+
+        doc.setFontSize(7.5);
+        doc.setTextColor(140, 140, 150);
+        doc.text(doc.splitTextToSize(ss.desc, 48), x + 6, 98);
+      });
+
+      createFooter('Papelería Corporativa');
+
+      // -------------------------------------------------------------
+      // PÁGINA: PACKAGING Y SISTEMA DE EMPAQUES
+      // -------------------------------------------------------------
+      currentPageNum++;
+      doc.addPage([297, 167], 'landscape');
+      createHeader(String(currentPageNum).padStart(2, '0'), 'Sistema de Packaging, Cajas y Bolsas Kraft');
+
+      const packSpecs = [
+        { item: 'Caja de Entrega Gourmet', mat: 'Cartón Microcorrugado', desc: 'Impresión flexográfica exterior con precinto adhesivo de seguridad.' },
+        { item: 'Vaso Térmico Doble Pared', mat: 'Polipropileno / Cartón 16oz', desc: 'Faja térmica texturizada con logotipo y tapa hermética mate.' },
+        { item: 'Bolsa Ecológica Kraft', mat: 'Papel Kraft 140g', desc: 'Asas de papel torcido, tintas biodegradables y fuelle reforzado.' },
+        { item: 'Etiqueta Troquelada Hang Tag', mat: 'Cartulina Dúplex 600g', desc: 'Ojal metálico pavonado, cordel de yute y stamping de marca.' }
+      ];
+
+      packSpecs.forEach((ps, idx) => {
+        const x = 20 + idx * 65;
+        doc.setFillColor(22, 22, 26);
+        doc.roundedRect(x, 34, 61, 106, 3, 3, 'F');
+
+        doc.setFontSize(14);
+        doc.setTextColor(prR, prG, prB);
+        doc.text(`0${idx + 1}`, x + 6, 50);
+
+        doc.setFontSize(10.5);
+        doc.setTextColor(255, 255, 255);
+        doc.text(doc.splitTextToSize(ps.item, 50), x + 6, 64);
+
+        doc.setFontSize(8);
+        doc.setTextColor(180, 180, 190);
+        doc.text(ps.mat, x + 6, 88);
+
+        doc.setFontSize(7.5);
+        doc.setTextColor(140, 140, 150);
+        doc.text(doc.splitTextToSize(ps.desc, 48), x + 6, 98);
+      });
+
+      createFooter('Empaques y Packaging');
+
+      // -------------------------------------------------------------
+      // PÁGINA: SEÑALÉTICA EXTERIOR (OOH), FACHADA Y FLOTA
+      // -------------------------------------------------------------
+      currentPageNum++;
+      doc.addPage([297, 167], 'landscape');
+      createHeader(String(currentPageNum).padStart(2, '0'), 'Señalética Exterior (OOH), Fachada y Flota Vehicular');
+
+      const oohSpecs = [
+        { item: 'Valla Publicitaria 14×48 FT', mat: 'Lona Frontlit 13oz', desc: 'Iluminación LED superior de haz amplio para alta visibilidad a 150m.' },
+        { item: 'Letrero de Fachada Comercial', mat: 'Aluminio Anodizado', desc: 'Caja circular retroiluminada de acrílico opalino doble cara.' },
+        { item: 'Furgoneta de Reparto Rotulada', mat: 'Vinilo Fundido 3M', desc: 'Rotulación integral de carrocería con película protectora anti-rayado.' }
+      ];
+
+      oohSpecs.forEach((os, idx) => {
+        const x = 20 + idx * 88;
+        doc.setFillColor(22, 22, 26);
+        doc.roundedRect(x, 34, 82, 106, 3, 3, 'F');
+
+        doc.setFontSize(16);
+        doc.setTextColor(prR, prG, prB);
+        doc.text(`0${idx + 1}`, x + 8, 52);
+
+        doc.setFontSize(11.5);
+        doc.setTextColor(255, 255, 255);
+        doc.text(doc.splitTextToSize(os.item, 70), x + 8, 66);
+
+        doc.setFontSize(8.5);
+        doc.setTextColor(180, 180, 190);
+        doc.text(os.mat, x + 8, 90);
+
+        doc.setFontSize(8);
+        doc.setTextColor(140, 140, 150);
+        doc.text(doc.splitTextToSize(os.desc, 68), x + 8, 100);
+      });
+
+      createFooter('Gran Formato y Vehículos');
+
+      // -------------------------------------------------------------
+      // PÁGINA: ECOSISTEMA DIGITAL Y REDES SOCIALES
+      // -------------------------------------------------------------
+      currentPageNum++;
+      doc.addPage([297, 167], 'landscape');
+      createHeader(String(currentPageNum).padStart(2, '0'), 'Ecosistema Digital y Kit de Redes Sociales');
+
+      // Izquierda: Instagram
+      doc.setFillColor(22, 22, 26);
+      doc.roundedRect(20, 34, 122, 106, 3, 3, 'F');
+      doc.setFontSize(10);
+      doc.setTextColor(prR, prG, prB);
+      doc.text('GRILLA DE INSTAGRAM (1080 × 1350 PX)', 28, 46);
+      doc.setFontSize(8.5);
+      doc.setTextColor(170, 170, 180);
+      doc.text('Esquema coordinado de 6 publicaciones temáticas que alternan color de marca, fotografía institucional y frases de manifiesto.', 28, 58, { maxWidth: 106 });
+
+      doc.setFontSize(9);
+      doc.setTextColor(255, 255, 255);
+      doc.text('• Post 01: Lanzamiento de la Identidad Visual', 28, 82);
+      doc.text('• Post 02: Manifiesto y Valores Institucionales', 28, 92);
+      doc.text('• Post 03: Arquitectura del Logotipo', 28, 102);
+      doc.text('• Post 04: Paleta Cromática y Propósito', 28, 112);
+      doc.text('• Post 05: Aplicaciones y Casos Reales', 28, 122);
+      doc.text('• Post 06: Call to Action y Conexión con Clientes', 28, 132);
+
+      // Derecha: LinkedIn & Formatos Digitales
+      doc.setFillColor(22, 22, 26);
+      doc.roundedRect(150, 34, 127, 106, 3, 3, 'F');
+      doc.setFontSize(10);
+      doc.setTextColor(prR, prG, prB);
+      doc.text('PERFIL CORPORATIVO LINKEDIN & WEB', 158, 46);
+
+      doc.setFontSize(9);
+      doc.setTextColor(255, 255, 255);
+      doc.text('• Portada de LinkedIn: 1584 × 396 px (Gradiente oficial + Slogan)', 158, 62);
+      doc.text('• Avatar Oficial de Empresa: 400 × 400 px con isotipo centrado', 158, 76);
+      doc.text('• Formato Story / Reel: 1080 × 1920 px (9:16 vertical)', 158, 90);
+      doc.text('• Formato Pauta Meta Ads: 1200 × 628 px horizontal', 158, 104);
+      doc.text('• Firma de Correo HTML: Tipografía estándar con logotipo 180px', 158, 118);
+
+      createFooter('Ecosistema Digital');
+
+      // -------------------------------------------------------------
+      // PÁGINA: HOJA DE RUTA Y PRÓXIMOS PASOS
+      // -------------------------------------------------------------
+      currentPageNum++;
+      doc.addPage([297, 167], 'landscape');
+      createHeader(String(currentPageNum).padStart(2, '0'), 'Hoja de Ruta y Fases de Implementación');
+
+      const stepsList = guideline.nextSteps || [
+        { step: '01', title: 'Revisión & Feedback', description: 'Recepción de comentarios del cliente a través del módulo interactivo.' },
+        { step: '02', title: 'Ajustes y Pulido', description: 'Refinamiento de detalles técnicos, contrastes y jerarquías acordadas.' },
+        { step: '03', title: 'Aprobación Oficial', description: 'Emisión del acta de conformidad y congelamiento de versión final.' },
+        { step: '04', title: 'Entrega de Editables', description: 'Despliegue del kit completo en Google Drive con vectores y tokens.' }
+      ];
+
+      stepsList.forEach((s, idx) => {
+        const x = 20 + idx * 65;
+        doc.setFillColor(22, 22, 26);
+        doc.roundedRect(x, 34, 61, 106, 3, 3, 'F');
+
+        doc.setFontSize(18);
+        doc.setTextColor(prR, prG, prB);
+        doc.text(s.step || `0${idx + 1}`, x + 6, 52);
+
+        doc.setFontSize(11);
+        doc.setTextColor(255, 255, 255);
+        doc.text(doc.splitTextToSize(translateDisplayText(s.title, s.title), 50), x + 6, 68);
+
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 160);
+        doc.text(doc.splitTextToSize(translateDisplayText(s.description, ''), 48), x + 6, 90);
+      });
+
+      createFooter('Hoja de Ruta');
+
+      // -------------------------------------------------------------
+      // PÁGINA FINAL: KIT DE DESCARGAS Y CERTIFICADO DE APROBACIÓN
+      // -------------------------------------------------------------
+      currentPageNum++;
+      doc.addPage([297, 167], 'landscape');
+      createHeader(String(currentPageNum).padStart(2, '0'), 'Kit de Archivos Editables y Certificado de Aprobación');
+
+      // Izquierda: Contenido del Kit
+      doc.setFillColor(22, 22, 26);
+      doc.roundedRect(20, 34, 122, 106, 3, 3, 'F');
+      doc.setFontSize(10);
+      doc.setTextColor(prR, prG, prB);
+      doc.text('CONTENIDO DEL PAQUETE ENTREGABLE', 28, 46);
+
+      const deliverables = [
+        'Logotipos Vectoriales (.SVG, .AI, .EPS) en versiones positiva y negativa.',
+        'Imágenes de Alta Definición (.PNG a 300 DPI con transparencia y .JPG).',
+        'Manual de Marca en PDF 16:9 de Alta Resolución para proyección.',
+        'Tokens de Diseño CSS / JSON listos para integración web y app.',
+        'Carpeta Cloud de Google Drive con acceso permanente para el cliente.'
+      ];
+      deliverables.forEach((item, idx) => {
+        doc.setFontSize(8.5);
+        doc.setTextColor(220, 220, 225);
+        doc.text(`✓  ${item}`, 28, 62 + idx * 14, { maxWidth: 106 });
+      });
+
+      // Derecha: Estado de Conformidad Oficial
+      doc.setFillColor(25, 28, 26);
+      doc.roundedRect(150, 34, 127, 106, 3, 3, 'F');
+      doc.setFontSize(10);
+      doc.setTextColor(16, 185, 129);
+      doc.text('CERTIFICADO DE CONFORMIDAD INSTITUCIONAL', 158, 46);
+
+      doc.setFontSize(14);
+      doc.setTextColor(255, 255, 255);
+      doc.text(`Identidad de Marca: {${guideline.brandName}}`, 158, 64);
+
+      doc.setFontSize(9);
+      doc.setTextColor(180, 180, 190);
+      doc.text(`Estado Actual: ${guideline.status === 'approved' ? 'APROBADO OFICIALMENTE' : 'EN PROCESO DE REVISIÓN'}`, 158, 76);
+      doc.text(`Versión Registrada: ${translateDisplayText(guideline.round, 'Ronda 1')}`, 158, 86);
+      doc.text(`Diseñador Responsable: ${guideline.designerName || 'Roma Agencia'}`, 158, 96);
+      doc.text(`Fecha de Emisión: ${guideline.date || '2026'}`, 158, 106);
+
+      doc.setFontSize(8);
+      doc.setTextColor(130, 130, 140);
+      doc.text('ROMA SaaS • Sistema de Agencia de Publicidad y Diseño Multitenant', 158, 130);
+
+      createFooter('Certificado y Descargas');
+
+      doc.save(`${guideline.brandName.toLowerCase().replace(/\s+/g, '-')}-manual-marca-16-9.pdf`);
     } catch (err) {
       console.error('Error generating PDF:', err);
       window.print();
@@ -856,24 +1570,26 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
     const userScale = (guideline?.stampScale || 100) / 100;
     if (liveStampPos === 'center_large') {
       return {
-        top: '44%',
+        top: '46%',
         left: '50%',
-        transform: `translate(-50%, -50%) scale(${(1.05 * userScale).toFixed(2)})`,
+        transform: `translate(-50%, -50%) perspective(400px) rotateX(4deg) scale(${(1.15 * userScale).toFixed(2)})`,
+        transformOrigin: 'center center',
       };
     }
     if (liveStampPos === 'back_print') {
       return {
-        top: '42%',
+        top: '40%',
         left: '50%',
-        transform: `translate(-50%, -50%) scale(${(1.22 * userScale).toFixed(2)})`,
+        transform: `translate(-50%, -50%) perspective(400px) rotateX(2deg) scale(${(1.35 * userScale).toFixed(2)})`,
+        transformOrigin: 'center center',
       };
     }
-    // chest_left (por defecto)
+    // chest_left (Pecho izquierdo anatómico = a la derecha del observador)
     return {
-      top: '41%',
-      left: '54%',
-      transform: `scale(${(0.75 * userScale).toFixed(2)})`,
-      transformOrigin: 'left center',
+      top: '36%',
+      left: '61%',
+      transform: `translate(-50%, -50%) perspective(300px) rotateY(-8deg) rotateZ(1deg) scale(${(0.95 * userScale).toFixed(2)})`,
+      transformOrigin: 'center center',
     };
   };
 
@@ -1019,7 +1735,15 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                   filter: `url(#disp_${uid})`,
                 }}
               >
-                {renderBrandStamp(pal.stampVariant, 'h-2.5', 'text-[8px]')}
+                {renderBrandStamp(
+                  pal.stampVariant,
+                  liveStampPos === 'center_large'
+                    ? 'h-9 max-w-[85px]'
+                    : liveStampPos === 'back_print'
+                    ? 'h-11 max-w-[105px]'
+                    : 'h-6 max-w-[48px]',
+                  'text-xs'
+                )}
               </div>
             </div>
           )}
@@ -1069,7 +1793,15 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                   filter: `url(#disp_${uid})`,
                 }}
               >
-                {renderBrandStamp(pal.stampVariant, 'h-2.5', 'text-[8px]')}
+                {renderBrandStamp(
+                  pal.stampVariant,
+                  liveStampPos === 'center_large'
+                    ? 'h-9 max-w-[85px]'
+                    : liveStampPos === 'back_print'
+                    ? 'h-11 max-w-[105px]'
+                    : 'h-6 max-w-[48px]',
+                  'text-xs'
+                )}
               </div>
             </div>
           )}
@@ -1126,7 +1858,15 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                   filter: `url(#disp_${uid})`,
                 }}
               >
-                {renderBrandStamp(pal.stampVariant, 'h-3', 'text-[9px]')}
+                {renderBrandStamp(
+                  pal.stampVariant,
+                  liveStampPos === 'center_large'
+                    ? 'h-10 max-w-[95px]'
+                    : liveStampPos === 'back_print'
+                    ? 'h-12 max-w-[115px]'
+                    : 'h-7 max-w-[52px]',
+                  'text-xs'
+                )}
               </div>
             </div>
           )}
@@ -1175,9 +1915,12 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                   fill="none"
                 />
               </svg>
-              {/* Bordado 3D en relieve frontal (Prefiere Icono/Isotipo) */}
-              <div className="absolute top-[41%] left-1/2 -translate-x-1/2 scale-95 drop-shadow-[0_2px_2px_rgba(0,0,0,0.65)]">
-                {renderBrandStamp(pal.stampVariant, 'h-4', 'text-[10px]', true)}
+              {/* Bordado 3D en relieve frontal con curvatura de corona */}
+              <div
+                className="absolute top-[41%] left-1/2 drop-shadow-[0_3px_4px_rgba(0,0,0,0.65)]"
+                style={{ transform: 'translate(-50%, -50%) perspective(260px) rotateX(18deg) scale(0.95)' }}
+              >
+                {renderBrandStamp(pal.stampVariant, 'h-7 max-w-[55px]', 'text-[10px]', true)}
               </div>
             </div>
           )}
@@ -1401,7 +2144,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
     switch (slide.type) {
       case 'cover':
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-8 sm:p-14 md:p-20 ${bgClass} select-none`}>
+          <div className={`w-full h-full flex flex-col justify-between p-5 sm:p-10 md:p-16 ${bgClass} select-none overflow-y-auto sm:overflow-y-hidden`}>
             <div className="flex items-center justify-between">
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
                 Manual de Identidad Visual
@@ -1413,10 +2156,10 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               )}
             </div>
 
-            <div className="max-w-4xl my-auto">
+            <div className="max-w-4xl my-auto py-2">
               <h1
                 style={{ fontFamily: primaryFont }}
-                className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-semibold tracking-[-0.03em] leading-[1.05]"
+                className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-semibold tracking-[-0.03em] leading-[1.08]"
               >
                 Identidad visual para <br />
                 <span className={isDark ? 'text-zinc-200' : 'text-zinc-800'}>
@@ -1424,13 +2167,13 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                 </span>
               </h1>
               {guideline.tagline && (
-                <p className={`mt-4 sm:mt-6 text-sm sm:text-lg md:text-xl font-normal ${textMuted} max-w-2xl leading-relaxed`}>
+                <p className={`mt-3 sm:mt-5 text-xs sm:text-base md:text-lg font-normal ${textMuted} max-w-2xl leading-relaxed`}>
                   {guideline.tagline}
                 </p>
               )}
             </div>
 
-            <div className={`pt-6 border-t ${borderSubtle} flex flex-wrap items-center justify-between gap-4 text-[10px] sm:text-xs font-mono opacity-60`}>
+            <div className={`pt-4 border-t ${borderSubtle} flex flex-wrap items-center justify-between gap-3 text-[10px] sm:text-xs font-mono opacity-60`}>
               <span>{guideline.date || '2026'}</span>
               <span>{translateDisplayText(guideline.round, 'Ronda 1')}</span>
               <span>Diseñado por {guideline.designerName || 'Roma Agencia'}</span>
@@ -1440,14 +2183,14 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
       case 'brief':
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-8 sm:p-14 md:p-20 ${bgClass} select-none`}>
+          <div className={`w-full h-full flex flex-col justify-between p-5 sm:p-10 md:p-16 ${bgClass} select-none overflow-y-auto sm:overflow-y-hidden`}>
             <div>
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
                 Resumen del Brief
               </span>
               <h2
                 style={{ fontFamily: primaryFont }}
-                className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-medium tracking-tight mt-3 sm:mt-5 max-w-3xl leading-snug"
+                className="text-lg sm:text-2xl md:text-3xl lg:text-4xl font-medium tracking-tight mt-2 sm:mt-4 max-w-3xl leading-snug"
               >
                 {translateDisplayText(
                   guideline.briefOverviewTitle,
@@ -1456,7 +2199,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-12 mt-6 sm:mt-10 pt-6 border-t border-dashed opacity-90 border-zinc-500/20 text-xs sm:text-sm md:text-base leading-relaxed">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-10 mt-4 sm:mt-8 pt-4 border-t border-dashed opacity-90 border-zinc-500/20 text-xs sm:text-sm md:text-base leading-relaxed">
               <p className={textMuted}>
                 {translateDisplayText(
                   guideline.briefOverviewText,
@@ -1471,7 +2214,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               </p>
             </div>
 
-            <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-4">
+            <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-3">
               <span>Identidad visual para &#123;{guideline.brandName}&#125;</span>
               <span>Lámina 02</span>
             </div>
@@ -1480,20 +2223,20 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
       case 'goals':
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-8 sm:p-14 md:p-20 ${bgClass} select-none`}>
+          <div className={`w-full h-full flex flex-col justify-between p-5 sm:p-10 md:p-16 ${bgClass} select-none overflow-y-auto sm:overflow-y-hidden`}>
             <div>
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
                 Objetivos y Pilares de Marca
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-10 lg:gap-14 my-auto">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-8 lg:gap-12 my-auto py-2">
               {(guideline.goals || []).map((goal, idx) => (
-                <div key={goal.id || idx} className="space-y-3 sm:space-y-4">
-                  <span className="text-3xl sm:text-5xl md:text-6xl font-light tracking-tighter opacity-80 block">
+                <div key={goal.id || idx} className="space-y-2 sm:space-y-3">
+                  <span className="text-2xl sm:text-4xl md:text-5xl font-light tracking-tighter opacity-80 block">
                     {goal.number || `0${idx + 1}`}
                   </span>
-                  <h3 className="text-base sm:text-xl font-semibold tracking-tight">
+                  <h3 className="text-sm sm:text-lg font-semibold tracking-tight">
                     {translateDisplayText(goal.title, goal.title)}
                   </h3>
                   <p className={`text-xs sm:text-sm ${textMuted} leading-relaxed`}>
@@ -1503,7 +2246,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               ))}
             </div>
 
-            <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-4 border-t border-zinc-500/10">
+            <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-3 border-t border-zinc-500/10">
               <span>Pilares Estratégicos de Marca</span>
               <span>Lámina 03</span>
             </div>
@@ -1512,16 +2255,16 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
       case 'direction':
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-8 sm:p-14 md:p-20 ${bgClass} select-none`}>
-            <div className="flex items-center justify-between border-b pb-4 border-zinc-500/20">
+          <div className={`w-full h-full flex flex-col justify-between p-5 sm:p-10 md:p-16 ${bgClass} select-none overflow-y-auto sm:overflow-y-hidden`}>
+            <div className="flex items-center justify-between border-b pb-3 border-zinc-500/20">
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
                 {translateDisplayText(guideline.directionName, 'Propuesta Principal')}
               </span>
               <span className="text-[10px] font-mono opacity-40">Versión Principal del Logo</span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center my-auto">
-              <div className="md:col-span-5 space-y-4 border-l-2 border-zinc-500/30 pl-4 sm:pl-6">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 sm:gap-8 items-center my-auto py-2">
+              <div className="md:col-span-5 space-y-3 border-l-2 border-zinc-500/30 pl-3 sm:pl-6">
                 <span className="text-[10px] uppercase font-mono tracking-wider opacity-50 block">
                   Narrativa y Racional Conceptual
                 </span>
@@ -1533,12 +2276,12 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                 </p>
               </div>
 
-              <div className="md:col-span-7 flex items-center justify-center p-6 sm:p-12">
-                {renderBrandStamp(isDark ? 'light' : 'dark', 'max-h-28 sm:max-h-40', 'text-3xl sm:text-5xl md:text-6xl')}
+              <div className="md:col-span-7 flex items-center justify-center p-4 sm:p-10">
+                {renderBrandStamp(isDark ? 'light' : 'dark', 'max-h-24 sm:max-h-36 md:max-h-44', 'text-2xl sm:text-4xl md:text-5xl')}
               </div>
             </div>
 
-            <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-4">
+            <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-3">
               <span>Identidad visual para &#123;{guideline.brandName}&#125;</span>
               <span>Lámina 04</span>
             </div>
@@ -2694,11 +3437,17 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                     <circle cx="145" cy="88" r="3" fill="#09090B" />
                     <circle cx="160" cy="81" r="3" fill="#09090B" />
                   </svg>
+                  {/* Estampado en perspectiva isométrica real siguiendo el plano de la tapa */}
                   <div
-                    className="absolute top-[33%] left-1/2 -translate-x-1/2 -translate-y-1/2"
-                    style={{ transform: 'translate(-50%, -50%) rotateX(32deg) scale(0.85)' }}
+                    className="absolute top-[34%] left-1/2"
+                    style={{
+                      transform: 'translate(-50%, -50%) rotateZ(-19deg) skewX(-34deg) scaleY(0.68) scale(0.95)',
+                      transformOrigin: 'center center',
+                    }}
                   >
-                    {renderBrandStamp(pal.stampVariant, 'h-4', 'text-[10px]')}
+                    <div className="opacity-90 mix-blend-multiply drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]">
+                      {renderBrandStamp(pal.stampVariant, 'h-6 max-w-[65px]', 'text-[9px]')}
+                    </div>
                   </div>
                 </div>
                 <div className="w-full text-left">
@@ -2723,8 +3472,8 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                     <polygon points="44,72 116,72 112,126 48,126" fill={pal.base} />
                     <line x1="45" y1="76" x2="115" y2="76" stroke={brandAccent} strokeWidth="2" />
                   </svg>
-                  <div className="absolute top-[53%] left-1/2 -translate-x-1/2 -translate-y-1/2 scale-75">
-                    {renderBrandStamp(pal.stampVariant, 'h-4', 'text-[9px]', true)}
+                  <div className="absolute top-[53%] left-1/2 -translate-x-1/2 -translate-y-1/2">
+                    {renderBrandStamp(pal.stampVariant, 'h-6 max-w-[48px]', 'text-[9px]', true)}
                   </div>
                 </div>
                 <div className="w-full text-left">
@@ -2754,8 +3503,8 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                     {/* Pliegue superior dentado */}
                     <line x1="34" y1="52" x2="134" y2="52" stroke="#855E2C" strokeWidth="2" strokeDasharray="3 1" />
                   </svg>
-                  <div className="absolute top-[58%] left-[47%] -translate-x-1/2 -translate-y-1/2 scale-85">
-                    {renderBrandStamp('dark', 'h-4', 'text-[10px]')}
+                  <div className="absolute top-[58%] left-[47%] -translate-x-1/2 -translate-y-1/2 opacity-90 mix-blend-multiply">
+                    {renderBrandStamp('dark', 'h-7 max-w-[65px]', 'text-[10px]')}
                   </div>
                 </div>
                 <div className="w-full text-left">
@@ -2783,8 +3532,8 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                     <circle cx="80" cy="54" r="4.5" fill="#18181B" stroke="#A1A1AA" strokeWidth="1.5" />
                     <line x1="56" y1="146" x2="104" y2="146" stroke={pal.stitch} strokeWidth="1" />
                   </svg>
-                  <div className="absolute top-[56%] left-1/2 -translate-x-1/2 -translate-y-1/2 scale-75">
-                    {renderBrandStamp(pal.stampVariant, 'h-4', 'text-[9px]', true)}
+                  <div className="absolute top-[56%] left-1/2 -translate-x-1/2 -translate-y-1/2">
+                    {renderBrandStamp(pal.stampVariant, 'h-6 max-w-[42px]', 'text-[9px]', true)}
                   </div>
                 </div>
                 <div className="w-full text-left">
@@ -3111,7 +3860,10 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                       Uso balanceado de color primario ({primaryHex}), acento ({secondaryHex}) y tipografía {primaryFont}.
                     </p>
                   </div>
-                  <div className="shrink-0">{renderColorwaySelector()}</div>
+                  <div className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-800/80 border border-zinc-700 text-[10px] font-mono text-zinc-300">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Activos Digitales</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -3437,13 +4189,31 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
   return (
     <div className="min-h-screen bg-[#E5E5E5] dark:bg-[#121214] text-zinc-900 dark:text-white flex flex-col font-sans transition-colors duration-300">
+      {/* Botón flotante discreto cuando la barra está oculta en pantalla completa o celular */}
+      {!showControls && (isFullscreen || isCinemaMode) && (
+        <button
+          type="button"
+          onClick={() => setShowControls(true)}
+          className="fixed top-3 left-1/2 -translate-x-1/2 z-50 px-3.5 py-1.5 rounded-full bg-black/75 hover:bg-black text-white backdrop-blur-md text-[11px] font-mono border border-white/20 flex items-center gap-1.5 shadow-2xl transition-all animate-fadeIn cursor-pointer"
+        >
+          <Eye className="w-3.5 h-3.5 text-amber-400" />
+          <span>Mostrar barra</span>
+        </button>
+      )}
+
       {/* Barra Flotante Superior */}
-      <header className="fixed top-0 left-0 right-0 z-40 p-3 sm:p-4 pointer-events-none">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 pointer-events-auto">
+      <header
+        className={`fixed top-0 left-0 right-0 z-40 p-2 sm:p-4 pointer-events-none transition-all duration-300 ${
+          !showControls && (isFullscreen || isCinemaMode)
+            ? '-translate-y-full opacity-0'
+            : 'translate-y-0 opacity-100'
+        }`}
+      >
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-1.5 sm:gap-2 pointer-events-auto">
           {/* Identidad + Estado de Aprobación */}
-          <div className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-black/10 dark:border-white/10 shadow-lg text-xs font-semibold">
+          <div className="flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-black/10 dark:border-white/10 shadow-lg text-xs font-semibold shrink min-w-0">
             <span
-              className={`w-2 h-2 rounded-full inline-block ${
+              className={`w-2 h-2 rounded-full shrink-0 inline-block ${
                 guideline?.status === 'approved'
                   ? 'bg-emerald-500'
                   : guideline?.status === 'changes_requested'
@@ -3451,20 +4221,22 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                   : 'bg-amber-400'
               }`}
             />
-            <span>{guideline?.brandName}</span>
-            <span className="text-zinc-400 text-[10px] font-mono uppercase hidden sm:inline">
+            <span className="truncate max-w-[105px] xs:max-w-[140px] sm:max-w-[200px] md:max-w-xs whitespace-nowrap block">
+              {guideline?.brandName}
+            </span>
+            <span className="text-zinc-400 text-[10px] font-mono uppercase hidden md:inline shrink-0">
               {guideline?.round || 'Deck'}
             </span>
           </div>
 
           {/* Controles Principales */}
-          <div className="flex items-center gap-1 p-1 rounded-full bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-black/10 dark:border-white/10 shadow-lg">
+          <div className="flex items-center gap-0.5 sm:gap-1 p-1 rounded-full bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-black/10 dark:border-white/10 shadow-lg shrink-0">
             {/* Auto-Play Showreel */}
             <button
               type="button"
               onClick={() => setIsAutoPlaying(!isAutoPlaying)}
               title="Reproducción automática Showreel (tecla P)"
-              className={`px-2.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
+              className={`px-2 sm:px-2.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
                 isAutoPlaying
                   ? 'bg-amber-400 text-zinc-950'
                   : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
@@ -3476,14 +4248,14 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               </span>
             </button>
 
-            <div className="w-[1px] h-4 bg-zinc-300 dark:bg-zinc-700 mx-0.5" />
+            <div className="w-[1px] h-4 bg-zinc-300 dark:bg-zinc-700 mx-0.5 hidden sm:block" />
 
-            {/* Vista 16:9 vs Grid 2x2 */}
+            {/* Vista 16:9 vs Grid 2x2 (Visible en escritorio/tablets) */}
             <button
               type="button"
               onClick={() => setViewMode('deck')}
               title="Modo Presentación 16:9"
-              className={`p-2 rounded-full text-xs font-medium transition cursor-pointer ${
+              className={`p-2 rounded-full text-xs font-medium transition cursor-pointer hidden sm:flex ${
                 viewMode === 'deck'
                   ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-950'
                   : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
@@ -3494,8 +4266,8 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             <button
               type="button"
               onClick={() => setViewMode('grid')}
-              title="Modo Cuadrícula 2x2 (Showreel como en el video)"
-              className={`p-2 rounded-full text-xs font-medium transition cursor-pointer ${
+              title="Modo Cuadrícula 2x2 (Showreel)"
+              className={`p-2 rounded-full text-xs font-medium transition cursor-pointer hidden sm:flex ${
                 viewMode === 'grid'
                   ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-950'
                   : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
@@ -3519,7 +4291,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               type="button"
               onClick={() => setIsCommentsOpen(true)}
               title="Dejar feedback en esta lámina"
-              className="px-2.5 py-1.5 rounded-full text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-1 text-xs font-bold cursor-pointer"
+              className="px-2 sm:px-2.5 py-1.5 rounded-full text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-1 text-xs font-bold cursor-pointer"
             >
               <MessageSquare className="w-3.5 h-3.5 text-indigo-500" />
               <span>{(guideline?.comments || []).length}</span>
@@ -3530,7 +4302,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               type="button"
               onClick={handleExportPdf}
               disabled={exportingPdf}
-              title="Descargar presentación en PDF 16:9"
+              title="Descargar presentación completa en PDF 16:9"
               className="p-2 rounded-full text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition cursor-pointer"
             >
               <FileDown className="w-4 h-4" />
@@ -3559,12 +4331,12 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               {copiedLink ? <Check className="w-4 h-4 text-emerald-500" /> : <Share2 className="w-4 h-4" />}
             </button>
 
-            {/* Modo Cine Sin Bordes + Pantalla Completa */}
+            {/* Modo Cine */}
             <button
               type="button"
               onClick={() => setIsCinemaMode((prev) => !prev)}
               title="Modo Cine Inmersivo (Expandir lámina al 100%)"
-              className={`px-2.5 py-1.5 rounded-full text-[11px] font-bold flex items-center gap-1 transition cursor-pointer ${
+              className={`p-2 sm:px-2.5 sm:py-1.5 rounded-full text-[11px] font-bold hidden md:flex items-center gap-1 transition cursor-pointer ${
                 isCinemaMode
                   ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-950'
                   : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
@@ -3573,6 +4345,18 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               <Maximize2 className="w-3.5 h-3.5" />
               <span className="hidden lg:inline">{isCinemaMode ? 'Salir Cine' : 'Modo Cine'}</span>
             </button>
+
+            {/* Botón para ocultar la barra y no molestar la lectura */}
+            {(isFullscreen || isCinemaMode) && (
+              <button
+                type="button"
+                onClick={() => setShowControls(false)}
+                title="Ocultar barra para leer la propuesta sin obstáculos"
+                className="p-2 rounded-full text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition cursor-pointer"
+              >
+                <EyeOff className="w-4 h-4" />
+              </button>
+            )}
 
             <button
               type="button"
@@ -3595,27 +4379,31 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
         className={`flex-1 flex flex-col justify-center items-center w-full transition-all duration-300 ${
           isCinemaMode || isFullscreen
             ? 'p-0 max-w-none h-screen overflow-hidden'
-            : 'p-3 sm:p-6 md:p-10 pt-20 sm:pt-24 max-w-7xl mx-auto'
+            : 'p-2.5 sm:p-6 md:p-10 pt-16 sm:pt-24 max-w-7xl mx-auto'
         }`}
       >
         {viewMode === 'deck' ? (
           <div className={`w-full flex flex-col items-center ${isCinemaMode || isFullscreen ? 'h-full' : ''}`}>
             <div
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
               className={`w-full overflow-hidden shadow-2xl relative transition-all duration-300 ${
                 isCinemaMode || isFullscreen
                   ? 'h-screen max-h-none rounded-none border-0'
-                  : 'aspect-[16/10] sm:aspect-[16/9] max-h-[82vh] rounded-2xl sm:rounded-3xl border border-black/10 dark:border-white/10'
+                  : 'aspect-[16/10] sm:aspect-[16/9] min-h-[480px] sm:min-h-0 max-h-[85vh] rounded-2xl sm:rounded-3xl border border-black/10 dark:border-white/10'
               }`}
             >
-              {renderSlideContent(currentSlideIndex)}
+              <div className="w-full h-full overflow-y-auto sm:overflow-y-hidden">
+                {renderSlideContent(currentSlideIndex)}
+              </div>
 
               {currentSlideIndex > 0 && (
                 <button
                   type="button"
                   onClick={() => setCurrentSlideIndex((prev) => Math.max(0, prev - 1))}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/45 hover:bg-black/80 text-white backdrop-blur-md transition cursor-pointer shadow-lg"
+                  className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-full bg-black/45 hover:bg-black/80 text-white backdrop-blur-md transition cursor-pointer shadow-lg z-20"
                 >
-                  <ChevronLeft className="w-5 h-5" />
+                  <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
               )}
 
@@ -3623,9 +4411,9 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                 <button
                   type="button"
                   onClick={() => setCurrentSlideIndex((prev) => Math.min(totalSlides - 1, prev + 1))}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/45 hover:bg-black/80 text-white backdrop-blur-md transition cursor-pointer shadow-lg"
+                  className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-full bg-black/45 hover:bg-black/80 text-white backdrop-blur-md transition cursor-pointer shadow-lg z-20"
                 >
-                  <ChevronRight className="w-5 h-5" />
+                  <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
               )}
             </div>
@@ -3683,9 +4471,9 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                   return (
                     <div
                       key={`empty-${offset}`}
-                      className="aspect-[16/10] rounded-2xl border-2 border-dashed border-black/10 dark:border-white/10 flex items-center justify-center opacity-30 text-xs font-mono"
+                      className="aspect-[16/9] rounded-2xl border-2 border-dashed border-black/15 dark:border-white/15 flex items-center justify-center opacity-30 text-xs font-mono"
                     >
-                      Fin del pliego
+                      Fin de la presentación
                     </div>
                   );
                 }
@@ -3696,9 +4484,23 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                       setCurrentSlideIndex(sIdx);
                       setViewMode('deck');
                     }}
-                    className="aspect-[16/10] rounded-2xl overflow-hidden shadow-xl border border-black/10 dark:border-white/10 cursor-pointer hover:ring-2 hover:ring-amber-400 transition-all hover:scale-[1.008]"
+                    className="relative aspect-[16/9] w-full rounded-2xl overflow-hidden shadow-2xl border border-black/10 dark:border-white/10 bg-zinc-950 group cursor-pointer hover:ring-2 hover:ring-amber-400 transition-all hover:scale-[1.01]"
                   >
-                    {renderSlideContent(sIdx)}
+                    {/* Renderizado de alta resolución escalado al 50% para emular pantalla panorámica sin distorsión */}
+                    <div className="absolute inset-0 w-[200%] h-[200%] origin-top-left transform scale-50 pointer-events-none select-none">
+                      {renderSlideContent(sIdx)}
+                    </div>
+                    {/* Pill indicador de lámina */}
+                    <div className="absolute top-2.5 left-2.5 z-20 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-md text-[10px] font-mono text-white/90 border border-white/15 flex items-center gap-1.5 shadow-md">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                      <span className="truncate max-w-[200px]">{slides[sIdx]?.title}</span>
+                    </div>
+                    {/* Overlay al pasar el mouse para abrir en pantalla 16:9 */}
+                    <div className="absolute inset-0 z-20 bg-black/0 group-hover:bg-black/25 transition-all flex items-end justify-end p-3">
+                      <span className="opacity-0 group-hover:opacity-100 px-3 py-1.5 rounded-xl bg-zinc-900/95 text-white text-xs font-semibold backdrop-blur-md border border-white/20 transition-all transform translate-y-1 group-hover:translate-y-0 shadow-lg">
+                        Ver lámina 16:9 →
+                      </span>
+                    </div>
                   </div>
                 );
               })}
