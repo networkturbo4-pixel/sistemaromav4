@@ -87,7 +87,7 @@ export const RomitaWorkspaceView: React.FC<RomitaWorkspaceViewProps> = ({ onBack
   const [activePendingAction, setActivePendingAction] = useState<PendingActionProposal | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [historyFilter, setHistoryFilter] = useState<'all' | 'clients' | 'workspace_tasks' | 'quotes'>('all');
+  const [historyFilter, setHistoryFilter] = useState<'all' | 'clients' | 'workspace_tasks' | 'quotes' | 'social_posts'>('all');
   const [historySearch, setHistorySearch] = useState('');
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -96,11 +96,10 @@ export const RomitaWorkspaceView: React.FC<RomitaWorkspaceViewProps> = ({ onBack
 
   const isDark = resolvedTheme === 'dark';
 
-  // Guardar mensajes en localStorage y sincronizar
+  // Guardar mensajes en localStorage
   useEffect(() => {
     try {
       localStorage.setItem('roma_romita_chat_history', JSON.stringify(messages));
-      window.dispatchEvent(new CustomEvent('roma_romita_chat_updated', { detail: { source: 'workspace' } }));
     } catch {}
   }, [messages]);
 
@@ -110,15 +109,22 @@ export const RomitaWorkspaceView: React.FC<RomitaWorkspaceViewProps> = ({ onBack
       if (e?.detail?.source === 'workspace') return;
       try {
         const stored = localStorage.getItem('roma_romita_chat_history');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) {
-            setMessages(parsed.map((m: any) => ({
-              ...m,
-              timestamp: new Date(m.timestamp),
-            })));
+        if (!stored) return;
+        const parsed = JSON.parse(stored);
+        if (!Array.isArray(parsed) || parsed.length === 0) return;
+
+        setMessages((prev) => {
+          if (
+            prev.length === parsed.length &&
+            prev[prev.length - 1]?.id === parsed[parsed.length - 1]?.id
+          ) {
+            return prev;
           }
-        }
+          return parsed.map((m: any) => ({
+            ...m,
+            timestamp: new Date(m.timestamp),
+          }));
+        });
       } catch {}
     };
 
@@ -248,6 +254,7 @@ export const RomitaWorkspaceView: React.FC<RomitaWorkspaceViewProps> = ({ onBack
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
+      window.dispatchEvent(new CustomEvent('roma_romita_chat_updated', { detail: { source: 'workspace' } }));
     }
   };
 
@@ -697,6 +704,7 @@ export const RomitaWorkspaceView: React.FC<RomitaWorkspaceViewProps> = ({ onBack
                 <option value="all">Todos los módulos</option>
                 <option value="clients">Clientes</option>
                 <option value="workspace_tasks">Tareas Workspace</option>
+                <option value="social_posts">Redes Sociales</option>
                 <option value="quotes">Cotizaciones</option>
               </select>
             </div>

@@ -125,10 +125,26 @@ const romitaToolsDeclarations = [
         parameters: {
             type: genai_1.Type.OBJECT,
             properties: {
-                modulo: { type: genai_1.Type.STRING, description: 'Módulo: clients, quotes, workspace, services' },
+                modulo: { type: genai_1.Type.STRING, description: 'Módulo: clients, quotes, workspace, services, social' },
                 termino: { type: genai_1.Type.STRING, description: 'Término de búsqueda o filtro' }
             },
             required: ['modulo']
+        }
+    },
+    {
+        name: 'crearPublicacionRedes',
+        description: 'Crea una nueva publicación o contenido en el módulo de Redes Sociales del Workspace.',
+        parameters: {
+            type: genai_1.Type.OBJECT,
+            properties: {
+                title: { type: genai_1.Type.STRING, description: 'Idea o título central del post' },
+                copy: { type: genai_1.Type.STRING, description: 'Texto / caption completo del post para la red social' },
+                platform: { type: genai_1.Type.STRING, description: 'Plataforma: instagram, facebook, tiktok, linkedin' },
+                format: { type: genai_1.Type.STRING, description: 'Formato: feed_image, reel, carousel, story' },
+                designerBrief: { type: genai_1.Type.STRING, description: 'Instrucciones o brief visual para el diseñador' },
+                scheduledDate: { type: genai_1.Type.STRING, description: 'Fecha estimada de publicación (YYYY-MM-DD)' }
+            },
+            required: ['title', 'platform']
         }
     }
 ];
@@ -312,6 +328,20 @@ Tus capacidades incluyen:
                                 replyText = `⚠️ Se requiere tu autorización para eliminar la cotización **${args.number || args.id}**.`;
                             }
                             break;
+                        case 'crearPublicacionRedes':
+                            pendingAction = {
+                                id: `act_${Date.now()}`,
+                                type: 'create',
+                                module: 'social_posts',
+                                title: `Post ${args.platform ? args.platform.toUpperCase() : 'REDES'}: ${args.title}`,
+                                description: `Formato: ${args.format || 'post'} | Copy: ${args.copy ? args.copy.slice(0, 100) : 'Sin copy inicial'}${args.designerBrief ? ` | Brief: ${args.designerBrief}` : ''}`,
+                                payload: args,
+                                permissionRequired: 'workspace.social.manage',
+                            };
+                            if (!replyText) {
+                                replyText = `He preparado la publicación de **${args.platform?.toUpperCase() || 'Redes Sociales'}** con la idea **"${args.title}"**. Puedes revisar el copy y la propuesta en la tarjeta inferior para aprobar su inserción.`;
+                            }
+                            break;
                         case 'consultarDatos': {
                             const clients = await db_1.db.getClientsByTenant(tenantId);
                             const quotes = await db_1.db.getQuotesByTenant(tenantId);
@@ -406,6 +436,15 @@ Tus capacidades incluyen:
             const quotes = await db_1.db.getQuotesByTenant(tenantId);
             const tasks = await db_1.db.getWorkspaceTasks(tenantId);
             reply = `📊 **Resumen General de Operaciones ROMA:**\n\n| Módulo | Total Registros | Estado Operativo |\n|---|---|---|\n| 👥 Clientes | ${clients.length} | Activo |\n| 📝 Cotizaciones | ${quotes.length} | Al día |\n| 📋 Tareas en Workspace | ${tasks.length} | En progreso |\n\nPuedes pedirme: *"Crear cliente Inversiones del Norte"*, *"Crear tarea Diseñar catálogo"*, o solicitar resúmenes en tabla.`;
+        }
+        else if (lower.includes('redes') ||
+            lower.includes('sociales') ||
+            lower.includes('publicacion') ||
+            lower.includes('post') ||
+            lower.includes('instagram') ||
+            lower.includes('tiktok') ||
+            lower.includes('facebook')) {
+            reply = `¡Sí, totalmente! Puedo accionar directamente en el módulo de **Redes Sociales** de tu Workspace.\n\n| Capacidad | Descripción |\n|---|---|\n| 📱 **Crear Publicaciones** | Redactar copys atractivos con hashtags y emojis para Instagram, TikTok, Facebook o LinkedIn. |\n| 🎨 **Briefs de Diseño** | Describir el arte visual, composición, colores y formato (Reel, Carrusel, Feed o Historia). |\n| 🗓️ **Calendario & Grilla** | Asignar fecha de publicación y preparar la tarjeta para tu confirmación. |\n\n¿Quieres que prepare una publicación ahora? Por ejemplo pídeme: *"Crea una publicación para Instagram sobre nuestro nuevo servicio de branding"* y prepararé la propuesta de inmediato.`;
         }
         else {
             reply = `Hola ${userName}, soy **Romita**, tu agente de IA integrado en ROMA. Puedo ayudarte a **crear clientes**, **crear tareas**, **gestionar cotizaciones** o consultar cualquier dato de tu agencia con solo pedírmelo en lenguaje natural.`;
@@ -519,6 +558,24 @@ router.post('/execute', auth_1.requireAuth, async (req, res) => {
                 }
                 await db_1.db.deleteQuote(quoteId, tenantId);
                 resultData = { deletedId: quoteId };
+            }
+        }
+        else if (action.module === 'social_posts') {
+            if (action.type === 'create') {
+                const clients = await db_1.db.getClientsByTenant(tenantId);
+                const fallbackClient = clients[0] || { id: 'general', name: 'General' };
+                resultData = await db_1.db.createWorkspacePost(tenantId, {
+                    clientId: action.payload.clientId || fallbackClient.id,
+                    clientName: action.payload.clientName || fallbackClient.name,
+                    title: action.payload.title || 'Nueva Publicación',
+                    copy: action.payload.copy || '',
+                    platforms: [action.payload.platform || 'instagram'],
+                    format: action.payload.format || 'feed_image',
+                    designerBrief: action.payload.designerBrief || '',
+                    status: 'idea',
+                    scheduledDate: action.payload.scheduledDate || new Date().toISOString().split('T')[0],
+                    tenantId,
+                });
             }
         }
         return res.json({

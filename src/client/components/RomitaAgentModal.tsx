@@ -25,7 +25,7 @@ import {
 export interface PendingActionProposal {
   id: string;
   type: 'create' | 'update' | 'delete';
-  module: 'clients' | 'quotes' | 'workspace_tasks' | 'services';
+  module: 'clients' | 'quotes' | 'workspace_tasks' | 'services' | 'social_posts';
   title: string;
   description: string;
   payload: Record<string, any>;
@@ -91,11 +91,10 @@ export const RomitaAgentModal: React.FC<RomitaAgentModalProps> = ({
     ];
   });
 
-  // Guardar en localStorage y notificar cambios
+  // Guardar en localStorage
   useEffect(() => {
     try {
       localStorage.setItem('roma_romita_chat_history', JSON.stringify(messages));
-      window.dispatchEvent(new CustomEvent('roma_romita_chat_updated', { detail: { source: 'modal' } }));
     } catch {}
   }, [messages]);
 
@@ -105,15 +104,22 @@ export const RomitaAgentModal: React.FC<RomitaAgentModalProps> = ({
       if (e?.detail?.source === 'modal') return;
       try {
         const stored = localStorage.getItem('roma_romita_chat_history');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) {
-            setMessages(parsed.map((m: any) => ({
-              ...m,
-              timestamp: new Date(m.timestamp),
-            })));
+        if (!stored) return;
+        const parsed = JSON.parse(stored);
+        if (!Array.isArray(parsed) || parsed.length === 0) return;
+
+        setMessages((prev) => {
+          if (
+            prev.length === parsed.length &&
+            prev[prev.length - 1]?.id === parsed[parsed.length - 1]?.id
+          ) {
+            return prev;
           }
-        }
+          return parsed.map((m: any) => ({
+            ...m,
+            timestamp: new Date(m.timestamp),
+          }));
+        });
       } catch {}
     };
 
@@ -261,6 +267,7 @@ export const RomitaAgentModal: React.FC<RomitaAgentModalProps> = ({
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
+      window.dispatchEvent(new CustomEvent('roma_romita_chat_updated', { detail: { source: 'modal' } }));
     }
   };
 

@@ -41,6 +41,7 @@ import { MeetingsSubmoduleView } from './workspace/submodules/meetings/MeetingsS
 import { WhiteboardsSubmoduleView } from './workspace/submodules/whiteboards/WhiteboardsSubmoduleView';
 import { BrandGuidelinesSubmoduleView } from './workspace/submodules/brand-guidelines/BrandGuidelinesSubmoduleView';
 import { RomitaWorkspaceView } from './workspace/submodules/romita/RomitaWorkspaceView';
+import { EmailsSubmoduleView } from './workspace/submodules/emails/EmailsSubmoduleView';
 
 // Modales
 import { ProjectModal } from './workspace/modals/ProjectModal';
@@ -56,7 +57,7 @@ export const WorkspaceModule: React.FC = () => {
   const { tenant, user, toast, confirmAction, apiFetch } = useApp();
 
   // Nivel 0: Navegación de Submódulos ('hub', 'social', 'tasks', 'drive', 'tools', 'forms', 'meetings', 'whiteboards', 'brand-guidelines', 'romita')
-  const [currentView, setCurrentView] = useState<'hub' | 'social' | 'tasks' | 'drive' | 'tools' | 'forms' | 'meetings' | 'whiteboards' | 'brand-guidelines' | 'romita'>('hub');
+  const [currentView, setCurrentView] = useState<'hub' | 'social' | 'tasks' | 'drive' | 'tools' | 'forms' | 'meetings' | 'whiteboards' | 'brand-guidelines' | 'romita' | 'emails'>('hub');
   const [forms, setForms] = useState<WorkspaceForm[]>([]);
   const [meetings, setMeetings] = useState<WorkspaceMeeting[]>([]);
   const [whiteboardsCount, setWhiteboardsCount] = useState<number>(0);
@@ -182,7 +183,7 @@ export const WorkspaceModule: React.FC = () => {
   useEffect(() => {
     const handleOpenWorkspaceSubview = (e: any) => {
       const detail = e.detail;
-      if (detail === 'social' || detail === 'tasks' || detail === 'drive' || detail === 'hub' || detail === 'tools' || detail === 'forms' || detail === 'meetings' || detail === 'whiteboards' || detail === 'brand-guidelines') {
+      if (detail === 'social' || detail === 'tasks' || detail === 'drive' || detail === 'hub' || detail === 'tools' || detail === 'forms' || detail === 'meetings' || detail === 'whiteboards' || detail === 'brand-guidelines' || detail === 'romita' || detail === 'emails') {
         setCurrentView(detail);
         if (detail === 'social') {
           setSocialPhase(1);
@@ -1182,6 +1183,16 @@ export const WorkspaceModule: React.FC = () => {
           <RomitaWorkspaceView onBackToHub={() => setCurrentView('hub')} />
         </div>
       )}
+
+      {/* ===================================================================== */}
+      {/* SUBMÓDULO: CORREOS CORPORATIVOS (SMTP / IMAP) */}
+      {/* ===================================================================== */}
+      {currentView === 'emails' && (
+        <div className="space-y-4 animate-fadeIn">
+          <EmailsSubmoduleView onBackToHub={() => setCurrentView('hub')} />
+        </div>
+      )}
+
 
       {/* ===================================================================== */}
       {/* MODALES DEL WORKSPACE */}
