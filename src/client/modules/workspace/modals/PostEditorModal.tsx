@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useApp } from '../../../context/AppContext';
 import {
   LayoutGrid,
   Lightbulb,
@@ -33,6 +34,11 @@ import {
   ShieldCheck,
   Layers,
   Plus,
+  Zap,
+  Target,
+  Palette,
+  Wand2,
+  Loader2,
   Maximize2,
   Tv,
   Smartphone,
@@ -95,6 +101,10 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
   const [refImageError, setRefImageError] = useState(false);
   const [finalArtImageError, setFinalArtImageError] = useState(false);
   const [copyViewMode, setCopyViewMode] = useState<'edit' | 'preview'>('edit');
+  const [isGeneratingWithAI, setIsGeneratingWithAI] = useState(false);
+  const [aiGenerationLabel, setAiGenerationLabel] = useState('');
+
+  const { apiFetch } = useApp();
 
   useEffect(() => {
     if (isOpen && editingPost) {
@@ -355,34 +365,67 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
     setEditingPost((prev) => (prev ? { ...prev, milestones: updated } : null));
   };
 
-  const handleRomitaAIGenerate = (mode: 'hook' | 'cta' | 'aida' | 'hashtags') => {
-    const title = editingPost?.title || 'Contenido de marca';
-    const pillar = editingPost?.contentPillar || 'Educación';
-    const brand = editingPost?.brandName || 'nuestra marca';
-
-    let generatedText = '';
-    if (mode === 'hook') {
-      generatedText = `🔥 ¿Sabías esto sobre ${title}?\n\nLa mayoría comete este error al iniciar. Aquí te revelamos las 3 claves esenciales para destacar con ${brand} 👇\n\n`;
-    } else if (mode === 'cta') {
-      generatedText = `\n\n📲 ¿Listo para dar el siguiente paso? Escríbenos por DM o haz clic en el enlace del perfil para agendar tu asesoría personalizada hoy mismo. ✨`;
-    } else if (mode === 'aida') {
-      generatedText = `👉 ATENCIÓN: Si buscas mejorar tus resultados con ${title}, esto es para ti.\n\n💡 INTERÉS: Diseñamos una metodología comprobada que ahorra tiempo y multiplica tus conversiones en ${brand}.\n\n✨ DESEO: Imagina tener todo el flujo automatizado y listo para escalar sin estrés.\n\n🚀 ACCIÓN: Comenta "QUIERO" o envíanos un mensaje directo para enviarte el acceso exclusivo.`;
-    } else if (mode === 'hashtags') {
-      const sanitized = title.replace(/[^a-zA-Z0-9]/g, '');
-      const sanitizedBrand = brand.replace(/[^a-zA-Z0-9]/g, '');
-      generatedText = `\n\n#${sanitizedBrand} #${sanitized} #${pillar} #EstrategiaDigital #AgenciaCreativa #MarketingDigital`;
-    }
-
-    setEditingPost((prev) => {
-      if (!prev) return null;
-      const current = prev.copy || '';
-      return {
-        ...prev,
-        copy: current ? `${current}\n${generatedText}` : generatedText,
-      };
-    });
+  const handleRomitaAIGenerate = async (mode: 'full' | 'hook' | 'cta' | 'aida' | 'brief' | 'improve') => {
+    if (isGeneratingWithAI) return;
     setRomitaDropdownOpen(false);
-    toast('Texto generado con Romita IA', 'success');
+    setIsGeneratingWithAI(true);
+
+    const labels: Record<string, string> = {
+      full: 'Copy Completo',
+      hook: 'Ganchos Virales',
+      cta: 'Llamados a la Acción',
+      aida: 'Estructura AIDA',
+      brief: 'Brief Creativo',
+      improve: 'Mejora de Copy',
+    };
+    setAiGenerationLabel(labels[mode] || 'Copy Inteligente');
+
+    try {
+      const res = await apiFetch<{
+        success: boolean;
+        text: string;
+        modelUsed?: string;
+      }>('/api/romita/generate-copy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editingPost?.title || '',
+          brandName: editingPost?.brandName || editingPost?.clientName || '',
+          contentPillar: editingPost?.contentPillar || 'General',
+          platforms: editingPost?.platforms || ['instagram'],
+          existingCopy: editingPost?.copy || '',
+          mode,
+        }),
+      });
+
+      if (res?.text) {
+        if (mode === 'brief') {
+          // Si el usuario pidió brief creativo, lo volcamos en el campo de brief para diseñador
+          setEditingPost((prev) => (prev ? { ...prev, designerBrief: res.text } : null));
+          toast('Brief para diseñador generado por Romita IA', 'success');
+        } else if (mode === 'hook' || mode === 'cta') {
+          // Si es hook o cta, lo anexamos de forma limpia
+          setEditingPost((prev) => {
+            if (!prev) return null;
+            const current = prev.copy || '';
+            return {
+              ...prev,
+              copy: current ? `${res.text}\n\n${current}` : res.text,
+            };
+          });
+          toast(`Opciones generadas con éxito por Romita IA`, 'success');
+        } else {
+          // Modo full o aida o improve: actualiza el copy
+          setEditingPost((prev) => (prev ? { ...prev, copy: res.text } : null));
+          toast('Copy inteligente redactado con Romita IA', 'success');
+        }
+      }
+    } catch (err: any) {
+      toast(err.message || 'Error al generar texto con IA', 'error');
+    } finally {
+      setIsGeneratingWithAI(false);
+      setAiGenerationLabel('');
+    }
   };
 
   const applyTextFormat = (
@@ -821,52 +864,107 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
                           </div>
                         </div>
 
-                        {/* Dropdown Romita IA */}
+                        {/* Botón y Menú Romita IA */}
                         <div className="relative">
                           <button
                             type="button"
+                            disabled={isGeneratingWithAI}
                             onClick={() => setRomitaDropdownOpen(!romitaDropdownOpen)}
-                            className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                            className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-80 disabled:cursor-wait text-white font-bold text-xs transition flex items-center gap-1.5 shadow-xs cursor-pointer"
                           >
-                            <Sparkles className="w-3.5 h-3.5" />
-                            <span>Hacer con Romita</span>
-                            <ChevronDown className="w-3.5 h-3.5" />
+                            {isGeneratingWithAI ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>Redactando con Romita...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-3.5 h-3.5" />
+                                <span>Hacer con Romita</span>
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </>
+                            )}
                           </button>
 
-                          {romitaDropdownOpen && (
-                            <div className="absolute right-0 top-full mt-1.5 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl p-1.5 z-30 space-y-1">
+                          {romitaDropdownOpen && !isGeneratingWithAI && (
+                            <div className="absolute right-0 top-full mt-1.5 w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl p-2 z-30 space-y-1 animate-in fade-in">
+                              <div className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                Redacción con IA de Romita
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleRomitaAIGenerate('full')}
+                                className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition flex items-start gap-2.5 cursor-pointer"
+                              >
+                                <Sparkles className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
+                                <div>
+                                  <div className="font-bold">Redactar Copy Completo</div>
+                                  <div className="text-[10px] text-slate-400 font-normal">Gancho + Valor + CTA + 5 Hashtags</div>
+                                </div>
+                              </button>
+
                               <button
                                 type="button"
                                 onClick={() => handleRomitaAIGenerate('hook')}
-                                className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 transition flex items-center gap-2 cursor-pointer"
+                                className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 hover:bg-pink-50 dark:hover:bg-pink-950/50 hover:text-pink-600 dark:hover:text-pink-400 transition flex items-start gap-2.5 cursor-pointer"
                               >
-                                <Sparkles className="w-3.5 h-3.5 text-pink-500" />
-                                <span>Gancho de Alto Impacto (Hook)</span>
+                                <Zap className="w-4 h-4 text-pink-500 shrink-0 mt-0.5" />
+                                <div>
+                                  <div className="font-bold">3 Ganchos Virales (Hooks)</div>
+                                  <div className="text-[10px] text-slate-400 font-normal">Detener el scroll en los primeros 2 seg.</div>
+                                </div>
                               </button>
+
                               <button
                                 type="button"
                                 onClick={() => handleRomitaAIGenerate('aida')}
-                                className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 transition flex items-center gap-2 cursor-pointer"
+                                className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 hover:bg-purple-50 dark:hover:bg-purple-950/50 hover:text-purple-600 dark:hover:text-purple-400 transition flex items-start gap-2.5 cursor-pointer"
                               >
-                                <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                                <span>Estructura AIDA para Ventas</span>
+                                <Target className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" />
+                                <div>
+                                  <div className="font-bold">Estructura AIDA para Ventas</div>
+                                  <div className="text-[10px] text-slate-400 font-normal">Atención, Interés, Deseo y Acción</div>
+                                </div>
                               </button>
+
                               <button
                                 type="button"
                                 onClick={() => handleRomitaAIGenerate('cta')}
-                                className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 transition flex items-center gap-2 cursor-pointer"
+                                className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-50 dark:hover:bg-sky-950/50 hover:text-sky-600 dark:hover:text-sky-400 transition flex items-start gap-2.5 cursor-pointer"
                               >
-                                <Send className="w-3.5 h-3.5 text-sky-500" />
-                                <span>Llamado a la Acción (CTA)</span>
+                                <Send className="w-4 h-4 text-sky-500 shrink-0 mt-0.5" />
+                                <div>
+                                  <div className="font-bold">Llamados a la Acción (CTAs)</div>
+                                  <div className="text-[10px] text-slate-400 font-normal">Para DMs, enlace en bio o compras</div>
+                                </div>
                               </button>
+
                               <button
                                 type="button"
-                                onClick={() => handleRomitaAIGenerate('hashtags')}
-                                className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 transition flex items-center gap-2 cursor-pointer"
+                                onClick={() => handleRomitaAIGenerate('brief')}
+                                className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 hover:bg-amber-50 dark:hover:bg-amber-950/50 hover:text-amber-600 dark:hover:text-amber-400 transition flex items-start gap-2.5 cursor-pointer"
                               >
-                                <Hash className="w-3.5 h-3.5 text-emerald-500" />
-                                <span>Sugerir 5 Hashtags</span>
+                                <Palette className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                                <div>
+                                  <div className="font-bold">Generar Brief para Diseñador</div>
+                                  <div className="text-[10px] text-slate-400 font-normal">Rellena las indicaciones del arte visual</div>
+                                </div>
                               </button>
+
+                              {editingPost?.copy && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRomitaAIGenerate('improve')}
+                                  className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 hover:text-emerald-600 dark:hover:text-emerald-400 transition flex items-start gap-2.5 cursor-pointer"
+                                >
+                                  <Wand2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                                  <div>
+                                    <div className="font-bold">Mejorar Copy Actual</div>
+                                    <div className="text-[10px] text-slate-400 font-normal">Optimizar persuasión y fluidez</div>
+                                  </div>
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -979,7 +1077,27 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
                         </button>
                       </div>
 
-                      {copyViewMode === 'edit' ? (
+                      {isGeneratingWithAI ? (
+                        <div className="w-full min-h-[175px] p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex flex-col justify-between animate-pulse">
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 dark:bg-indigo-400" />
+                              <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                                Romita IA redactando ({aiGenerationLabel})...
+                              </span>
+                            </div>
+                            <div className="h-3.5 bg-slate-200 dark:bg-slate-700 rounded-md w-3/4" />
+                            <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-md w-full" />
+                            <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-md w-5/6" />
+                            <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-md w-4/5" />
+                            <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-md w-2/3" />
+                          </div>
+                          <div className="pt-3 border-t border-slate-200 dark:border-slate-700/80 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                            <span>Estructurando ganchos, llamada a la acción y contenido persuasivo...</span>
+                            <span className="font-mono text-xs">● ● ●</span>
+                          </div>
+                        </div>
+                      ) : copyViewMode === 'edit' ? (
                         <textarea
                           ref={copyTextareaRef}
                           rows={7}

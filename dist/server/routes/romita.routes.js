@@ -461,6 +461,89 @@ Tus capacidades incluyen:
     }
 });
 /**
+ * Endpoint de Redacción Inteligente de Copys y Briefs para Redes Sociales
+ */
+router.post('/generate-copy', auth_1.requireAuth, async (req, res) => {
+    try {
+        const { title, brandName, contentPillar = 'General', platforms = ['instagram'], existingCopy = '', mode = 'full', // 'full' | 'hook' | 'cta' | 'aida' | 'brief' | 'improve'
+        modelPreference = 'gemini-3.8-flash', } = req.body;
+        const tenantId = req.auth?.tenant?.id || 'default-tenant';
+        const gemini = await getGeminiClient(tenantId);
+        const platformNames = Array.isArray(platforms) && platforms.length > 0 ? platforms.join(', ') : 'Instagram';
+        if (gemini) {
+            const instructions = `Eres Romita, la Directora Creativa y Copywriter Senior de la agencia.
+Escribe un texto excepcionalmente persuasivo, magnético y profesional para redes sociales (${platformNames}).
+Marca / Cliente: "${brandName || 'Nuestra marca'}"
+Concepto / Título del post: "${title || 'Publicación'}"
+Pilar de contenido: "${contentPillar}"
+${existingCopy ? `Texto actual a mejorar o extender: "${existingCopy}"` : ''}
+
+REGLAS DE FORMATO:
+- NO uses código HTML. Usa texto limpio con saltos de línea y emojis bien ubicados.
+- NO uses markdown complejo (evita encabezados con # o asteriscos extraños).
+- El gancho inicial debe ser potente y detener el scroll en los primeros 2 segundos.
+- Añade saltos de línea estratégicos para que sea fácil de leer en móvil.
+- Al final, incluye 4 o 5 hashtags relevantes y el Call to Action (CTA) claro.
+
+Modo de generación solicitado:
+${mode === 'hook'
+                ? 'Genera 3 opciones de ganchos (hooks) magnéticos y diferentes para este post, numerados.'
+                : mode === 'cta'
+                    ? 'Genera 3 opciones de llamados a la acción (CTAs) de alta conversión (interacción, ventas, mensajes directos).'
+                    : mode === 'aida'
+                        ? 'Aplica la fórmula AIDA (Atención, Interés, Deseo, Acción) de manera fluida y vendedora.'
+                        : mode === 'brief'
+                            ? 'Redacta un brief visual y creativo directo para el diseñador gráfico: composición, colores recomendados, elementos clave que deben verse, tipografía y estilo.'
+                            : mode === 'improve'
+                                ? 'Reescribe y pule el texto actual aumentando la persuasión, el ritmo de lectura y la corrección estilística.'
+                                : 'Redacta el COPY COMPLETO: Gancho magnético + Cuerpo de alto valor adaptado al pilar + Llamada a la acción clara + Hashtags específicos.'}`;
+            const { response, modelUsed } = await generateContentWithResilience(gemini, modelPreference || 'gemini-3.8-flash', {
+                contents: `Redacta el contenido creativo solicitado para esta publicación.`,
+                config: {
+                    systemInstruction: instructions,
+                },
+            });
+            const generated = response.text || '';
+            return res.json({
+                success: true,
+                text: generated.trim(),
+                modelUsed,
+            });
+        }
+        // Fallback inteligente local si no hay API key de Gemini
+        let fallbackText = '';
+        const cleanTitle = title || 'nuestro servicio';
+        const cleanBrand = brandName || 'nuestra marca';
+        if (mode === 'hook') {
+            fallbackText = `🔥 Opción 1: ¿Por qué la mayoría falla al buscar ${cleanTitle}?\n\n⚡ Opción 2: El secreto de ${cleanBrand} que nadie te había contado hasta hoy.\n\n✨ Opción 3: Si quieres dominar ${cleanTitle}, necesitas ver esto antes de que termine la semana 👇`;
+        }
+        else if (mode === 'cta') {
+            fallbackText = `📲 ¿Listo para vivir la experiencia ${cleanBrand}? Escríbenos un DM o haz clic en el enlace de la bio para reservar tu lugar hoy mismo. ✨\n\n💬 Comenta "${cleanTitle.slice(0, 15).toUpperCase()}" y te enviaremos todos los detalles por privado.`;
+        }
+        else if (mode === 'aida') {
+            fallbackText = `👉 ATENCIÓN: Si buscas la mejor experiencia con ${cleanTitle}, esto te interesa.\n\n💡 INTERÉS: En ${cleanBrand} cuidamos cada detalle para garantizar calidad insuperable desde el primer momento.\n\n✨ DESEO: Imagina disfrutar de un servicio pensado exactamente a tu medida, sin complicaciones.\n\n🚀 ACCIÓN: Escríbenos al enlace del perfil o déjanos un mensaje directo para comenzar hoy mismo.`;
+        }
+        else if (mode === 'brief') {
+            fallbackText = `🎨 BRIEF CREATIVO:\n- Composición: Primer plano con protagonismo de ${cleanTitle}.\n- Estilo: Fotografía cálida, apetecible y moderna, iluminación natural destacando texturas.\n- Texto en arte: Frase corta de impacto.\n- Formato: 4:5 vertical optimizado para Feed e Historias de ${platformNames}.\n- Colores: Paleta corporativa de ${cleanBrand} con acentos de alto contraste.`;
+        }
+        else if (mode === 'improve' && existingCopy) {
+            fallbackText = `✨ ${existingCopy.trim()}\n\n📲 ¿Tienes dudas o quieres más detalles? Escríbenos por mensaje directo y te responderemos al instante.`;
+        }
+        else {
+            fallbackText = `¿Estás listo para llevar tu experiencia con ${cleanBrand} al siguiente nivel? 🔥\n\nHoy te presentamos ${cleanTitle}. Porque sabemos que cuando se trata de calidad, los detalles son lo que realmente marcan la diferencia.\n\n✨ Pensado para darte lo mejor en cada momento y superar tus expectativas.\n\n📲 Haz tu pedido o reserva escribiéndonos al enlace del perfil o déjanos un comentario con tus dudas.\n\n#${cleanBrand.replace(/\s+/g, '')} #Calidad #Experiencia #${contentPillar} #Tendencias`;
+        }
+        return res.json({
+            success: true,
+            text: fallbackText,
+            modelUsed: 'romita-turbo-engine',
+        });
+    }
+    catch (err) {
+        console.error('Error en /api/romita/generate-copy:', err);
+        return res.status(500).json({ error: err.message || 'Error al generar copy con IA' });
+    }
+});
+/**
  * Endpoint de Ejecución Segura de Acciones (Human-in-the-Loop)
  * Recibe la acción aprobada por el usuario, valida permisos y la aplica en la DB.
  */
