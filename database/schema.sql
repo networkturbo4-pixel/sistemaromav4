@@ -430,6 +430,32 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 
 CREATE INDEX IF NOT EXISTS idx_push_sub_tenant ON push_subscriptions(tenant_id);
 
+-- 28. TABLA DE BRAND GUIDELINES / PITCH DECKS DE IDENTIDAD VISUAL
+CREATE TABLE IF NOT EXISTS brand_guidelines (
+    id VARCHAR(64) PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    project_id VARCHAR(64),
+    client_id VARCHAR(64),
+    client_name VARCHAR(200) NOT NULL DEFAULT '',
+    client_logo TEXT NOT NULL DEFAULT '',
+    brand_name VARCHAR(200) NOT NULL DEFAULT '',
+    designer_name VARCHAR(150) NOT NULL DEFAULT '',
+    round VARCHAR(50) NOT NULL DEFAULT 'Round 1',
+    date VARCHAR(50) NOT NULL DEFAULT '',
+    tagline TEXT NOT NULL DEFAULT '',
+    public_token VARCHAR(120) NOT NULL UNIQUE,
+    require_pin BOOLEAN NOT NULL DEFAULT FALSE,
+    public_pin VARCHAR(20) NOT NULL DEFAULT '',
+    theme_default VARCHAR(20) NOT NULL DEFAULT 'dark',
+    view_mode_default VARCHAR(20) NOT NULL DEFAULT 'deck',
+    data JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_brand_guidelines_tenant ON brand_guidelines(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_brand_guidelines_token ON brand_guidelines(public_token);
+
 
 
 

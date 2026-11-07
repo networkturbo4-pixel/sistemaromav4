@@ -23,6 +23,7 @@ import { PublicWorkspaceMonthView } from './components/PublicWorkspaceMonthView'
 import { PublicBiolinkView } from './components/PublicBiolinkView';
 import { PublicEmployeePaymentsView } from './components/PublicEmployeePaymentsView';
 import { PublicFormView } from './components/PublicFormView';
+import { PublicBrandGuidelineView } from './components/PublicBrandGuidelineView';
 import { AttendanceGateModal } from './components/AttendanceGateModal';
 
 const MainRouter: React.FC = () => {
@@ -204,6 +205,22 @@ const MainRouter: React.FC = () => {
     return null;
   });
 
+  // 10. Detección de enlace público de Brand Guidelines / Pitch Deck (/brand/:token o /p/brand/:token o ?brand=:token)
+  const [publicBrandToken] = useState<string | null>(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const b = urlParams.get('brand') || urlParams.get('deck') || urlParams.get('guideline');
+      if (b) return b;
+
+      const path = window.location.pathname;
+      const match = path.match(/^\/(?:brand|deck|guidelines|p\/brand|p\/deck)\/([^/?#]+)/i);
+      if (match && match[1]) {
+        return decodeURIComponent(match[1]);
+      }
+    } catch {}
+    return null;
+  });
+
   // Persistencia de módulo activo al recargar la página (F5 o navegación)
   const [activeModule, setActiveModuleState] = useState<ActiveModule>(() => {
     try {
@@ -353,6 +370,11 @@ const MainRouter: React.FC = () => {
   // 9. Vista pública de Formulario interactivo
   if (publicFormSlug) {
     return <PublicFormView slug={publicFormSlug} />;
+  }
+
+  // 10. Vista pública de Brand Guidelines / Pitch Deck de Identidad Visual
+  if (publicBrandToken) {
+    return <PublicBrandGuidelineView token={publicBrandToken} />;
   }
 
   if (isLoading) {

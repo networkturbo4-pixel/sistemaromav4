@@ -70,6 +70,7 @@ import {
   WhiteboardTag,
   WhiteboardAccessType,
   WhiteboardPublicRole,
+  BrandGuideline,
 } from '../shared/types';
 import { ALL_PERMISSION_KEYS, PermissionKey } from '../shared/permissions';
 
@@ -109,6 +110,7 @@ export interface DatabaseState {
   workspaceMeetings: WorkspaceMeeting[];
   whiteboards: Whiteboard[];
   whiteboardFolders: WhiteboardFolder[];
+  brandGuidelines: BrandGuideline[];
 }
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -263,6 +265,7 @@ export class DatabaseManager {
       workspaceMeetings: [],
       whiteboards: [],
       whiteboardFolders: [],
+      brandGuidelines: [],
     };
     return defaultState;
   }
@@ -4159,7 +4162,169 @@ export class DatabaseManager {
     return deleted;
   }
 
+  // ===========================================================================
+  // SUBMÓDULO: BRAND GUIDELINES / MANUALES DE MARCA
+  // ===========================================================================
 
+  public async getBrandGuidelines(tenantId: string, search?: string): Promise<BrandGuideline[]> {
+    if (!this.localState.brandGuidelines) {
+      this.localState.brandGuidelines = [];
+    }
+    let list = this.localState.brandGuidelines.filter((bg) => bg.tenantId === tenantId);
+    if (search) {
+      const q = search.toLowerCase().trim();
+      list = list.filter(
+        (bg) =>
+          bg.brandName?.toLowerCase().includes(q) ||
+          bg.clientName?.toLowerCase().includes(q) ||
+          bg.projectName?.toLowerCase().includes(q)
+      );
+    }
+    return list.sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+  }
+
+  public async getBrandGuidelineById(id: string, tenantId?: string): Promise<BrandGuideline | null> {
+    if (!this.localState.brandGuidelines) return null;
+    return (
+      this.localState.brandGuidelines.find(
+        (bg) => bg.id === id && (!tenantId || bg.tenantId === tenantId)
+      ) || null
+    );
+  }
+
+  public async getBrandGuidelineByPublicToken(token: string): Promise<BrandGuideline | null> {
+    if (!this.localState.brandGuidelines) return null;
+    return (
+      this.localState.brandGuidelines.find(
+        (bg) => bg.publicToken === token || bg.id === token
+      ) || null
+    );
+  }
+
+  public async createBrandGuideline(data: Partial<BrandGuideline> & { tenantId: string }): Promise<BrandGuideline> {
+    if (!this.localState.brandGuidelines) {
+      this.localState.brandGuidelines = [];
+    }
+    const now = new Date().toISOString();
+    const id = `bg_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const publicToken = generateToken(16);
+
+    const newGuideline: BrandGuideline = {
+      id,
+      tenantId: data.tenantId,
+      projectId: data.projectId || null,
+      projectName: data.projectName || '',
+      clientId: data.clientId || null,
+      clientName: data.clientName || 'Cliente',
+      clientLogo: data.clientLogo || '',
+      brandName: data.brandName || 'Nueva Marca',
+      designerName: data.designerName || '',
+      round: data.round || 'Round 1',
+      date: data.date || new Date().toLocaleDateString('es-ES', { month: 'short', year: 'numeric' }),
+      tagline: data.tagline || '',
+      publicToken,
+      requirePin: Boolean(data.requirePin),
+      publicPin: data.publicPin || '',
+      themeDefault: data.themeDefault || 'dark',
+      viewModeDefault: data.viewModeDefault || 'deck',
+      status: data.status || 'in_review',
+      approvedBy: data.approvedBy || '',
+      approvedAt: data.approvedAt || '',
+      approvalNotes: data.approvalNotes || '',
+      comments: data.comments || [],
+      briefOverviewTitle: data.briefOverviewTitle || 'A brief project summary highlighting the purpose, key objectives, and goals of the redesign.',
+      briefOverviewText: data.briefOverviewText || '',
+      briefSecondaryText: data.briefSecondaryText || '',
+      goals: data.goals || [],
+      directionName: data.directionName || 'Direction One',
+      directionRationale: data.directionRationale || '',
+      logoPrimaryUrl: data.logoPrimaryUrl || '',
+      logoSecondaryUrl: data.logoSecondaryUrl || '',
+      logoSymbolUrl: data.logoSymbolUrl || '',
+      logoSymbolDarkUrl: data.logoSymbolDarkUrl || '',
+      mockupStampMode: data.mockupStampMode || 'auto',
+      isRebrand: Boolean(data.isRebrand),
+      logoBeforeUrl: data.logoBeforeUrl || '',
+      brandBeforeLabel: data.brandBeforeLabel || 'Identidad Anterior',
+      clearspaceUnit: data.clearspaceUnit || '1x',
+      stampPosition: data.stampPosition || 'chest_left',
+      stampScale: data.stampScale || 100,
+      photoSceneMode: data.photoSceneMode || 'studio_3d',
+      iconStrokeWidth: data.iconStrokeWidth || '2px',
+      iconCornerRadius: data.iconCornerRadius || '6px',
+      viewsCount: data.viewsCount || 0,
+      lastViewedAt: data.lastViewedAt || '',
+      slideAnalytics: data.slideAnalytics || {},
+      roundHistory: data.roundHistory || [],
+      donts: data.donts || [
+        { id: 'd1', title: 'Do not stretch or distort proportions', ruleType: 'stretch' },
+        { id: 'd2', title: 'Do not rotate or tilt at arbitrary angles', ruleType: 'rotate' },
+        { id: 'd3', title: 'Do not apply unauthorized gradients or colors', ruleType: 'recolor' },
+        { id: 'd4', title: 'Do not add heavy drop shadows or outlines', ruleType: 'shadow' },
+        { id: 'd5', title: 'Do not place on low-contrast backgrounds', ruleType: 'contrast' },
+        { id: 'd6', title: 'Do not rearrange symbol and logotype lockup', ruleType: 'rearrange' },
+      ],
+      colors: data.colors || [],
+      typography: data.typography || [],
+      statNumber: data.statNumber || '',
+      statLabel: data.statLabel || '',
+      mockupAppIconUrl: data.mockupAppIconUrl || '',
+      mockupMobileScreenUrl: data.mockupMobileScreenUrl || '',
+      mockupMobileUrlWebsite: data.mockupMobileUrlWebsite || '',
+      mockupDesktopScreenUrl: data.mockupDesktopScreenUrl || '',
+      merchItems: data.merchItems || [],
+      otherIdeas: data.otherIdeas || [],
+      nextSteps: data.nextSteps || [],
+      driveFolderId: data.driveFolderId || '',
+      driveFolderName: data.driveFolderName || '',
+      driveFolderUrl: data.driveFolderUrl || '',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.localState.brandGuidelines.unshift(newGuideline);
+    this.saveLocalState();
+    return newGuideline;
+  }
+
+  public async updateBrandGuideline(
+    id: string,
+    tenantId: string,
+    updates: Partial<BrandGuideline>
+  ): Promise<BrandGuideline | null> {
+    if (!this.localState.brandGuidelines) return null;
+    const index = this.localState.brandGuidelines.findIndex(
+      (bg) => bg.id === id && bg.tenantId === tenantId
+    );
+    if (index === -1) return null;
+
+    const existing = this.localState.brandGuidelines[index];
+    const updated: BrandGuideline = {
+      ...existing,
+      ...updates,
+      id: existing.id,
+      tenantId: existing.tenantId,
+      publicToken: existing.publicToken,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.localState.brandGuidelines[index] = updated;
+    this.saveLocalState();
+    return updated;
+  }
+
+  public async deleteBrandGuideline(id: string, tenantId: string): Promise<boolean> {
+    if (!this.localState.brandGuidelines) return false;
+    const initialLen = this.localState.brandGuidelines.length;
+    this.localState.brandGuidelines = this.localState.brandGuidelines.filter(
+      (bg) => bg.id !== id
+    );
+    const deleted = this.localState.brandGuidelines.length < initialLen;
+    if (deleted) this.saveLocalState();
+    return deleted;
+  }
 }
 
 export const db = new DatabaseManager();

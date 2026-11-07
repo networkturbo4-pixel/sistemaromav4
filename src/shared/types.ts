@@ -1649,3 +1649,184 @@ export interface Whiteboard {
   updatedAt: string;
 }
 
+
+
+// =============================================================================
+// SUBMÓDULO: BRAND GUIDELINES / PITCH DECKS DE IDENTIDAD VISUAL
+// =============================================================================
+
+export interface BrandGuidelineColor {
+  id: string;
+  name: string;
+  hex: string;
+  pantone?: string;
+  cmyk?: string;
+  rgb?: string;
+  role?: 'primary' | 'secondary' | 'accent' | 'neutral' | 'dark' | 'light';
+}
+
+export interface BrandGuidelineFont {
+  id: string;
+  role: 'headings' | 'body' | 'accent';
+  fontFamily: string;
+  weight: string;
+  sampleText?: string;
+  customFontDataUrl?: string;
+  customFontFileName?: string;
+}
+
+export interface BrandGuidelineSlideStat {
+  slideId: string;
+  slideTitle: string;
+  views: number;
+  totalSeconds: number;
+}
+
+export interface BrandGuidelineRoundSnapshot {
+  id: string;
+  round: string;
+  savedAt: string;
+  note?: string;
+  logoPrimaryUrl?: string;
+  colors?: BrandGuidelineColor[];
+}
+
+export interface BrandGuidelineGoal {
+  id: string;
+  number: string; // ej: "01", "02", "03"
+  title: string;
+  description: string;
+}
+
+export interface BrandGuidelineMerchItem {
+  id: string;
+  type: 'sweatshirt' | 'tshirt' | 'hoodie' | 'cap' | 'totebag' | 'bottle' | 'badge' | 'laptop' | 'custom';
+  title: string;
+  imageUrl?: string;
+  variant?: 'black' | 'white' | 'gray';
+}
+
+export interface BrandGuidelineOtherIdea {
+  id: string;
+  title: string;
+  svgIcon?: string;
+  imageUrl?: string;
+}
+
+export interface BrandGuidelineStep {
+  id: string;
+  step: string; // ej: "01", "02", "03", "04"
+  title: string;
+  description: string;
+}
+
+export interface BrandGuidelineDontRule {
+  id: string;
+  title: string;
+  ruleType: 'stretch' | 'rotate' | 'recolor' | 'shadow' | 'contrast' | 'rearrange';
+}
+
+export interface BrandGuidelineComment {
+  id: string;
+  slideId: string;
+  slideTitle: string;
+  authorName: string;
+  text: string;
+  resolved?: boolean;
+  createdAt: string;
+}
+
+export type BrandGuidelineStatus = 'draft' | 'in_review' | 'approved' | 'changes_requested';
+
+export interface BrandGuideline {
+  id: string;
+  tenantId: string;
+  projectId?: string | null;
+  projectName?: string;
+  clientId?: string | null;
+  clientName: string;
+  clientLogo?: string;
+  brandName: string;
+  designerName?: string;
+  round?: string; // ej: "Round 1", "Versión Final"
+  date?: string;
+  tagline?: string;
+  publicToken: string;
+  requirePin: boolean;
+  publicPin?: string;
+  themeDefault: 'dark' | 'light';
+  viewModeDefault: 'deck' | 'grid'; // 'deck' (16:9 carrusel) o 'grid' (2x2 showreel como en el video)
+  
+  // Estado de aprobación y feedback del cliente
+  status?: BrandGuidelineStatus;
+  approvedBy?: string;
+  approvedAt?: string;
+  approvalNotes?: string;
+  comments?: BrandGuidelineComment[];
+
+  // Contenidos editoriales
+  briefOverviewTitle?: string;
+  briefOverviewText?: string;
+  briefSecondaryText?: string;
+  
+  // Pilares estratégicos
+  goals: BrandGuidelineGoal[];
+  
+  // Dirección de logotipo y Comparador Antes / Después
+  directionName?: string; // ej: "Direction One"
+  directionRationale?: string;
+  logoPrimaryUrl?: string; // Logo blanco sobre fondo oscuro
+  logoSecondaryUrl?: string; // Logo oscuro sobre fondo claro
+  logoSymbolUrl?: string; // Icono / Isotipo aislado (versión clara o principal)
+  logoSymbolDarkUrl?: string; // Icono / Isotipo aislado (versión oscura sobre fondo claro)
+  mockupStampMode?: 'auto' | 'symbol_only' | 'full_logo'; // Qué estampar en mockups
+  isRebrand?: boolean; // Si es false (Marca Nueva), no se muestra la lámina comparativa Antes vs Después
+  logoBeforeUrl?: string; // Logo anterior para slider comparativo Antes vs Después
+  brandBeforeLabel?: string; // Etiqueta para estado anterior (ej: "Identidad Anterior 2019")
+  clearspaceUnit?: string; // ej: "1x"
+  donts?: BrandGuidelineDontRule[];
+  stampPosition?: 'chest_left' | 'center_large' | 'back_print';
+  stampScale?: number; // 60 a 150 (porcentaje)
+  photoSceneMode?: 'studio_3d' | 'urban_model' | 'coffee_shop' | 'creative_office';
+  iconStrokeWidth?: string; // ej: "2px"
+  iconCornerRadius?: string; // ej: "6px"
+
+  // Analítica (Heatmap) e Historial de Rondas
+  viewsCount?: number;
+  lastViewedAt?: string;
+  slideAnalytics?: Record<string, BrandGuidelineSlideStat>;
+  roundHistory?: BrandGuidelineRoundSnapshot[];
+  
+  // Paleta de colores
+  colors: BrandGuidelineColor[];
+  
+  // Tipografías
+  typography: BrandGuidelineFont[];
+  
+  // Métrica / KPI destacada
+  statNumber?: string; // ej: "$2.5M", "+180%"
+  statLabel?: string; // ej: "Key performance metric"
+  
+  // Mockups digitales
+  mockupAppIconUrl?: string;
+  mockupMobileScreenUrl?: string;
+  mockupMobileUrlWebsite?: string; // ej: "www.pixel-truck.com"
+  mockupDesktopScreenUrl?: string;
+  
+  // Merchandising y aplicaciones
+  merchItems: BrandGuidelineMerchItem[];
+  
+  // Otras ideas / Isotipos alternativos
+  otherIdeas: BrandGuidelineOtherIdea[];
+  
+  // Próximos pasos
+  nextSteps: BrandGuidelineStep[];
+
+  // Kit de Descarga / Google Drive
+  driveFolderId?: string;
+  driveFolderName?: string;
+  driveFolderUrl?: string;
+  
+  createdAt: string;
+  updatedAt: string;
+}

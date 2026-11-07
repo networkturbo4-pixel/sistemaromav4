@@ -37,6 +37,7 @@ import {
 import { PERMISSIONS_CATALOG, hasPermission, hasAnyPermission } from '../shared/permissions';
 import driveRouter from './routes/drive.routes';
 import whiteboardRouter from './routes/whiteboards.routes';
+import brandGuidelinesRouter from './routes/brand-guidelines.routes';
 import { googleDriveService } from './services/googleDriveService';
 import { generateTotpSecret, generateTotpCode, verifyTotpCode, buildOtpAuthUri } from './utils/totp';
 import { notificationService, notifyEvent } from './services/notificationService';
@@ -69,6 +70,10 @@ app.use('/api/drive', driveRouter);
 
 // Módulo de Pizarras Creativas (Whiteboards)
 app.use('/api/workspace/whiteboards', whiteboardRouter);
+
+// Submódulo: Brand Guidelines / Pitch Decks (Público y Privado)
+app.use('/api/workspace/brand-guidelines', brandGuidelinesRouter);
+app.use('/api/brand-guidelines', brandGuidelinesRouter);
 
 // =============================================================================
 // 1. ENDPOINTS PÚBLICOS Y AUTENTICACIÓN POR PIN DE 8 DÍGITOS

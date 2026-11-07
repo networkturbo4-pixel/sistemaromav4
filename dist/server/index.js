@@ -35,6 +35,7 @@ const auth_1 = require("./middleware/auth");
 const permissions_1 = require("../shared/permissions");
 const drive_routes_1 = __importDefault(require("./routes/drive.routes"));
 const whiteboards_routes_1 = __importDefault(require("./routes/whiteboards.routes"));
+const brand_guidelines_routes_1 = __importDefault(require("./routes/brand-guidelines.routes"));
 const googleDriveService_1 = require("./services/googleDriveService");
 const totp_1 = require("./utils/totp");
 const notificationService_1 = require("./services/notificationService");
@@ -58,6 +59,9 @@ app.use(express_1.default.json({ limit: '50mb' }));
 app.use('/api/drive', drive_routes_1.default);
 // Módulo de Pizarras Creativas (Whiteboards)
 app.use('/api/workspace/whiteboards', whiteboards_routes_1.default);
+// Submódulo: Brand Guidelines / Pitch Decks (Público y Privado)
+app.use('/api/workspace/brand-guidelines', brand_guidelines_routes_1.default);
+app.use('/api/brand-guidelines', brand_guidelines_routes_1.default);
 // =============================================================================
 // 1. ENDPOINTS PÚBLICOS Y AUTENTICACIÓN POR PIN DE 8 DÍGITOS
 // =============================================================================

@@ -1,0 +1,2465 @@
+import React, { useState, useEffect } from 'react';
+import {
+  X, Lock, KeyRound, Palette, Type, Plus, Trash2, Check, Sparkles,
+  Smartphone, Monitor, Shirt, Upload, HardDrive, Image as ImageIcon,
+  ShieldCheck, Sliders, FolderCheck, ExternalLink, Maximize2, Minimize2,
+  ClipboardPaste, Eye
+} from 'lucide-react';
+import {
+  BrandGuideline,
+  BrandGuidelineColor,
+  BrandGuidelineDontRule,
+  BrandGuidelineFont,
+  BrandGuidelineGoal,
+  BrandGuidelineOtherIdea,
+  BrandGuidelineStep,
+} from '../../../../../shared/types';
+import { useApp } from '../../../../context/AppContext';
+import { DriveFolderPickerModal } from '../../../../components/DriveFolderPickerModal';
+
+interface BrandGuidelineEditorModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  guideline?: BrandGuideline | null;
+  onSaved: () => void;
+}
+
+// Conversor automático HEX -> RGB, CMYK y aproximación Pantone
+export function hexToColorSpecs(hexInput: string): { rgb: string; cmyk: string; pantone: string } {
+  const clean = hexInput.replace('#', '').trim();
+  if (!/^[0-9A-Fa-f]{6}$/.test(clean)) {
+    return { rgb: '0, 0, 0', cmyk: '0, 0, 0, 100', pantone: 'Black C' };
+  }
+  const r = parseInt(clean.substring(0, 2), 16);
+  const g = parseInt(clean.substring(2, 4), 16);
+  const b = parseInt(clean.substring(4, 6), 16);
+
+  const rNorm = r / 255;
+  const gNorm = g / 255;
+  const bNorm = b / 255;
+  const k = 1 - Math.max(rNorm, gNorm, bNorm);
+
+  let c = 0;
+  let m = 0;
+  let y = 0;
+  if (k < 1) {
+    c = Math.round(((1 - rNorm - k) / (1 - k)) * 100);
+    m = Math.round(((1 - gNorm - k) / (1 - k)) * 100);
+    y = Math.round(((1 - bNorm - k) / (1 - k)) * 100);
+  }
+  const kPct = Math.round(k * 100);
+
+  // Sugerencia inteligente de Pantone según luminosidad y matiz
+  let pantone = 'PMS Custom C';
+  if (r < 25 && g < 25 && b < 25) pantone = 'Black 6 C';
+  else if (r > 240 && g > 240 && b > 240) pantone = 'Bright White';
+  else if (Math.abs(r - g) < 12 && Math.abs(g - b) < 12) {
+    const grayLevel = Math.max(1, Math.min(11, Math.round(((255 - r) / 255) * 11)));
+    pantone = `Cool Gray ${grayLevel} C`;
+  } else {
+    const code = ((r * 3 + g * 5 + b * 7) % 800) + 100;
+    pantone = `PMS ${code} C`;
+  }
+
+  return {
+    rgb: `${r}, ${g}, ${b}`,
+    cmyk: `${c}, ${m}, ${y}, ${kPct}`,
+    pantone,
+  };
+}
+
+const GOOGLE_FONT_OPTIONS = [
+  'Inter',
+  'Space Grotesk',
+  'Plus Jakarta Sans',
+  'Montserrat',
+  'Outfit',
+  'Poppins',
+  'Syne',
+  'Playfair Display',
+  'DM Sans',
+];
+
+export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps> = ({
+  isOpen,
+  onClose,
+  guideline,
+  onSaved,
+}) => {
+  const { toast, apiFetch } = useApp();
+  const isEditing = Boolean(guideline);
+
+  const [activeTab, setActiveTab] = useState<
+    'general' | 'logos' | 'pillars' | 'colors' | 'typography' | 'mockups' | 'steps'
+  >('general');
+  const [saving, setSaving] = useState(false);
+  const [isDrivePickerOpen, setIsDrivePickerOpen] = useState(false);
+  const [isModalFullscreen, setIsModalFullscreen] = useState(false);
+
+  // Campos Generales
+  const [brandName, setBrandName] = useState('');
+  const [clientName, setClientName] = useState('');
+  const [designerName, setDesignerName] = useState('');
+  const [round, setRound] = useState('Round 1');
+  const [date, setDate] = useState('');
+  const [tagline, setTagline] = useState('');
+  const [themeDefault, setThemeDefault] = useState<'dark' | 'light'>('dark');
+  const [viewModeDefault, setViewModeDefault] = useState<'deck' | 'grid'>('deck');
+
+  // SEGURIDAD / SWITCHER DE PIN
+  const [requirePin, setRequirePin] = useState(false);
+  const [publicPin, setPublicPin] = useState('');
+
+  // Logos, Iconos/Isotipos, Antes/Después y Reglas
+  const [directionName, setDirectionName] = useState('Direction One');
+  const [directionRationale, setDirectionRationale] = useState('');
+  const [logoPrimaryUrl, setLogoPrimaryUrl] = useState('');
+  const [logoSecondaryUrl, setLogoSecondaryUrl] = useState('');
+  const [logoSymbolUrl, setLogoSymbolUrl] = useState('');
+  const [logoSymbolDarkUrl, setLogoSymbolDarkUrl] = useState('');
+  const [mockupStampMode, setMockupStampMode] = useState<'auto' | 'symbol_only' | 'full_logo'>('auto');
+  const [otherIdeas, setOtherIdeas] = useState<BrandGuidelineOtherIdea[]>([]);
+  const [activePasteSlot, setActivePasteSlot] = useState<string>('symbol');
+  const [livePreviewColorway, setLivePreviewColorway] = useState<'obsidian' | 'offwhite' | 'brand'>('obsidian');
+  const [isRebrand, setIsRebrand] = useState(false);
+  const [logoBeforeUrl, setLogoBeforeUrl] = useState('');
+  const [brandBeforeLabel, setBrandBeforeLabel] = useState('Identidad Anterior');
+  const [clearspaceUnit, setClearspaceUnit] = useState('1x');
+  const [stampPosition, setStampPosition] = useState<'chest_left' | 'center_large' | 'back_print'>('chest_left');
+  const [stampScale, setStampScale] = useState(100);
+  const [photoSceneMode, setPhotoSceneMode] = useState<'studio_3d' | 'urban_model' | 'coffee_shop' | 'creative_office'>('studio_3d');
+  const [iconStrokeWidth, setIconStrokeWidth] = useState('2px');
+  const [iconCornerRadius, setIconCornerRadius] = useState('6px');
+  const [donts, setDonts] = useState<BrandGuidelineDontRule[]>([]);
+
+  // Brief
+  const [briefOverviewTitle, setBriefOverviewTitle] = useState('');
+  const [briefOverviewText, setBriefOverviewText] = useState('');
+  const [briefSecondaryText, setBriefSecondaryText] = useState('');
+
+  // Pilares
+  const [goals, setGoals] = useState<BrandGuidelineGoal[]>([]);
+
+  // Colores
+  const [colors, setColors] = useState<BrandGuidelineColor[]>([]);
+
+  // Tipografías
+  const [typography, setTypography] = useState<BrandGuidelineFont[]>([]);
+
+  // KPI, Mockups y Google Drive Kit
+  const [statNumber, setStatNumber] = useState('');
+  const [statLabel, setStatLabel] = useState('');
+  const [mockupMobileUrlWebsite, setMockupMobileUrlWebsite] = useState('');
+  const [mockupMobileScreenUrl, setMockupMobileScreenUrl] = useState('');
+  const [mockupDesktopScreenUrl, setMockupDesktopScreenUrl] = useState('');
+  const [driveFolderId, setDriveFolderId] = useState('');
+  const [driveFolderName, setDriveFolderName] = useState('');
+  const [driveFolderUrl, setDriveFolderUrl] = useState('');
+
+  // Próximos pasos
+  const [nextSteps, setNextSteps] = useState<BrandGuidelineStep[]>([]);
+
+  useEffect(() => {
+    if (guideline) {
+      setBrandName(guideline.brandName || '');
+      setClientName(guideline.clientName || '');
+      setDesignerName(guideline.designerName || '');
+      setRound(guideline.round || 'Round 1');
+      setDate(guideline.date || '');
+      setTagline(guideline.tagline || '');
+      setThemeDefault(guideline.themeDefault || 'dark');
+      setViewModeDefault(guideline.viewModeDefault || 'deck');
+      setRequirePin(Boolean(guideline.requirePin));
+      setPublicPin(guideline.publicPin || '');
+      setDirectionName(guideline.directionName || 'Direction One');
+      setDirectionRationale(guideline.directionRationale || '');
+      setLogoPrimaryUrl(guideline.logoPrimaryUrl || '');
+      setLogoSecondaryUrl(guideline.logoSecondaryUrl || '');
+      setLogoSymbolUrl(guideline.logoSymbolUrl || '');
+      setLogoSymbolDarkUrl(guideline.logoSymbolDarkUrl || '');
+      setMockupStampMode(guideline.mockupStampMode || 'auto');
+      setOtherIdeas(
+        guideline.otherIdeas && guideline.otherIdeas.length > 0
+          ? guideline.otherIdeas
+          : [
+              { id: 'oi1', title: 'Isotipo Principal / Variación 01', imageUrl: '' },
+              { id: 'oi2', title: 'Monograma / Variación 02', imageUrl: '' },
+              { id: 'oi3', title: 'Sello / Badge 03', imageUrl: '' },
+              { id: 'oi4', title: 'Icono App / Favicon 04', imageUrl: '' },
+              { id: 'oi5', title: 'Símbolo Simplificado 05', imageUrl: '' },
+              { id: 'oi6', title: 'Marca de Agua / Símbolo 06', imageUrl: '' },
+            ]
+      );
+      setIsRebrand(Boolean(guideline.isRebrand));
+      setLogoBeforeUrl(guideline.logoBeforeUrl || '');
+      setBrandBeforeLabel(guideline.brandBeforeLabel || 'Identidad Anterior');
+      setClearspaceUnit(guideline.clearspaceUnit || '1x');
+      setStampPosition(guideline.stampPosition || 'chest_left');
+      setStampScale(guideline.stampScale || 100);
+      setPhotoSceneMode(guideline.photoSceneMode || 'studio_3d');
+      setIconStrokeWidth(guideline.iconStrokeWidth || '2px');
+      setIconCornerRadius(guideline.iconCornerRadius || '6px');
+      setDonts(
+        guideline.donts && guideline.donts.length > 0
+          ? guideline.donts
+          : [
+              { id: 'd1', title: 'No deformar ni estirar horizontal/verticalmente', ruleType: 'stretch' },
+              { id: 'd2', title: 'No inclinar ni rotar en ángulos arbitrarios', ruleType: 'rotate' },
+              { id: 'd3', title: 'No alterar los colores oficiales de la marca', ruleType: 'recolor' },
+              { id: 'd4', title: 'No aplicar sombras paralelas ni trazos invasivos', ruleType: 'shadow' },
+              { id: 'd5', title: 'No usar sobre fondos sin contraste suficiente', ruleType: 'contrast' },
+              { id: 'd6', title: 'No alterar la proporción entre isotipo y logotipo', ruleType: 'rearrange' },
+            ]
+      );
+      setBriefOverviewTitle(guideline.briefOverviewTitle || '');
+      setBriefOverviewText(guideline.briefOverviewText || '');
+      setBriefSecondaryText(guideline.briefSecondaryText || '');
+      setGoals(guideline.goals || []);
+      setColors(guideline.colors || []);
+      setTypography(guideline.typography || []);
+      setStatNumber(guideline.statNumber || '');
+      setStatLabel(guideline.statLabel || '');
+      setMockupMobileUrlWebsite(guideline.mockupMobileUrlWebsite || '');
+      setMockupMobileScreenUrl(guideline.mockupMobileScreenUrl || '');
+      setMockupDesktopScreenUrl(guideline.mockupDesktopScreenUrl || '');
+      setDriveFolderId(guideline.driveFolderId || '');
+      setDriveFolderName(guideline.driveFolderName || '');
+      setDriveFolderUrl(guideline.driveFolderUrl || '');
+      setNextSteps(guideline.nextSteps || []);
+    } else {
+      setBrandName('');
+      setClientName('');
+      setDesignerName('Equipo Creativo Roma');
+      setRound('Round 1');
+      setDate(new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }));
+      setTagline('');
+      setThemeDefault('dark');
+      setViewModeDefault('deck');
+      setRequirePin(true);
+      setPublicPin('1234');
+      setDirectionName('Direction One');
+      setDirectionRationale(
+        'This direction provides a brief overview of the logo concept, focusing on its inspiration, design rationale, and core message.'
+      );
+      setLogoPrimaryUrl('');
+      setLogoSecondaryUrl('');
+      setLogoSymbolUrl('');
+      setLogoSymbolDarkUrl('');
+      setMockupStampMode('auto');
+      setOtherIdeas([
+        { id: 'oi1', title: 'Isotipo Principal / Variación 01', imageUrl: '' },
+        { id: 'oi2', title: 'Monograma / Variación 02', imageUrl: '' },
+        { id: 'oi3', title: 'Sello / Badge 03', imageUrl: '' },
+        { id: 'oi4', title: 'Icono App / Favicon 04', imageUrl: '' },
+        { id: 'oi5', title: 'Símbolo Simplificado 05', imageUrl: '' },
+        { id: 'oi6', title: 'Marca de Agua / Símbolo 06', imageUrl: '' },
+      ]);
+      setIsRebrand(false);
+      setLogoBeforeUrl('');
+      setBrandBeforeLabel('Identidad Anterior');
+      setClearspaceUnit('1x');
+      setStampPosition('chest_left');
+      setStampScale(100);
+      setPhotoSceneMode('studio_3d');
+      setIconStrokeWidth('2px');
+      setIconCornerRadius('6px');
+      setDonts([
+        { id: 'd1', title: 'No deformar ni estirar horizontal/verticalmente', ruleType: 'stretch' },
+        { id: 'd2', title: 'No inclinar ni rotar en ángulos arbitrarios', ruleType: 'rotate' },
+        { id: 'd3', title: 'No alterar los colores oficiales de la marca', ruleType: 'recolor' },
+        { id: 'd4', title: 'No aplicar sombras paralelas ni trazos invasivos', ruleType: 'shadow' },
+        { id: 'd5', title: 'No usar sobre fondos sin contraste suficiente', ruleType: 'contrast' },
+        { id: 'd6', title: 'No alterar la proporción entre isotipo y logotipo', ruleType: 'rearrange' },
+      ]);
+      setBriefOverviewTitle(
+        'A brief project summary highlighting the purpose, key objectives, and goals of the redesign.'
+      );
+      setBriefOverviewText(
+        'This project overview provides a concise summary of the rebranding project, outlining the purpose and key objectives of the redesign.'
+      );
+      setBriefSecondaryText(
+        'Additionally, this section describes the desired look and feel of the new logo and core values.'
+      );
+      setGoals([
+        {
+          id: '1',
+          number: '01',
+          title: 'Modernization',
+          description:
+            'Update the brand visual identity to feel modern and aligned with contemporary standards.',
+        },
+        {
+          id: '2',
+          number: '02',
+          title: 'Competitive Differentiation',
+          description:
+            'Refine the brand to stand out clearly from competitors with unique positioning.',
+        },
+        {
+          id: '3',
+          number: '03',
+          title: 'Simplification',
+          description:
+            'Streamline complex brand elements into a clean and recognizable system.',
+        },
+      ]);
+      setColors([
+        { id: '1', name: 'Pitch Black', hex: '#111111', role: 'dark', pantone: 'Black 6 C', rgb: '17, 17, 17', cmyk: '0, 0, 0, 93' },
+        { id: '2', name: 'Slate Gray', hex: '#636569', role: 'secondary', pantone: 'Cool Gray 9 C', rgb: '99, 101, 105', cmyk: '6, 4, 0, 59' },
+        { id: '3', name: 'Silver Mist', hex: '#CACBCE', role: 'neutral', pantone: 'Cool Gray 3 C', rgb: '202, 203, 206', cmyk: '2, 1, 0, 19' },
+        { id: '4', name: 'Pure Canvas', hex: '#FFFFFF', role: 'light', pantone: 'Bright White', rgb: '255, 255, 255', cmyk: '0, 0, 0, 0' },
+      ]);
+      setTypography([
+        {
+          id: '1',
+          role: 'headings',
+          fontFamily: 'Inter',
+          weight: 'Regular / SemiBold',
+          sampleText: 'The quick brown fox jumps over the lazy dog',
+        },
+        {
+          id: '2',
+          role: 'body',
+          fontFamily: 'Inter',
+          weight: 'Regular',
+          sampleText: 'The quick brown fox jumps over the lazy dog',
+        },
+      ]);
+      setStatNumber('$2.5M');
+      setStatLabel('Key performance metric & market target');
+      setMockupMobileUrlWebsite('www.brandname.com');
+      setMockupMobileScreenUrl('');
+      setMockupDesktopScreenUrl('');
+      setDriveFolderId('');
+      setDriveFolderName('');
+      setDriveFolderUrl('');
+      setNextSteps([
+        { id: '1', step: '01', title: 'Review & Feedback', description: 'Share your thoughts on the logo design.' },
+        { id: '2', step: '02', title: 'Revisions (if necessary)', description: 'We will refine the design based on your feedback.' },
+        { id: '3', step: '03', title: 'Final Approval', description: 'Once approved, we will proceed with finalizing vectors.' },
+        { id: '4', step: '04', title: 'File Delivery', description: 'Delivery of all logo formats and production assets.' },
+      ]);
+    }
+  }, [guideline, isOpen]);
+
+  if (!isOpen) return null;
+
+  // Extraer paleta dominante desde un logo cargado usando HTML5 Canvas
+  const extractColorsFromLogo = (imgSrc?: string) => {
+    const source = imgSrc || logoPrimaryUrl || logoSecondaryUrl || logoSymbolUrl;
+    if (!source) {
+      toast('Primero sube un logo (PNG/SVG/JPG) para extraer sus colores', 'error');
+      return;
+    }
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        const size = 64;
+        canvas.width = size;
+        canvas.height = size;
+        ctx.drawImage(img, 0, 0, size, size);
+        const data = ctx.getImageData(0, 0, size, size).data;
+
+        const buckets: Record<string, { r: number; g: number; b: number; count: number }> = {};
+        for (let i = 0; i < data.length; i += 4) {
+          const a = data[i + 3];
+          if (a < 110) continue; // Ignorar píxeles transparentes
+          // Cuantizar en bloques de 24 para agrupar tonos cercanos
+          const rq = Math.min(255, Math.round(data[i] / 24) * 24);
+          const gq = Math.min(255, Math.round(data[i + 1] / 24) * 24);
+          const bq = Math.min(255, Math.round(data[i + 2] / 24) * 24);
+          const key = `${rq}_${gq}_${bq}`;
+          if (!buckets[key]) buckets[key] = { r: rq, g: gq, b: bq, count: 0 };
+          buckets[key].count++;
+        }
+
+        const sorted = Object.values(buckets)
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 4);
+
+        if (sorted.length === 0) {
+          toast('No se detectaron colores sólidos suficientes en la imagen', 'error');
+          return;
+        }
+
+        const roleNames = ['Brand Primary', 'Brand Secondary', 'Accent Tone', 'Surface Neutral'];
+        const extracted: BrandGuidelineColor[] = sorted.map((item, idx) => {
+          const hex = `#${item.r.toString(16).padStart(2, '0')}${item.g
+            .toString(16)
+            .padStart(2, '0')}${item.b.toString(16).padStart(2, '0')}`.toUpperCase();
+          const specs = hexToColorSpecs(hex);
+          return {
+            id: `ext_${Date.now()}_${idx}`,
+            name: roleNames[idx] || `Brand Color ${idx + 1}`,
+            hex,
+            rgb: specs.rgb,
+            cmyk: specs.cmyk,
+            pantone: specs.pantone,
+          };
+        });
+
+        // Asegurar contraste base si hay menos de 4
+        if (extracted.length < 4) {
+          const darkSpecs = hexToColorSpecs('#111111');
+          extracted.push({
+            id: `ext_${Date.now()}_dark`,
+            name: 'Obsidian Core',
+            hex: '#111111',
+            rgb: darkSpecs.rgb,
+            cmyk: darkSpecs.cmyk,
+            pantone: darkSpecs.pantone,
+          });
+        }
+
+        setColors(extracted);
+        toast(`¡${extracted.length} colores dominantes extraídos del logo con RGB/CMYK/Pantone!`, 'success');
+      } catch {
+        toast('No se pudo analizar la imagen automáticamente', 'error');
+      }
+    };
+    img.src = source;
+  };
+
+  // Subir archivo local desde PC (PNG/SVG/JPG -> DataURL)
+  const handleFileUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: (val: string) => void
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 15 * 1024 * 1024) {
+      toast('El archivo supera el límite de 15MB', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setter(reader.result);
+        toast('Imagen cargada y lista para estampar en mockups', 'success');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Convierte código XML <svg> (copiado desde Adobe Illustrator o Figma) a DataURL vectorial
+  const svgStringToDataUrl = (rawText: string): string | null => {
+    const trimmed = rawText.trim();
+    const svgMatch = trimmed.match(/<svg[\s\S]*?<\/svg>/i);
+    if (!svgMatch) return null;
+    let svgCode = svgMatch[0];
+    if (!/xmlns=/i.test(svgCode)) {
+      svgCode = svgCode.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+    try {
+      const encoded = window.btoa(unescape(encodeURIComponent(svgCode)));
+      return `data:image/svg+xml;base64,${encoded}`;
+    } catch {
+      return `data:image/svg+xml;utf8,${encodeURIComponent(svgCode)}`;
+    }
+  };
+
+  // Pegar con Ctrl+V directamente sobre cualquier caja (Soporta Adobe Illustrator SVG y Capturas de Pantalla PNG)
+  const handleClipboardPasteEvent = (
+    e: React.ClipboardEvent,
+    setter: (val: string) => void,
+    slotLabel: string
+  ) => {
+    const clipboardData = e.clipboardData;
+    if (!clipboardData) return;
+
+    // 1. Verificar si viene texto con <svg> (Adobe Illustrator / Figma / Inkscape)
+    const plainText = clipboardData.getData('text/plain') || clipboardData.getData('image/svg+xml');
+    if (plainText) {
+      const svgUrl = svgStringToDataUrl(plainText);
+      if (svgUrl) {
+        e.preventDefault();
+        setter(svgUrl);
+        toast(`✨ Vector SVG pegado desde Illustrator en "${slotLabel}"`, 'success');
+        return;
+      }
+      if (/^data:image\//i.test(plainText.trim()) || /^https?:\/\/.+/i.test(plainText.trim())) {
+        e.preventDefault();
+        setter(plainText.trim());
+        toast(`Imagen pegada en "${slotLabel}"`, 'success');
+        return;
+      }
+    }
+
+    // 2. Verificar si viene una imagen o captura de pantalla (Win+Shift+S / PrtScn / Copiar imagen)
+    const items = clipboardData.items;
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.indexOf('image') !== -1) {
+          const blob = item.getAsFile();
+          if (blob) {
+            e.preventDefault();
+            const reader = new FileReader();
+            reader.onload = () => {
+              if (typeof reader.result === 'string') {
+                setter(reader.result);
+                toast(`📸 Captura / Imagen pegada en "${slotLabel}"`, 'success');
+              }
+            };
+            reader.readAsDataURL(blob);
+            return;
+          }
+        }
+      }
+    }
+  };
+
+  // Botón directo "Pegar (Illustrator / Captura)" usando la API navigator.clipboard
+  const handlePasteButtonClick = async (setter: (val: string) => void, slotLabel: string) => {
+    try {
+      // 1. Intentar leer items binarios o SVG del portapapeles (Capturas de pantalla o imágenes copiadas)
+      if (navigator.clipboard && navigator.clipboard.read) {
+        try {
+          const clipboardItems = await navigator.clipboard.read();
+          for (const item of clipboardItems) {
+            // Si hay texto plano con <svg> (Adobe Illustrator copia el vector como texto XML <svg>)
+            if (item.types.includes('text/plain')) {
+              const textBlob = await item.getType('text/plain');
+              const textContent = await textBlob.text();
+              const svgUrl = svgStringToDataUrl(textContent);
+              if (svgUrl) {
+                setter(svgUrl);
+                toast(`✨ Vector SVG pegado desde Illustrator en "${slotLabel}"`, 'success');
+                return;
+              }
+            }
+            // Si hay imagen PNG/JPEG/SVG (Captura de pantalla Win+Shift+S o copia de imagen)
+            const imgType = item.types.find((t) => t.startsWith('image/'));
+            if (imgType) {
+              const blob = await item.getType(imgType);
+              const reader = new FileReader();
+              reader.onload = () => {
+                if (typeof reader.result === 'string') {
+                  setter(reader.result);
+                  toast(`📸 Captura / Imagen pegada en "${slotLabel}"`, 'success');
+                }
+              };
+              reader.readAsDataURL(blob);
+              return;
+            }
+          }
+        } catch {
+          // Si falla read(), probamos readText() debajo
+        }
+      }
+
+      // 2. Fallback a navigator.clipboard.readText() para vectores SVG de Illustrator
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          const svgUrl = svgStringToDataUrl(text);
+          if (svgUrl) {
+            setter(svgUrl);
+            toast(`✨ Vector SVG pegado desde Illustrator en "${slotLabel}"`, 'success');
+            return;
+          }
+          if (/^data:image\//i.test(text.trim()) || /^https?:\/\/.+/i.test(text.trim())) {
+            setter(text.trim());
+            toast(`Imagen pegada en "${slotLabel}"`, 'success');
+            return;
+          }
+        }
+      }
+
+      toast(
+        'Haz clic en el recuadro y presiona Ctrl+V para pegar desde Illustrator o una captura de pantalla',
+        'error'
+      );
+    } catch {
+      toast(
+        'Haz clic en el recuadro y presiona Ctrl+V en tu teclado para pegar tu vector o captura',
+        'error'
+      );
+    }
+  };
+
+  // Soporte Drag & Drop sobre cualquier caja de logo/icono
+  const handleDropFile = (
+    e: React.DragEvent,
+    setter: (val: string) => void,
+    slotLabel: string
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setter(reader.result);
+        toast(`Archivo cargado en "${slotLabel}"`, 'success');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Subir fuente personalizada (.TTF / .OTF / .WOFF2) desde PC
+  const handleCustomFontUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    fontIdx: number
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 12 * 1024 * 1024) {
+      toast('El archivo de fuente supera el límite de 12MB', 'error');
+      return;
+    }
+    const cleanName = file.name.replace(/\.(ttf|otf|woff2|woff)$/i, '').replace(/[^a-zA-Z0-9_-]/g, ' ');
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        const updated = [...typography];
+        updated[fontIdx] = {
+          ...updated[fontIdx],
+          fontFamily: cleanName || 'CustomBrandFont',
+          customFontDataUrl: reader.result,
+          customFontFileName: file.name,
+        };
+        setTypography(updated);
+        toast(`Fuente "${file.name}" cargada para el Type Tester y láminas`, 'success');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!brandName.trim()) {
+      toast('Ingresa el nombre de la marca', 'error');
+      return;
+    }
+    if (requirePin && !publicPin.trim()) {
+      toast('Ingresa un PIN numérico o desactiva la protección por PIN', 'error');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const payload = {
+        brandName: brandName.trim(),
+        clientName: clientName.trim() || 'Cliente',
+        designerName: designerName.trim(),
+        round: round.trim(),
+        date: date.trim(),
+        tagline: tagline.trim(),
+        themeDefault,
+        viewModeDefault,
+        requirePin,
+        publicPin: publicPin.trim(),
+        directionName: directionName.trim(),
+        directionRationale: directionRationale.trim(),
+        logoPrimaryUrl,
+        logoSecondaryUrl,
+        logoSymbolUrl,
+        logoSymbolDarkUrl,
+        mockupStampMode,
+        otherIdeas,
+        isRebrand,
+        logoBeforeUrl,
+        brandBeforeLabel: brandBeforeLabel.trim(),
+        clearspaceUnit: clearspaceUnit.trim() || '1x',
+        stampPosition,
+        stampScale,
+        photoSceneMode,
+        iconStrokeWidth,
+        iconCornerRadius,
+        donts,
+        briefOverviewTitle,
+        briefOverviewText,
+        briefSecondaryText,
+        goals,
+        colors,
+        typography,
+        statNumber,
+        statLabel,
+        mockupMobileUrlWebsite,
+        mockupMobileScreenUrl,
+        mockupDesktopScreenUrl,
+        driveFolderId,
+        driveFolderName,
+        driveFolderUrl,
+        nextSteps,
+      };
+
+      const url = isEditing
+        ? `/api/workspace/brand-guidelines/${guideline!.id}`
+        : '/api/workspace/brand-guidelines';
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const res = await apiFetch(url, {
+        method,
+        body: JSON.stringify(payload),
+      });
+
+      if (res && res.success) {
+        toast(isEditing ? 'Brand Guideline actualizado' : 'Brand Guideline creado exitosamente', 'success');
+        onSaved();
+        onClose();
+      } else {
+        throw new Error(res?.error || 'Error al guardar');
+      }
+    } catch (err: any) {
+      console.error('Error saving brand guideline:', err);
+      toast(err.message || 'Error al guardar la presentación', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addColor = () => {
+    const specs = hexToColorSpecs('#3B82F6');
+    setColors([
+      ...colors,
+      {
+        id: `c_${Date.now()}`,
+        name: 'Brand Accent',
+        hex: '#3B82F6',
+        role: 'accent',
+        rgb: specs.rgb,
+        cmyk: specs.cmyk,
+        pantone: specs.pantone,
+      },
+    ]);
+  };
+
+  const removeColor = (id: string) => {
+    setColors(colors.filter((c) => c.id !== id));
+  };
+
+  // Actualiza color y recalcula automáticamente RGB, CMYK y Pantone si cambia el HEX
+  const updateColor = (id: string, field: keyof BrandGuidelineColor, value: string) => {
+    setColors(
+      colors.map((c) => {
+        if (c.id !== id) return c;
+        if (field === 'hex') {
+          const specs = hexToColorSpecs(value);
+          return {
+            ...c,
+            hex: value,
+            rgb: specs.rgb,
+            cmyk: specs.cmyk,
+            pantone: specs.pantone,
+          };
+        }
+        return { ...c, [field]: value };
+      })
+    );
+  };
+
+  return (
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm animate-fadeIn ${
+        isModalFullscreen ? 'p-0' : 'p-2 sm:p-4 md:p-6'
+      }`}
+    >
+      <div
+        className={`bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex flex-col shadow-2xl overflow-hidden transition-all duration-200 ${
+          isModalFullscreen
+            ? 'w-screen h-screen max-w-none max-h-none rounded-none border-0'
+            : 'w-[96vw] max-w-[1440px] h-[92vh] rounded-3xl'
+        }`}
+      >
+        {/* Header Modal */}
+        <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0 bg-white dark:bg-zinc-900">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-zinc-950 text-white flex items-center justify-center font-bold shadow-md">
+              <Sparkles className="w-5 h-5 text-amber-400" />
+            </div>
+            <div>
+              <h3 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-white tracking-tight">
+                {isEditing
+                  ? `Configurar Brand Guideline: ${brandName || guideline?.brandName}`
+                  : 'Nuevo Brand Guideline / Pitch Deck Studio'}
+              </h3>
+              <p className="text-xs text-zinc-500">
+                Estudio Widescreen • Auto-estampado en mockups 3D, conversión HEX/RGB/CMYK, Type Tester, Safe Zone y Drive Kit.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {isEditing && guideline?.publicToken && (
+              <a
+                href={`/brand/${guideline.publicToken}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-xs font-bold text-zinc-800 dark:text-zinc-200 transition"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Ver Vista Pública</span>
+              </a>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setIsModalFullscreen(!isModalFullscreen)}
+              title={isModalFullscreen ? 'Restaurar ventana' : 'Maximizar a pantalla completa'}
+              className="p-2.5 rounded-xl text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer transition"
+            >
+              {isModalFullscreen ? (
+                <Minimize2 className="w-4 h-4" />
+              ) : (
+                <Maximize2 className="w-4 h-4" />
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2.5 rounded-xl text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Layout Principal Widescreen: Sidebar Lateral + Panel de Edición */}
+        <form onSubmit={handleSave} className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+          {/* Sidebar de Navegación (Sin barra de scroll horizontal) */}
+          <aside className="w-full lg:w-72 border-b lg:border-b-0 lg:border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/50 p-3 sm:p-4 flex lg:flex-col justify-between shrink-0 overflow-x-auto lg:overflow-y-auto gap-2">
+            <div className="flex lg:flex-col gap-1.5 w-full">
+              {[
+                { id: 'general', label: '1. General y PIN', desc: 'Identidad, cliente y acceso' },
+                { id: 'logos', label: '2. Logos, Mockups & Reglas', desc: 'Archivos PNG/SVG, Safe Zone' },
+                { id: 'pillars', label: '3. Brief y Pilares', desc: 'Objetivos y narrativa' },
+                { id: 'colors', label: '4. Paleta (Auto RGB/CMYK)', desc: `${colors.length} colores activos` },
+                { id: 'typography', label: '5. Tipografía & Tester', desc: `${typography[0]?.fontFamily || 'Inter'}` },
+                { id: 'mockups', label: '6. Drive Kit & Web', desc: driveFolderName ? 'Drive vinculado' : 'Entregables y URLs' },
+                { id: 'steps', label: '7. Próximos Pasos', desc: `${nextSteps.length} etapas de cierre` },
+              ].map((tab) => {
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id as any)}
+                    className={`px-3.5 py-2.5 rounded-2xl text-left transition cursor-pointer shrink-0 lg:w-full flex flex-col ${
+                      isActive
+                        ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-md'
+                        : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/60 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <span className="text-xs font-bold whitespace-nowrap">{tab.label}</span>
+                    <span
+                      className={`text-[10px] hidden lg:block truncate mt-0.5 ${
+                        isActive ? 'text-zinc-300 dark:text-zinc-600' : 'text-zinc-400'
+                      }`}
+                    >
+                      {tab.desc}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Tarjeta de Resumen en Vivo en el Sidebar (Desktop) */}
+            <div className="hidden lg:flex flex-col gap-3 p-4 rounded-2xl bg-zinc-900 text-white border border-zinc-800 mt-4">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">
+                  Vista Previa Rápida
+                </span>
+                <span
+                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+                    requirePin
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      : 'bg-emerald-500/20 text-emerald-300'
+                  }`}
+                >
+                  {requirePin ? `PIN: ${publicPin || 'Activo'}` : 'Público'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden shrink-0">
+                  {logoSymbolUrl || logoPrimaryUrl ? (
+                    <img
+                      src={logoSymbolUrl || logoPrimaryUrl}
+                      alt="Logo"
+                      className="h-6 w-6 object-contain"
+                    />
+                  ) : (
+                    <span className="text-xs font-bold">
+                      {(brandName || 'BR').slice(0, 2).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold truncate">{brandName || 'Sin nombre'}</p>
+                  <p className="text-[10px] text-zinc-400 truncate">
+                    {clientName || 'Cliente'} • {round}
+                  </p>
+                </div>
+              </div>
+
+              {/* Mini muestras de color */}
+              <div className="flex items-center gap-1 pt-1">
+                {colors.slice(0, 6).map((c, i) => (
+                  <div
+                    key={c.id || i}
+                    style={{ backgroundColor: c.hex }}
+                    title={`${c.name} (${c.hex})`}
+                    className="h-5 flex-1 rounded-md border border-white/15"
+                  />
+                ))}
+              </div>
+            </div>
+          </aside>
+
+          {/* Contenido Principal Scrolleable y Amplio */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 lg:p-10 space-y-6">
+          {/* =============================================================== */}
+          {/* TAB 1: GENERAL Y SWITCHER DE PIN                                */}
+          {/* =============================================================== */}
+          {activeTab === 'general' && (
+            <div className="space-y-6">
+              {/* SECCIÓN DESTACADA: SWITCHER DE PROTECCIÓN CON PIN */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-zinc-900 text-white border border-zinc-800 shadow-md space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0">
+                      <Lock className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold tracking-tight">
+                        Proteger Vista Pública con PIN
+                      </h4>
+                      <p className="text-xs text-zinc-400">
+                        Si está activo, el cliente deberá ingresar este PIN confidencial para ver el Pitch Deck.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setRequirePin(!requirePin)}
+                    className={`w-12 h-6.5 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 ease-in-out shrink-0 ${
+                      requirePin ? 'bg-emerald-500' : 'bg-zinc-700'
+                    }`}
+                  >
+                    <div
+                      className={`bg-white w-4.5 h-4.5 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
+                        requirePin ? 'translate-x-5.5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {requirePin && (
+                  <div className="pt-3 border-t border-zinc-800 flex flex-col sm:flex-row sm:items-center gap-3 animate-fadeIn">
+                    <label className="text-xs font-mono text-zinc-300 shrink-0">
+                      PIN de Acceso Confidencial:
+                    </label>
+                    <div className="relative flex-1 max-w-xs">
+                      <input
+                        type="text"
+                        value={publicPin}
+                        onChange={(e) => setPublicPin(e.target.value.replace(/\s+/g, ''))}
+                        placeholder="Ej: 1234"
+                        maxLength={8}
+                        className="w-full px-3.5 py-2 pl-9 rounded-xl bg-zinc-950 border border-zinc-700 font-mono text-sm tracking-widest text-emerald-400 focus:outline-none focus:border-emerald-500"
+                      />
+                      <KeyRound className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    </div>
+                    <span className="text-[11px] text-zinc-400 font-mono">
+                      (Sugerido: 4 a 8 dígitos)
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Datos de la Marca */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Nombre de la Marca *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={brandName}
+                    onChange={(e) => setBrandName(e.target.value)}
+                    placeholder="Ej: PixelTruck"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:border-zinc-900 dark:focus:border-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Cliente / Empresa
+                  </label>
+                  <input
+                    type="text"
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                    placeholder="Ej: PixelTruck Logistics SAC"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:border-zinc-900 dark:focus:border-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Diseñador / Estudio Responsable
+                  </label>
+                  <input
+                    type="text"
+                    value={designerName}
+                    onChange={(e) => setDesignerName(e.target.value)}
+                    placeholder="Ej: Roma Agencia Creativa"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:border-zinc-900 dark:focus:border-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Ronda / Versión
+                  </label>
+                  <input
+                    type="text"
+                    value={round}
+                    onChange={(e) => setRound(e.target.value)}
+                    placeholder="Ej: Round 1, Versión Final"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:border-zinc-900 dark:focus:border-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Eslogan o Propuesta de Valor Corta
+                </label>
+                <input
+                  type="text"
+                  value={tagline}
+                  onChange={(e) => setTagline(e.target.value)}
+                  placeholder="Ej: Modern Logistics & Scalable Tech Platform"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:border-zinc-900 dark:focus:border-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Tema Inicial por Defecto
+                  </label>
+                  <select
+                    value={themeDefault}
+                    onChange={(e) => setThemeDefault(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm focus:outline-none"
+                  >
+                    <option value="dark">Dark Deck (#111111 - Como en el video)</option>
+                    <option value="light">Light Deck (Blanco Inmaculado)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Modo de Visualización por Defecto
+                  </label>
+                  <select
+                    value={viewModeDefault}
+                    onChange={(e) => setViewModeDefault(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm focus:outline-none"
+                  >
+                    <option value="deck">Presentación 16:9 (Diapositiva por diapositiva)</option>
+                    <option value="grid">Cuadrícula 2x2 (Showreel pliego de 4 slides)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* TAB 2: LOGOS, ICONOS/ISOTIPOS, VISUALIZADOR EN VIVO Y REGLAS    */}
+          {/* =============================================================== */}
+          {activeTab === 'logos' && (
+            <div className="space-y-6">
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-300 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <Sparkles className="w-5 h-5 shrink-0" />
+                  <span>
+                    <strong>Auto-Branding + Pegado directo (Ctrl+V):</strong> Puedes subir PNG/SVG o{' '}
+                    <strong>copiar desde Adobe Illustrator (Ctrl+C) / hacer captura de pantalla y pegar (Ctrl+V)</strong>{' '}
+                    directamente en cada recuadro de Logo o Icono/Isotipo.
+                  </span>
+                </div>
+                {(logoPrimaryUrl || logoSecondaryUrl || logoSymbolUrl || logoSymbolDarkUrl) && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      extractColorsFromLogo(
+                        logoSymbolUrl || logoSymbolDarkUrl || logoPrimaryUrl || logoSecondaryUrl
+                      )
+                    }
+                    className="px-3 py-1.5 rounded-xl bg-amber-500 text-zinc-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer hover:bg-amber-400 transition shrink-0"
+                  >
+                    <Palette className="w-3.5 h-3.5" />
+                    <span>Extraer Paleta del Logo / Icono</span>
+                  </button>
+                )}
+              </div>
+
+              {/* SWITCHER: ¿MARCA NUEVA O REBRANDING (ANTES VS DESPUÉS)? */}
+              <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-white">
+                    ¿Es un Rebranding (Comparar Antes vs. Después)?
+                  </h4>
+                  <p className="text-xs text-zinc-500">
+                    Si es una <strong>Marca Nueva desde cero</strong>, mantenlo desactivado para ocultar la lámina comparativa &quot;Antes vs. Después&quot;. Actívalo solo cuando rediseñes un logo existente.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs font-mono font-bold text-zinc-500">
+                    {isRebrand ? 'Rebranding (Muestra Antes/Después)' : 'Marca Nueva (Sin Antes/Después)'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsRebrand(!isRebrand)}
+                    className={`w-12 h-6.5 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 shrink-0 ${
+                      isRebrand ? 'bg-amber-500' : 'bg-zinc-400 dark:bg-zinc-700'
+                    }`}
+                  >
+                    <div
+                      className={`bg-white w-4.5 h-4.5 rounded-full shadow-md transform transition-transform duration-200 ${
+                        isRebrand ? 'translate-x-5.5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              {/* =========================================================== */}
+              {/* 4 CAJAS DE IDENTIDAD: LOGOS COMPLETOS + ICONOS / ISOTIPOS   */}
+              {/* =========================================================== */}
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                    1. Archivos de Identidad: Logo Completo + Icono / Isotipo (Símbolo para Mockups y Presentación)
+                  </h4>
+                  <span className="text-[11px] font-mono text-amber-500">
+                    💡 Haz clic en cualquier recuadro y presiona Ctrl+V para pegar desde Illustrator o Captura
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* 1. Logo Principal Claro (Sobre fondo oscuro) */}
+                  <div
+                    tabIndex={0}
+                    onFocus={() => setActivePasteSlot('primary')}
+                    onPaste={(e) => handleClipboardPasteEvent(e, setLogoPrimaryUrl, 'Logo Principal (Claro)')}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => handleDropFile(e, setLogoPrimaryUrl, 'Logo Principal (Claro)')}
+                    className={`p-3.5 rounded-2xl border transition bg-zinc-950 text-white space-y-2.5 outline-none ${
+                      activePasteSlot === 'primary'
+                        ? 'border-amber-400 ring-2 ring-amber-400/25'
+                        : 'border-zinc-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold">Logo Principal (Claro)</span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
+                        Fondo Oscuro
+                      </span>
+                    </div>
+                    <div
+                      onClick={() => setActivePasteSlot('primary')}
+                      className="h-24 rounded-xl border border-dashed border-zinc-700 hover:border-amber-400/60 flex flex-col items-center justify-center p-2 bg-[#111111] cursor-pointer relative"
+                    >
+                      {logoPrimaryUrl ? (
+                        <img src={logoPrimaryUrl} alt="Logo claro" className="max-h-16 object-contain" />
+                      ) : (
+                        <div className="text-center space-y-1">
+                          <span className="text-[10px] font-mono text-zinc-400 block">
+                            Clic aquí + Ctrl+V
+                          </span>
+                          <span className="text-[9px] text-zinc-500 block">
+                            (Illustrator / Captura / Archivo)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <label className="flex-1 py-1.5 px-2 rounded-xl bg-white text-zinc-950 text-[11px] font-bold text-center cursor-pointer hover:bg-zinc-200 transition flex items-center justify-center gap-1">
+                        <Upload className="w-3 h-3" />
+                        <span>Subir</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleFileUpload(e, setLogoPrimaryUrl)}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handlePasteButtonClick(setLogoPrimaryUrl, 'Logo Principal (Claro)')}
+                        className="py-1.5 px-2.5 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/30 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                        title="Pegar vector copiado de Adobe Illustrator o captura de pantalla"
+                      >
+                        <ClipboardPaste className="w-3 h-3" />
+                        <span>Pegar</span>
+                      </button>
+                      {logoPrimaryUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setLogoPrimaryUrl('')}
+                          className="p-1.5 rounded-xl bg-zinc-800 text-rose-400 hover:bg-zinc-700 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 2. Logo Secundario Oscuro (Sobre fondo claro) */}
+                  <div
+                    tabIndex={0}
+                    onFocus={() => setActivePasteSlot('secondary')}
+                    onPaste={(e) => handleClipboardPasteEvent(e, setLogoSecondaryUrl, 'Logo Secundario (Oscuro)')}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => handleDropFile(e, setLogoSecondaryUrl, 'Logo Secundario (Oscuro)')}
+                    className={`p-3.5 rounded-2xl border transition bg-zinc-100 text-zinc-900 space-y-2.5 outline-none ${
+                      activePasteSlot === 'secondary'
+                        ? 'border-amber-500 ring-2 ring-amber-500/25'
+                        : 'border-zinc-200 dark:border-zinc-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold">Logo Secundario (Oscuro)</span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-zinc-200 text-zinc-600">
+                        Fondo Claro
+                      </span>
+                    </div>
+                    <div
+                      onClick={() => setActivePasteSlot('secondary')}
+                      className="h-24 rounded-xl border border-dashed border-zinc-300 hover:border-amber-500 flex flex-col items-center justify-center p-2 bg-white cursor-pointer"
+                    >
+                      {logoSecondaryUrl ? (
+                        <img src={logoSecondaryUrl} alt="Logo oscuro" className="max-h-16 object-contain" />
+                      ) : (
+                        <div className="text-center space-y-1">
+                          <span className="text-[10px] font-mono text-zinc-500 block">
+                            Clic aquí + Ctrl+V
+                          </span>
+                          <span className="text-[9px] text-zinc-400 block">
+                            (Illustrator / Captura / Archivo)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <label className="flex-1 py-1.5 px-2 rounded-xl bg-zinc-900 text-white text-[11px] font-bold text-center cursor-pointer hover:bg-black transition flex items-center justify-center gap-1">
+                        <Upload className="w-3 h-3" />
+                        <span>Subir</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleFileUpload(e, setLogoSecondaryUrl)}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handlePasteButtonClick(setLogoSecondaryUrl, 'Logo Secundario (Oscuro)')}
+                        className="py-1.5 px-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 border border-amber-500/30 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                        title="Pegar vector copiado de Adobe Illustrator o captura de pantalla"
+                      >
+                        <ClipboardPaste className="w-3 h-3" />
+                        <span>Pegar</span>
+                      </button>
+                      {logoSecondaryUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setLogoSecondaryUrl('')}
+                          className="p-1.5 rounded-xl bg-zinc-200 text-rose-600 hover:bg-zinc-300 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 3. ICONO / ISOTIPO AISLADO (CLARO / PRINCIPAL) */}
+                  <div
+                    tabIndex={0}
+                    onFocus={() => setActivePasteSlot('symbol')}
+                    onPaste={(e) => handleClipboardPasteEvent(e, setLogoSymbolUrl, 'Icono / Isotipo (Claro)')}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => handleDropFile(e, setLogoSymbolUrl, 'Icono / Isotipo (Claro)')}
+                    className={`p-3.5 rounded-2xl border transition bg-zinc-950 text-white space-y-2.5 outline-none ${
+                      activePasteSlot === 'symbol'
+                        ? 'border-emerald-400 ring-2 ring-emerald-400/30'
+                        : 'border-emerald-500/40'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-emerald-400">★ Icono / Isotipo (Claro)</span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
+                        Símbolo Mockups
+                      </span>
+                    </div>
+                    <div
+                      onClick={() => setActivePasteSlot('symbol')}
+                      className="h-24 rounded-xl border border-dashed border-emerald-500/40 hover:border-emerald-400 flex flex-col items-center justify-center p-2 bg-[#111111] cursor-pointer"
+                    >
+                      {logoSymbolUrl ? (
+                        <img src={logoSymbolUrl} alt="Icono claro" className="max-h-16 object-contain" />
+                      ) : (
+                        <div className="text-center space-y-1">
+                          <span className="text-[10px] font-mono text-emerald-400 block font-bold">
+                            Pegar Icono / Símbolo (Ctrl+V)
+                          </span>
+                          <span className="text-[9px] text-zinc-400 block">
+                            Para Gorra, App Icon, Prendas, Retícula
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <label className="flex-1 py-1.5 px-2 rounded-xl bg-emerald-500 text-zinc-950 text-[11px] font-bold text-center cursor-pointer hover:bg-emerald-400 transition flex items-center justify-center gap-1">
+                        <Upload className="w-3 h-3" />
+                        <span>Subir Icono</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleFileUpload(e, setLogoSymbolUrl)}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handlePasteButtonClick(setLogoSymbolUrl, 'Icono / Isotipo (Claro)')}
+                        className="py-1.5 px-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                        title="Pegar icono desde Adobe Illustrator (Ctrl+C) o captura"
+                      >
+                        <ClipboardPaste className="w-3 h-3" />
+                        <span>Pegar</span>
+                      </button>
+                      {logoSymbolUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setLogoSymbolUrl('')}
+                          className="p-1.5 rounded-xl bg-zinc-800 text-rose-400 hover:bg-zinc-700 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 4. ICONO / ISOTIPO AISLADO (OSCURO / COLOR SOBRE FONDO CLARO) */}
+                  <div
+                    tabIndex={0}
+                    onFocus={() => setActivePasteSlot('symbolDark')}
+                    onPaste={(e) => handleClipboardPasteEvent(e, setLogoSymbolDarkUrl, 'Icono / Isotipo (Oscuro)')}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => handleDropFile(e, setLogoSymbolDarkUrl, 'Icono / Isotipo (Oscuro)')}
+                    className={`p-3.5 rounded-2xl border transition bg-zinc-100 text-zinc-900 space-y-2.5 outline-none ${
+                      activePasteSlot === 'symbolDark'
+                        ? 'border-emerald-600 ring-2 ring-emerald-500/30'
+                        : 'border-emerald-500/40'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-emerald-800">★ Icono / Isotipo (Oscuro)</span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-600/15 text-emerald-800">
+                        Fondo Claro
+                      </span>
+                    </div>
+                    <div
+                      onClick={() => setActivePasteSlot('symbolDark')}
+                      className="h-24 rounded-xl border border-dashed border-emerald-600/40 hover:border-emerald-600 flex flex-col items-center justify-center p-2 bg-white cursor-pointer"
+                    >
+                      {logoSymbolDarkUrl ? (
+                        <img src={logoSymbolDarkUrl} alt="Icono oscuro" className="max-h-16 object-contain" />
+                      ) : (
+                        <div className="text-center space-y-1">
+                          <span className="text-[10px] font-mono text-emerald-700 block font-bold">
+                            Pegar Icono Oscuro (Ctrl+V)
+                          </span>
+                          <span className="text-[9px] text-zinc-500 block">
+                            Para prendas blancas, papelería, bolsas
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <label className="flex-1 py-1.5 px-2 rounded-xl bg-zinc-900 text-white text-[11px] font-bold text-center cursor-pointer hover:bg-black transition flex items-center justify-center gap-1">
+                        <Upload className="w-3 h-3" />
+                        <span>Subir Icono</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleFileUpload(e, setLogoSymbolDarkUrl)}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handlePasteButtonClick(setLogoSymbolDarkUrl, 'Icono / Isotipo (Oscuro)')}
+                        className="py-1.5 px-2.5 rounded-xl bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-900 border border-emerald-600/30 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                        title="Pegar icono desde Adobe Illustrator (Ctrl+C) o captura"
+                      >
+                        <ClipboardPaste className="w-3 h-3" />
+                        <span>Pegar</span>
+                      </button>
+                      {logoSymbolDarkUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setLogoSymbolDarkUrl('')}
+                          className="p-1.5 rounded-xl bg-zinc-200 text-rose-600 hover:bg-zinc-300 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Logo Anterior (Solo visible si es Rebranding) */}
+                {isRebrand && (
+                  <div
+                    tabIndex={0}
+                    onPaste={(e) => handleClipboardPasteEvent(e, setLogoBeforeUrl, 'Logo Anterior (Antes)')}
+                    className="p-4 rounded-2xl border border-amber-500/40 bg-amber-500/5 flex flex-col sm:flex-row items-center justify-between gap-4 animate-fadeIn"
+                  >
+                    <div className="space-y-1">
+                      <span className="text-xs font-bold text-zinc-900 dark:text-white block">
+                        Logo Anterior (Para Slider Comparativo Antes vs. Después)
+                      </span>
+                      <span className="text-[11px] text-zinc-500 block">
+                        Sube o pega con Ctrl+V el logo antiguo del cliente para compararlo con la nueva propuesta.
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="w-28 h-14 rounded-xl border border-dashed border-zinc-400 flex items-center justify-center p-2 bg-white/60 dark:bg-zinc-900">
+                        {logoBeforeUrl ? (
+                          <img src={logoBeforeUrl} alt="Logo antes" className="max-h-10 object-contain" />
+                        ) : (
+                          <span className="text-[9px] font-mono text-zinc-400">Sin imagen</span>
+                        )}
+                      </div>
+                      <label className="py-2 px-3 rounded-xl border border-zinc-300 dark:border-zinc-700 text-xs font-bold cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-1.5">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Subir</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleFileUpload(e, setLogoBeforeUrl)}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handlePasteButtonClick(setLogoBeforeUrl, 'Logo Anterior')}
+                        className="py-2 px-3 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5" />
+                        <span>Pegar</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* =========================================================== */}
+              {/* 2. CONFIGURACIÓN + VISUALIZADOR EN VIVO DE MOCKUPS          */}
+              {/* =========================================================== */}
+              <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/80 space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white flex items-center gap-1.5">
+                      <Eye className="w-4 h-4 text-amber-500" />
+                      <span>2. Visualizador en Vivo de Mockups &amp; Control de Estampado</span>
+                    </h4>
+                    <p className="text-[11px] text-zinc-500 mt-0.5">
+                      Ajusta cómo se estampa el <strong>Icono / Isotipo</strong> o el <strong>Logo Completo</strong> y previsualízalo aquí mismo antes de guardar.
+                    </p>
+                  </div>
+
+                  {/* Selector de Colorway del Visualizador */}
+                  <div className="flex items-center gap-1.5 bg-zinc-200/70 dark:bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-300 dark:border-zinc-800">
+                    <span className="text-[10px] font-mono text-zinc-500 mr-1">Color Prenda:</span>
+                    <button
+                      type="button"
+                      onClick={() => setLivePreviewColorway('obsidian')}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer ${
+                        livePreviewColorway === 'obsidian'
+                          ? 'bg-zinc-950 text-white'
+                          : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Negro
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLivePreviewColorway('offwhite')}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer ${
+                        livePreviewColorway === 'offwhite'
+                          ? 'bg-white text-zinc-950 shadow-xs'
+                          : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Blanco
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLivePreviewColorway('brand')}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer ${
+                        livePreviewColorway === 'brand'
+                          ? 'bg-amber-400 text-zinc-950'
+                          : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Color Marca
+                    </button>
+                  </div>
+                </div>
+
+                {/* Controles de Modo de Estampado, Posición, Escala y Escena */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mb-1">
+                      ¿Qué Estampar en Mockups?
+                    </label>
+                    <select
+                      value={mockupStampMode}
+                      onChange={(e) => setMockupStampMode(e.target.value as any)}
+                      className="w-full px-2.5 py-2 rounded-xl border border-emerald-500/40 bg-white dark:bg-zinc-900 text-xs font-bold"
+                    >
+                      <option value="auto">✨ Auto (Icono en Gorra/App + Logo en Ropa)</option>
+                      <option value="symbol_only">★ Solo Icono / Isotipo en Todo</option>
+                      <option value="full_logo">Logo Completo en Todo</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                      Posición en Prendas
+                    </label>
+                    <select
+                      value={stampPosition}
+                      onChange={(e) => setStampPosition(e.target.value as any)}
+                      className="w-full px-2.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-bold"
+                    >
+                      <option value="chest_left">Pecho Izquierdo (Escudo)</option>
+                      <option value="center_large">Pecho Central Grande</option>
+                      <option value="back_print">Espalda Completa (Back)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                      Escala del Estampado ({stampScale}%)
+                    </label>
+                    <input
+                      type="range"
+                      min={65}
+                      max={145}
+                      value={stampScale}
+                      onChange={(e) => setStampScale(Number(e.target.value))}
+                      className="w-full accent-amber-500 cursor-pointer mt-2"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                      Escena Fotográfica
+                    </label>
+                    <select
+                      value={photoSceneMode}
+                      onChange={(e) => setPhotoSceneMode(e.target.value as any)}
+                      className="w-full px-2.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-bold"
+                    >
+                      <option value="studio_3d">Estudio 3D + Displacement</option>
+                      <option value="urban_model">Lookbook Urbano</option>
+                      <option value="coffee_shop">Cafetería / Gastro</option>
+                      <option value="creative_office">Estudio Arquitectónico</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                        Trazo
+                      </label>
+                      <select
+                        value={iconStrokeWidth}
+                        onChange={(e) => setIconStrokeWidth(e.target.value)}
+                        className="w-full px-2 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[11px] font-mono"
+                      >
+                        <option value="1.5px">1.5px</option>
+                        <option value="2px">2.0px</option>
+                        <option value="2.5px">2.5px</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                        Radio
+                      </label>
+                      <select
+                        value={iconCornerRadius}
+                        onChange={(e) => setIconCornerRadius(e.target.value)}
+                        className="w-full px-2 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[11px] font-mono"
+                      >
+                        <option value="0px">0px</option>
+                        <option value="6px">6px</option>
+                        <option value="12px">12px</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ========================================================= */}
+                {/* LIENZO VISUALIZADOR EN VIVO (4 MOCKUPS EN TIEMPO REAL)    */}
+                {/* ========================================================= */}
+                {(() => {
+                  const isLightGarment = livePreviewColorway === 'offwhite';
+                  const garmentFill =
+                    livePreviewColorway === 'offwhite'
+                      ? '#EFECE6'
+                      : livePreviewColorway === 'brand'
+                      ? colors[0]?.hex || '#4F46E5'
+                      : '#18181B';
+                  const garmentStroke = isLightGarment ? '#C7C3B8' : '#3F3F46';
+
+                  // Selección inteligente de imagen para Prendas vs Símbolos/Iconos
+                  const lightSymbol = logoSymbolUrl || logoPrimaryUrl || logoSymbolDarkUrl || logoSecondaryUrl;
+                  const darkSymbol = logoSymbolDarkUrl || logoSymbolUrl || logoSecondaryUrl || logoPrimaryUrl;
+                  const lightFull = logoPrimaryUrl || logoSymbolUrl || logoSecondaryUrl;
+                  const darkFull = logoSecondaryUrl || logoSymbolDarkUrl || logoPrimaryUrl;
+
+                  const garmentStampUrl =
+                    mockupStampMode === 'symbol_only'
+                      ? isLightGarment
+                        ? darkSymbol
+                        : lightSymbol
+                      : isLightGarment
+                      ? darkFull
+                      : lightFull;
+
+                  const badgeIconUrl =
+                    mockupStampMode === 'full_logo'
+                      ? isLightGarment
+                        ? darkFull
+                        : lightFull
+                      : isLightGarment
+                      ? darkSymbol
+                      : lightSymbol;
+
+                  const scaleMul = (stampScale || 100) / 100;
+                  const garmentPosStyle =
+                    stampPosition === 'center_large'
+                      ? {
+                          top: '46%',
+                          left: '50%',
+                          transform: `translate(-50%, -50%) scale(${(1.05 * scaleMul).toFixed(2)})`,
+                        }
+                      : stampPosition === 'back_print'
+                      ? {
+                          top: '44%',
+                          left: '50%',
+                          transform: `translate(-50%, -50%) scale(${(1.25 * scaleMul).toFixed(2)})`,
+                        }
+                      : {
+                          top: '40%',
+                          left: '54%',
+                          transform: `scale(${(0.75 * scaleMul).toFixed(2)})`,
+                          transformOrigin: 'left center',
+                        };
+
+                  return (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-1">
+                      {/* Vista Previa 1: Hoodie / Sudadera */}
+                      <div className="rounded-2xl p-3 bg-gradient-to-b from-zinc-900 to-zinc-950 text-white border border-zinc-800 flex flex-col items-center justify-between min-h-[175px] relative overflow-hidden">
+                        <div className="w-full flex justify-between items-center text-[9px] font-mono text-zinc-400">
+                          <span>PRENDA ({stampPosition === 'chest_left' ? 'Pecho Izq' : stampPosition === 'center_large' ? 'Centro' : 'Espalda'})</span>
+                          <span>{stampScale}%</span>
+                        </div>
+                        <div className="my-auto relative flex items-center justify-center">
+                          <svg viewBox="0 0 220 195" className="w-32 h-28 drop-shadow-xl">
+                            <path
+                              d="M72,22 C90,30 130,30 148,22 L192,50 C197,54 198,60 195,68 L176,162 L152,162 L155,76 L146,72 L146,168 L74,168 L74,72 L65,76 L68,162 L44,162 L25,68 C22,60 23,54 28,50 Z"
+                              fill={garmentFill}
+                              stroke={garmentStroke}
+                              strokeWidth="1.5"
+                            />
+                            {stampPosition !== 'back_print' && (
+                              <polygon points="102,34 118,34 110,48" fill={garmentStroke} />
+                            )}
+                          </svg>
+                          <div className="absolute flex items-center justify-center" style={garmentPosStyle}>
+                            {garmentStampUrl ? (
+                              <img src={garmentStampUrl} alt="Preview" className="h-3.5 max-w-[44px] object-contain" />
+                            ) : (
+                              <span
+                                className={`text-[8px] font-bold ${
+                                  isLightGarment ? 'text-zinc-900' : 'text-white'
+                                }`}
+                              >
+                                {brandName || 'BRAND'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-[9px] font-mono text-zinc-400">
+                          {mockupStampMode === 'symbol_only' ? 'Estampando: Icono' : 'Estampando: Logo'}
+                        </span>
+                      </div>
+
+                      {/* Vista Previa 2: Gorra Bordada (Usa el Icono / Isotipo) */}
+                      <div className="rounded-2xl p-3 bg-gradient-to-b from-zinc-900 to-zinc-950 text-white border border-zinc-800 flex flex-col items-center justify-between min-h-[175px] relative overflow-hidden">
+                        <div className="w-full flex justify-between items-center text-[9px] font-mono text-emerald-400">
+                          <span>GORRA 3D</span>
+                          <span>ICONO / SÍMBOLO</span>
+                        </div>
+                        <div className="my-auto relative flex items-center justify-center">
+                          <svg viewBox="0 0 220 175" className="w-32 h-26 drop-shadow-xl">
+                            <path
+                              d="M42,102 C40,32 180,32 178,102 Z"
+                              fill={garmentFill}
+                              stroke={garmentStroke}
+                              strokeWidth="1.5"
+                            />
+                            <path
+                              d="M34,99 C75,114 145,114 186,99 L180,131 C142,116 78,116 40,131 Z"
+                              fill={garmentFill}
+                              stroke={garmentStroke}
+                              strokeWidth="1.5"
+                            />
+                          </svg>
+                          <div
+                            className="absolute top-[41%] left-1/2 -translate-x-1/2 flex items-center justify-center"
+                            style={{ transform: `translate(-50%, -20%) scale(${scaleMul.toFixed(2)})` }}
+                          >
+                            {badgeIconUrl ? (
+                              <img src={badgeIconUrl} alt="Cap icon" className="h-5 max-w-[42px] object-contain" />
+                            ) : (
+                              <span
+                                className={`text-[9px] font-bold ${
+                                  isLightGarment ? 'text-zinc-900' : 'text-white'
+                                }`}
+                              >
+                                {(brandName || 'BR').slice(0, 3).toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-[9px] font-mono text-zinc-400">
+                          {logoSymbolUrl || logoSymbolDarkUrl ? '✓ Usando tu Icono' : 'Sube el Icono arriba'}
+                        </span>
+                      </div>
+
+                      {/* Vista Previa 3: App Icon iOS + Retícula Áurea */}
+                      <div className="rounded-2xl p-3 bg-gradient-to-b from-zinc-900 to-zinc-950 text-white border border-zinc-800 flex flex-col items-center justify-between min-h-[175px] relative overflow-hidden">
+                        <div className="w-full flex justify-between items-center text-[9px] font-mono text-cyan-400">
+                          <span>APP ICON &amp; FAVICON</span>
+                          <span>ISOTIPO</span>
+                        </div>
+                        <div className="my-auto flex items-center justify-center">
+                          <div
+                            className="w-20 h-20 rounded-[22px] border border-white/20 shadow-2xl flex items-center justify-center relative overflow-hidden p-3"
+                            style={{ backgroundColor: garmentFill }}
+                          >
+                            <div className="absolute inset-2 rounded-2xl border border-cyan-400/25 pointer-events-none" />
+                            <div className="absolute inset-4 rounded-full border border-cyan-400/25 pointer-events-none" />
+                            {badgeIconUrl ? (
+                              <img
+                                src={badgeIconUrl}
+                                alt="App Icon"
+                                className="max-h-11 max-w-11 object-contain z-10"
+                                style={{ transform: `scale(${scaleMul.toFixed(2)})` }}
+                              />
+                            ) : (
+                              <span
+                                className={`text-sm font-bold z-10 ${
+                                  isLightGarment ? 'text-zinc-900' : 'text-white'
+                                }`}
+                              >
+                                {(brandName || 'B').slice(0, 2).toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-[9px] font-mono text-zinc-400">
+                          App Icon, Avatar &amp; Retícula
+                        </span>
+                      </div>
+
+                      {/* Vista Previa 4: Packaging / Vaso & Sticker */}
+                      <div className="rounded-2xl p-3 bg-gradient-to-b from-zinc-900 to-zinc-950 text-white border border-zinc-800 flex flex-col items-center justify-between min-h-[175px] relative overflow-hidden">
+                        <div className="w-full flex justify-between items-center text-[9px] font-mono text-amber-400">
+                          <span>PACKAGING &amp; MERCH</span>
+                          <span>SELLO</span>
+                        </div>
+                        <div className="my-auto relative flex items-center justify-center">
+                          <svg viewBox="0 0 140 160" className="w-24 h-26 drop-shadow-xl">
+                            <rect x="34" y="12" width="72" height="10" rx="3" fill="#27272A" />
+                            <polygon points="38,24 102,24 94,145 46,145" fill="#F4F4F5" />
+                            <polygon points="41,58 99,58 96,108 44,108" fill={garmentFill} />
+                          </svg>
+                          <div
+                            className="absolute top-[52%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center"
+                            style={{ transform: `translate(-50%, -50%) scale(${scaleMul.toFixed(2)})` }}
+                          >
+                            {badgeIconUrl ? (
+                              <img src={badgeIconUrl} alt="Cup icon" className="h-4 max-w-[34px] object-contain" />
+                            ) : (
+                              <span
+                                className={`text-[8px] font-bold ${
+                                  isLightGarment ? 'text-zinc-900' : 'text-white'
+                                }`}
+                              >
+                                {(brandName || 'BR').slice(0, 3).toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-[9px] font-mono text-zinc-400">
+                          Vaso, Termo, Sticker &amp; Caja
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* =========================================================== */}
+              {/* 3. SISTEMA DE ICONOS Y VARIACIONES DEL SÍMBOLO (6 SLOTS)    */}
+              {/* =========================================================== */}
+              <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-950/60 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
+                      3. Iconos de la Marca / Variaciones del Símbolo (Opcional • 6 Slots con Ctrl+V)
+                    </h4>
+                    <p className="text-[11px] text-zinc-500">
+                      Sube o pega desde Illustrator (Ctrl+V) los iconos de tu sistema visual para que reemplacen los iconos genéricos en las láminas de <strong>Sistema Iconográfico</strong> y <strong>Exploración de Símbolos</strong>.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                  {otherIdeas.slice(0, 6).map((idea, idx) => {
+                    const updateIdeaImage = (url: string) => {
+                      const next = [...otherIdeas];
+                      next[idx] = { ...next[idx], imageUrl: url };
+                      setOtherIdeas(next);
+                    };
+                    const updateIdeaTitle = (title: string) => {
+                      const next = [...otherIdeas];
+                      next[idx] = { ...next[idx], title };
+                      setOtherIdeas(next);
+                    };
+                    const slotId = `idea_${idx}`;
+
+                    return (
+                      <div
+                        key={idea.id || idx}
+                        tabIndex={0}
+                        onFocus={() => setActivePasteSlot(slotId)}
+                        onPaste={(e) => handleClipboardPasteEvent(e, updateIdeaImage, `Icono 0${idx + 1}`)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => handleDropFile(e, updateIdeaImage, `Icono 0${idx + 1}`)}
+                        className={`p-2.5 rounded-xl border bg-zinc-900 text-white space-y-2 outline-none transition ${
+                          activePasteSlot === slotId
+                            ? 'border-amber-400 ring-2 ring-amber-400/25'
+                            : 'border-zinc-800'
+                        }`}
+                      >
+                        <div
+                          onClick={() => setActivePasteSlot(slotId)}
+                          className="h-16 rounded-lg border border-dashed border-zinc-700 hover:border-amber-400/60 bg-zinc-950 flex items-center justify-center p-2 cursor-pointer"
+                        >
+                          {idea.imageUrl ? (
+                            <img
+                              src={idea.imageUrl}
+                              alt={idea.title}
+                              className="max-h-12 max-w-full object-contain"
+                            />
+                          ) : (
+                            <span className="text-[9px] font-mono text-zinc-500 text-center">
+                              Icono 0{idx + 1}
+                              <br />
+                              (Clic + Ctrl+V)
+                            </span>
+                          )}
+                        </div>
+                        <input
+                          type="text"
+                          value={idea.title}
+                          onChange={(e) => updateIdeaTitle(e.target.value)}
+                          placeholder={`Icono 0${idx + 1}`}
+                          className="w-full px-2 py-1 rounded bg-zinc-950 border border-zinc-800 text-[10px] text-zinc-200"
+                        />
+                        <div className="flex items-center gap-1">
+                          <label className="flex-1 py-1 px-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-[10px] font-bold text-center cursor-pointer">
+                            Subir
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => handleFileUpload(e, updateIdeaImage)}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => handlePasteButtonClick(updateIdeaImage, `Icono 0${idx + 1}`)}
+                            className="py-1 px-1.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold cursor-pointer"
+                            title="Pegar desde Illustrator o Captura"
+                          >
+                            Pegar
+                          </button>
+                          {idea.imageUrl && (
+                            <button
+                              type="button"
+                              onClick={() => updateIdeaImage('')}
+                              className="p-1 rounded bg-zinc-800 text-rose-400 cursor-pointer"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Concepto y Área de Resguardo */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Título de la Propuesta
+                  </label>
+                  <input
+                    type="text"
+                    value={directionName}
+                    onChange={(e) => setDirectionName(e.target.value)}
+                    placeholder="Direction One"
+                    className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-bold"
+                  />
+                </div>
+                {isRebrand && (
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                      Etiqueta Slider &quot;Antes&quot;
+                    </label>
+                    <input
+                      type="text"
+                      value={brandBeforeLabel}
+                      onChange={(e) => setBrandBeforeLabel(e.target.value)}
+                      placeholder="Identidad Anterior (2019)"
+                      className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs"
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Unidad de Safe Zone (Clearspace)
+                  </label>
+                  <input
+                    type="text"
+                    value={clearspaceUnit}
+                    onChange={(e) => setClearspaceUnit(e.target.value)}
+                    placeholder="1x"
+                    className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Racional / Narrativa Conceptual del Logo
+                </label>
+                <textarea
+                  rows={3}
+                  value={directionRationale}
+                  onChange={(e) => setDirectionRationale(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* TAB 3: BRIEF Y PILARES                                         */}
+          {/* =============================================================== */}
+          {activeTab === 'pillars' && (
+            <div className="space-y-6">
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Titular del Brief
+                </label>
+                <input
+                  type="text"
+                  value={briefOverviewTitle}
+                  onChange={(e) => setBriefOverviewTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Columna 1: Resumen y Objetivos
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={briefOverviewText}
+                    onChange={(e) => setBriefOverviewText(e.target.value)}
+                    className="w-full p-3 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Columna 2: Look & Feel y Mensaje
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={briefSecondaryText}
+                    onChange={(e) => setBriefSecondaryText(e.target.value)}
+                    className="w-full p-3 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  Pilares de Marca (01, 02, 03)
+                </h4>
+                {goals.map((g, idx) => (
+                  <div
+                    key={g.id || idx}
+                    className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 space-y-2"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono font-bold text-sm text-zinc-400">
+                        {g.number || `0${idx + 1}`}
+                      </span>
+                      <input
+                        type="text"
+                        value={g.title}
+                        onChange={(e) => {
+                          const updated = [...goals];
+                          updated[idx].title = e.target.value;
+                          setGoals(updated);
+                        }}
+                        placeholder="Título del Pilar"
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 text-xs font-bold"
+                      />
+                    </div>
+                    <textarea
+                      rows={2}
+                      value={g.description}
+                      onChange={(e) => {
+                        const updated = [...goals];
+                        updated[idx].description = e.target.value;
+                        setGoals(updated);
+                      }}
+                      placeholder="Descripción del pilar estratégico"
+                      className="w-full p-2 rounded-lg border border-zinc-300 dark:border-zinc-700 text-xs"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* TAB 4: PALETA DE COLOR CON CONVERSIÓN AUTOMÁTICA HEX->RGB/CMYK  */}
+          {/* =============================================================== */}
+          {activeTab === 'colors' && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-bold text-zinc-900 dark:text-white">
+                    Sistema Cromático Inteligente (HEX → RGB / CMYK / Pantone)
+                  </h4>
+                  <p className="text-xs text-zinc-500">
+                    Al seleccionar un color o escribir un código HEX, se calculan automáticamente sus valores RGB, CMYK y Pantone.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => extractColorsFromLogo()}
+                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Extraer del Logo Subido</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={addColor}
+                    className="px-3 py-1.5 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Agregar Color</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {colors.map((c) => (
+                  <div
+                    key={c.id}
+                    className="p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex items-start gap-3"
+                  >
+                    <input
+                      type="color"
+                      value={c.hex}
+                      onChange={(e) => updateColor(c.id, 'hex', e.target.value)}
+                      className="w-14 h-14 rounded-xl cursor-pointer border border-zinc-300 dark:border-zinc-700 shrink-0"
+                    />
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={c.name}
+                          onChange={(e) => updateColor(c.id, 'name', e.target.value)}
+                          placeholder="Nombre del tono"
+                          className="flex-1 px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 text-xs font-bold"
+                        />
+                        <input
+                          type="text"
+                          value={c.hex}
+                          onChange={(e) => updateColor(c.id, 'hex', e.target.value)}
+                          placeholder="#000000"
+                          className="w-24 px-2 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 text-xs font-mono font-bold"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <div>
+                          <span className="text-[9px] font-mono text-zinc-400 block">RGB</span>
+                          <input
+                            type="text"
+                            value={c.rgb || ''}
+                            onChange={(e) => updateColor(c.id, 'rgb', e.target.value)}
+                            className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 text-[10px] font-mono"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-mono text-zinc-400 block">CMYK (%)</span>
+                          <input
+                            type="text"
+                            value={c.cmyk || ''}
+                            onChange={(e) => updateColor(c.id, 'cmyk', e.target.value)}
+                            className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 text-[10px] font-mono"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-mono text-zinc-400 block">Pantone</span>
+                          <input
+                            type="text"
+                            value={c.pantone || ''}
+                            onChange={(e) => updateColor(c.id, 'pantone', e.target.value)}
+                            className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 text-[10px] font-mono"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeColor(c.id)}
+                      className="p-1.5 text-zinc-400 hover:text-rose-500 cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* TAB 5: TIPOGRAFÍA Y GOOGLE FONTS                                */}
+          {/* =============================================================== */}
+          {activeTab === 'typography' && (
+            <div className="space-y-4">
+              <h4 className="text-sm font-bold text-zinc-900 dark:text-white">
+                Sistema Tipográfico (Google Fonts + Type Tester en Vivo)
+              </h4>
+              <p className="text-xs text-zinc-500">
+                Selecciona la familia tipográfica para titulares y cuerpo. En la vista pública el cliente podrá probar la fuente en vivo con un slider de tamaño.
+              </p>
+
+              {typography.map((f, idx) => (
+                <div
+                  key={f.id || idx}
+                  className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 space-y-3"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                      {f.role === 'headings' ? 'Titulares / Headings' : 'Párrafos / Body'}
+                    </span>
+
+                    <div className="flex items-center gap-2">
+                      {f.customFontFileName && (
+                        <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-mono font-bold">
+                          ✓ Fuente propia: {f.customFontFileName}
+                        </span>
+                      )}
+                      <label className="px-3 py-1.5 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 text-xs font-bold cursor-pointer hover:opacity-90 transition flex items-center gap-1.5">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Subir Fuente (.TTF / .OTF / .WOFF2)</span>
+                        <input
+                          type="file"
+                          accept=".ttf,.otf,.woff,.woff2"
+                          className="hidden"
+                          onChange={(e) => handleCustomFontUpload(e, idx)}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-mono text-zinc-400 mb-1">
+                        Familia Tipográfica (Google Fonts o Fuente Subida)
+                      </label>
+                      <select
+                        value={f.fontFamily}
+                        onChange={(e) => {
+                          const updated = [...typography];
+                          updated[idx].fontFamily = e.target.value;
+                          setTypography(updated);
+                        }}
+                        className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-bold"
+                      >
+                        {f.customFontDataUrl && !GOOGLE_FONT_OPTIONS.includes(f.fontFamily) && (
+                          <option value={f.fontFamily}>★ {f.fontFamily} (Fuente Propia)</option>
+                        )}
+                        {GOOGLE_FONT_OPTIONS.map((font) => (
+                          <option key={font} value={font}>
+                            {font}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-mono text-zinc-400 mb-1">
+                        Pesos recomendados
+                      </label>
+                      <input
+                        type="text"
+                        value={f.weight}
+                        onChange={(e) => {
+                          const updated = [...typography];
+                          updated[idx].weight = e.target.value;
+                          setTypography(updated);
+                        }}
+                        placeholder="Ej: Regular / SemiBold / Bold"
+                        className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* TAB 6: KIT DE DESCARGA GOOGLE DRIVE, CAPTURAS Y MÉTRICA KPI     */}
+          {/* =============================================================== */}
+          {activeTab === 'mockups' && (
+            <div className="space-y-6">
+              {/* Carpeta Entregable de Google Drive */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/60 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0">
+                      <HardDrive className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-zinc-900 dark:text-white">
+                        Centro de Descargas & Brand Assets Kit (Google Drive)
+                      </h4>
+                      <p className="text-xs text-zinc-500">
+                        Vincula la carpeta de Google Drive con los editables (.AI, .EPS, .SVG, fuentes) para que el cliente los descargue al final del manual.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsDrivePickerOpen(true)}
+                    className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 shrink-0 cursor-pointer"
+                  >
+                    <FolderCheck className="w-4 h-4" />
+                    <span>{driveFolderId ? 'Cambiar Carpeta Drive' : 'Elegir Carpeta de Drive'}</span>
+                  </button>
+                </div>
+
+                {driveFolderName && (
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-indigo-200 dark:border-indigo-800 text-xs">
+                    <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                      📁 {driveFolderName}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDriveFolderId('');
+                        setDriveFolderName('');
+                        setDriveFolderUrl('');
+                      }}
+                      className="text-rose-500 text-[11px] font-bold cursor-pointer"
+                    >
+                      Desvincular
+                    </button>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[11px] font-mono text-zinc-500 mb-1">
+                    O pega directamente el enlace de descarga (Google Drive / WeTransfer / Dropbox):
+                  </label>
+                  <input
+                    type="text"
+                    value={driveFolderUrl}
+                    onChange={(e) => setDriveFolderUrl(e.target.value)}
+                    placeholder="https://drive.google.com/drive/folders/..."
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Métrica KPI y URL Web */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Métrica / KPI Gigante
+                  </label>
+                  <input
+                    type="text"
+                    value={statNumber}
+                    onChange={(e) => setStatNumber(e.target.value)}
+                    placeholder="Ej: $2.5M"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Descripción del KPI
+                  </label>
+                  <input
+                    type="text"
+                    value={statLabel}
+                    onChange={(e) => setStatLabel(e.target.value)}
+                    placeholder="Ej: Key performance metric"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Dominio Web (iPhone / macOS / QR)
+                  </label>
+                  <input
+                    type="text"
+                    value={mockupMobileUrlWebsite}
+                    onChange={(e) => setMockupMobileUrlWebsite(e.target.value)}
+                    placeholder="www.pixeltruck.com"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* TAB 7: PRÓXIMOS PASOS                                           */}
+          {/* =============================================================== */}
+          {activeTab === 'steps' && (
+            <div className="space-y-3">
+              <h4 className="text-sm font-bold text-zinc-900 dark:text-white">Hoja de Ruta / Cierre</h4>
+              {nextSteps.map((step, idx) => (
+                <div
+                  key={step.id || idx}
+                  className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex items-center gap-3"
+                >
+                  <span className="font-mono font-bold text-xs text-zinc-400">
+                    {step.step || `0${idx + 1}`}
+                  </span>
+                  <input
+                    type="text"
+                    value={step.title}
+                    onChange={(e) => {
+                      const updated = [...nextSteps];
+                      updated[idx].title = e.target.value;
+                      setNextSteps(updated);
+                    }}
+                    placeholder="Fase"
+                    className="w-1/3 px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 text-xs font-bold"
+                  />
+                  <input
+                    type="text"
+                    value={step.description}
+                    onChange={(e) => {
+                      const updated = [...nextSteps];
+                      updated[idx].description = e.target.value;
+                      setNextSteps(updated);
+                    }}
+                    placeholder="Descripción"
+                    className="flex-1 px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 text-xs"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+            </div>
+
+            {/* Footer Modal Acciones Fijo */}
+            <div className="px-6 sm:px-8 py-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center justify-between shrink-0">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-7 py-2.5 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-bold shadow-md hover:opacity-90 transition cursor-pointer disabled:opacity-50"
+                >
+                  {saving ? 'Guardando...' : isEditing ? 'Guardar Cambios' : 'Crear Brand Guideline'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      {/* Selector de Carpetas de Google Drive */}
+      <DriveFolderPickerModal
+        isOpen={isDrivePickerOpen}
+        onClose={() => setIsDrivePickerOpen(false)}
+        currentSelectedId={driveFolderId}
+        title="Vincular Carpeta de Editables (Brand Assets Kit)"
+        subtitle="Elige la carpeta de Google Drive que contiene los logos vectoriales y fuentes para el cliente."
+        onSelect={(folder) => {
+          setDriveFolderId(folder.id);
+          setDriveFolderName(folder.name);
+          setDriveFolderUrl(
+            folder.webViewLink || `https://drive.google.com/drive/folders/${folder.id}`
+          );
+          setIsDrivePickerOpen(false);
+          toast(`Carpeta "${folder.name}" vinculada al Brand Kit`, 'success');
+        }}
+      />
+    </div>
+  );
+};
