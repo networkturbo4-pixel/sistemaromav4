@@ -138,11 +138,9 @@ const romitaToolsDeclarations = [
  * prueba automáticamente con los modelos hermanos de la familia Gemini (2.5-flash, 1.5-flash, etc.)
  */
 async function generateContentWithResilience(client, preferredModel, requestParams) {
+    // Modelos oficiales vigentes de Google Gemini (los modelos 2.5 y 1.5 fueron descontinuados por Google)
     const modelsToTry = [
         preferredModel,
-        'gemini-2.5-flash',
-        'gemini-1.5-flash',
-        'gemini-2.0-flash',
         'gemini-3.8-flash',
         'gemini-3.5-flash-lite',
     ].filter((m, i, arr) => Boolean(m) && arr.indexOf(m) === i);
@@ -201,7 +199,7 @@ Tus capacidades incluyen:
 3. Sé concisa, profesional, amable y con tono ágil.
 4. Cuando el usuario te pida crear, editar o eliminar, SIEMPRE invoca la herramienta correspondiente con los parámetros extraídos.
 5. NO realices acciones destructivas sin usar la herramienta respectiva para que el usuario pueda validarlas en su pantalla.`;
-                const { response, modelUsed } = await generateContentWithResilience(gemini, modelPreference || 'gemini-2.5-flash', {
+                const { response, modelUsed } = await generateContentWithResilience(gemini, modelPreference || 'gemini-3.8-flash', {
                     contents: trimmed,
                     config: {
                         systemInstruction: systemPrompt,
@@ -625,7 +623,7 @@ function formatGeminiError(err) {
  */
 router.post('/test-connection', auth_1.requireAuth, async (req, res) => {
     try {
-        const { apiKey, model = 'gemini-2.5-flash' } = req.body;
+        const { apiKey, model = 'gemini-3.8-flash' } = req.body;
         const tenantId = req.auth?.tenant?.id;
         let keyToTest = apiKey;
         if (!keyToTest || keyToTest.includes('...')) {
@@ -640,7 +638,7 @@ router.post('/test-connection', auth_1.requireAuth, async (req, res) => {
         }
         const client = new genai_1.GoogleGenAI({ apiKey: keyToTest });
         const startTime = Date.now();
-        const { response, modelUsed } = await generateContentWithResilience(client, model || 'gemini-2.5-flash', {
+        const { response, modelUsed } = await generateContentWithResilience(client, model || 'gemini-3.8-flash', {
             contents: 'Responde únicamente con la palabra "ROMA_OK" para verificar la conexión.',
         });
         const latencyMs = Date.now() - startTime;

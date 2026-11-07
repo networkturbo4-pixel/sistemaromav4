@@ -143,11 +143,9 @@ async function generateContentWithResilience(
   preferredModel: string,
   requestParams: any
 ): Promise<{ response: any; modelUsed: string }> {
+  // Modelos oficiales vigentes de Google Gemini (los modelos 2.5 y 1.5 fueron descontinuados por Google)
   const modelsToTry = [
     preferredModel,
-    'gemini-2.5-flash',
-    'gemini-1.5-flash',
-    'gemini-2.0-flash',
     'gemini-3.8-flash',
     'gemini-3.5-flash-lite',
   ].filter((m, i, arr) => Boolean(m) && arr.indexOf(m) === i);
@@ -225,7 +223,7 @@ Tus capacidades incluyen:
 
         const { response, modelUsed } = await generateContentWithResilience(
           gemini,
-          modelPreference || 'gemini-2.5-flash',
+          modelPreference || 'gemini-3.8-flash',
           {
             contents: trimmed,
             config: {
@@ -677,7 +675,7 @@ function formatGeminiError(err: any): string {
  */
 router.post('/test-connection', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { apiKey, model = 'gemini-2.5-flash' } = req.body;
+    const { apiKey, model = 'gemini-3.8-flash' } = req.body;
     const tenantId = req.auth?.tenant?.id;
     let keyToTest = apiKey;
 
@@ -698,7 +696,7 @@ router.post('/test-connection', requireAuth, async (req: AuthenticatedRequest, r
 
     const { response, modelUsed } = await generateContentWithResilience(
       client,
-      model || 'gemini-2.5-flash',
+      model || 'gemini-3.8-flash',
       {
         contents: 'Responde únicamente con la palabra "ROMA_OK" para verificar la conexión.',
       }

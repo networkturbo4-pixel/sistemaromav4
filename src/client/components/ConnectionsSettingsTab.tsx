@@ -371,10 +371,8 @@ export const ConnectionsSettingsTab: React.FC = () => {
                 color: 'var(--app-text)',
               }}
             >
-              <option value="gemini-2.5-flash">Gemini 2.5 Flash (Alta Disponibilidad y Estabilidad)</option>
-              <option value="gemini-1.5-flash">Gemini 1.5 Flash (Gran velocidad y cuota amplia)</option>
-              <option value="gemini-3.8-flash">Gemini 3.8 Flash (Razonamiento Avanzado y 1M Tokens)</option>
-              <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite (Ultra Rápido y Bajo Costo)</option>
+              <option value="gemini-3.8-flash">Gemini 3.8 Flash (Recomendado - Multimodal y 1M Tokens)</option>
+              <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite (Ultra Rápido y Alta Frecuencia)</option>
               <option value="gemini-4-argon">Gemini 4 Argon (Razonamiento Complejo)</option>
             </select>
           </div>
