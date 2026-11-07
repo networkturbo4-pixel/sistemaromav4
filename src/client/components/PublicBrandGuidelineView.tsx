@@ -832,7 +832,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
           doc.setFontSize(7.5);
           doc.setTextColor(150, 150, 160);
           doc.text(`Escala: ${m.stampScale || 100}%`, x + 6, 80);
-          doc.text(`Posición: ${m.stampPositionPreset || 'Centro'}`, x + 6, 90);
+          doc.text(`Posición: ${m.posX !== undefined ? `X:${m.posX}% Y:${m.posY}%` : (m.stampPositionPreset || 'Centro')}`, x + 6, 90);
           doc.text(`Fusión: ${m.blendMode || 'Normal'}`, x + 6, 100);
         });
 
@@ -1487,9 +1487,11 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
   };
 
   const getPublicMockupStampStyle = (
-    pos: 'chest_left' | 'center_large' | 'back_print' | 'full' | 'subtle' = 'center_large',
+    pos: 'chest_left' | 'center_large' | 'back_print' | 'full' | 'subtle' | 'custom' = 'center_large',
     scale: number = 100,
-    blendMode: 'normal' | 'multiply' | 'screen' = 'normal'
+    blendMode: 'normal' | 'multiply' | 'screen' = 'normal',
+    posX?: number,
+    posY?: number
   ): React.CSSProperties => {
     const scaleRatio = (scale || 100) / 100;
     const base: React.CSSProperties = {
@@ -1501,6 +1503,15 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
       justifyContent: 'center',
       mixBlendMode: blendMode,
     };
+    if (posX !== undefined && posY !== undefined) {
+      return {
+        ...base,
+        top: `${posY}%`,
+        left: `${posX}%`,
+        width: `${Math.round(35 * scaleRatio)}%`,
+        height: `${Math.round(35 * scaleRatio)}%`,
+      };
+    }
     switch (pos) {
       case 'chest_left':
         return {
@@ -2412,7 +2423,9 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                 const stampStyle = getPublicMockupStampStyle(
                   item.stampPositionPreset,
                   item.stampScale,
-                  item.blendMode
+                  item.blendMode,
+                  item.posX,
+                  item.posY
                 );
 
                 return (

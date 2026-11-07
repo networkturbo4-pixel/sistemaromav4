@@ -4760,6 +4760,9 @@ app.use('/uploads', (req: Request, res: Response, next: NextFunction) => {
   res.status(404).send('Archivo multimedia no encontrado');
 });
 
+// Servir imágenes de mockups estáticas de estudio
+app.use('/mockups', express.static(path.resolve(process.cwd(), 'public', 'mockups')));
+
 if (fs.existsSync(clientDistPath)) {
   app.use(express.static(clientDistPath));
   app.get('*', (req: Request, res: Response) => {

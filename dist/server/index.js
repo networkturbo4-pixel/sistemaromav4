@@ -3779,6 +3779,8 @@ app.use('/uploads', (req, res, next) => {
     // Si no se encuentra en ningún directorio y no es imagen, responder 404 estricto
     res.status(404).send('Archivo multimedia no encontrado');
 });
+// Servir imágenes de mockups estáticas de estudio
+app.use('/mockups', express_1.default.static(path_1.default.resolve(process.cwd(), 'public', 'mockups')));
 if (fs_1.default.existsSync(clientDistPath)) {
     app.use(express_1.default.static(clientDistPath));
     app.get('*', (req, res) => {

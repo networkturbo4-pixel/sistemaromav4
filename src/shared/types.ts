@@ -1707,8 +1707,10 @@ export interface BrandGuidelineCustomMockup {
   assignedLogoType: 'primary' | 'secondary' | 'symbol' | 'symbol_dark' | 'favicon' | 'custom_version';
   customLogoVersionId?: string;
   customLogoVersionName?: string;
-  stampPositionPreset?: 'chest_left' | 'center_large' | 'back_print' | 'full' | 'subtle';
-  stampScale?: number; // porcentaje 50 a 160
+  stampPositionPreset?: 'chest_left' | 'center_large' | 'back_print' | 'full' | 'subtle' | 'custom';
+  stampScale?: number; // porcentaje 30 a 200
+  posX?: number; // posición horizontal en % (0 a 100)
+  posY?: number; // posición vertical en % (0 a 100)
   blendMode?: 'normal' | 'multiply' | 'screen';
   notes?: string;
 }

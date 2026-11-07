@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X, Lock, KeyRound, Palette, Type, Plus, Trash2, Check, Sparkles,
   Smartphone, Monitor, Shirt, Upload, HardDrive, Image as ImageIcon,
   ShieldCheck, Sliders, FolderCheck, ExternalLink, Maximize2, Minimize2,
   ClipboardPaste, Eye, Search, Filter, Layers, Tag, PlusCircle, Wand2,
-  SlidersHorizontal, CheckCircle2
+  SlidersHorizontal, CheckCircle2, Move, ZoomIn, RotateCcw, Crosshair
 } from 'lucide-react';
 import {
   BrandGuideline,
@@ -26,7 +26,9 @@ export interface MockupCatalogTemplate {
   category: 'textil' | 'vehiculos' | 'promocional' | 'papeleria' | 'packaging' | 'outdoor';
   categoryLabel: string;
   mockupImageUrl: string;
-  defaultPosition: 'chest_left' | 'center_large' | 'back_print' | 'full' | 'subtle';
+  defaultPosition?: 'chest_left' | 'center_large' | 'back_print' | 'full' | 'subtle' | 'custom';
+  defaultPosX?: number;
+  defaultPosY?: number;
   defaultScale: number;
   defaultBlendMode: 'normal' | 'multiply' | 'screen';
   defaultLogoType: 'primary' | 'secondary' | 'symbol' | 'symbol_dark' | 'favicon';
@@ -35,184 +37,60 @@ export interface MockupCatalogTemplate {
 
 export const MOCKUP_CATALOG_TEMPLATES: MockupCatalogTemplate[] = [
   {
-    id: 'tpl_chaleco',
-    title: 'Chaleco Corporativo Softshell',
-    category: 'textil',
-    categoryLabel: 'Textil & Indumentaria',
-    mockupImageUrl: 'https://images.unsplash.com/photo-1578587018452-892bacefd3f2?w=1000&auto=format&fit=crop&q=80',
-    defaultPosition: 'chest_left',
-    defaultScale: 90,
-    defaultBlendMode: 'screen',
-    defaultLogoType: 'symbol',
-    description: 'Chaleco técnico para staff y directiva con bordado en pecho izquierdo.',
-  },
-  {
-    id: 'tpl_polo_negro',
-    title: 'Polo Oversize Streetwear Negro 300g',
-    category: 'textil',
-    categoryLabel: 'Textil & Indumentaria',
-    mockupImageUrl: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=1000&auto=format&fit=crop&q=80',
-    defaultPosition: 'center_large',
-    defaultScale: 100,
-    defaultBlendMode: 'screen',
-    defaultLogoType: 'primary',
-    description: 'Camiseta de corte contemporáneo boxy con serigrafía tacto cero en pecho.',
-  },
-  {
-    id: 'tpl_polo_blanco',
-    title: 'Camiseta Algodón Peinado Blanca',
-    category: 'textil',
-    categoryLabel: 'Textil & Indumentaria',
-    mockupImageUrl: 'https://images.unsplash.com/photo-1581655353564-df123a1eb820?w=1000&auto=format&fit=crop&q=80',
-    defaultPosition: 'chest_left',
+    id: 'tpl_tarjeta_presentacion',
+    title: 'Tarjeta de Presentación Minimalista',
+    category: 'papeleria',
+    categoryLabel: 'Papelería & Corporativo',
+    mockupImageUrl: '/mockups/business-card.jpg',
+    defaultPosition: 'custom',
+    defaultPosX: 32.5,
+    defaultPosY: 48.5,
     defaultScale: 85,
     defaultBlendMode: 'multiply',
     defaultLogoType: 'secondary',
-    description: 'Prenda ligera de uso diario con estampado de escudo a color.',
+    description: 'Tarjeta ejecutiva en papel texturado mate con recuadro delimitado para logotipo.',
   },
   {
-    id: 'tpl_hoodie',
-    title: 'Hoodie Canguro Heavyweight Franela',
-    category: 'textil',
-    categoryLabel: 'Textil & Indumentaria',
-    mockupImageUrl: 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=1000&auto=format&fit=crop&q=80',
-    defaultPosition: 'center_large',
-    defaultScale: 110,
-    defaultBlendMode: 'screen',
-    defaultLogoType: 'primary',
-    description: 'Polera con capucha y bolsillo canguro, estampada en gran formato.',
-  },
-  {
-    id: 'tpl_gorra',
-    title: 'Gorra Estructurada 6 Paneles',
-    category: 'textil',
-    categoryLabel: 'Textil & Indumentaria',
-    mockupImageUrl: 'https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=1000&auto=format&fit=crop&q=80',
-    defaultPosition: 'center_large',
-    defaultScale: 80,
-    defaultBlendMode: 'normal',
-    defaultLogoType: 'symbol',
-    description: 'Gorra deportiva estructurada con bordado frontal en relieve.',
-  },
-  {
-    id: 'tpl_van',
-    title: 'Furgoneta Comercial de Reparto (Van)',
+    id: 'tpl_van_comercial',
+    title: 'Furgoneta Comercial de Flota (Van)',
     category: 'vehiculos',
     categoryLabel: 'Vehículos & Flota',
-    mockupImageUrl: 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=1000&auto=format&fit=crop&q=80',
-    defaultPosition: 'full',
+    mockupImageUrl: '/mockups/commercial-van.jpg',
+    defaultPosition: 'custom',
+    defaultPosX: 66,
+    defaultPosY: 44,
     defaultScale: 95,
-    defaultBlendMode: 'normal',
-    defaultLogoType: 'primary',
-    description: 'Rotulación integral de laterales para vehículos de transporte y distribución.',
+    defaultBlendMode: 'multiply',
+    defaultLogoType: 'secondary',
+    description: 'Vehículo comercial de reparto con rotulación en panel lateral de carga.',
   },
   {
-    id: 'tpl_pickup',
-    title: 'Camioneta Pickup de Operaciones',
-    category: 'vehiculos',
-    categoryLabel: 'Vehículos & Flota',
-    mockupImageUrl: 'https://images.unsplash.com/photo-1559416523-140ddc3d238c?w=1000&auto=format&fit=crop&q=80',
-    defaultPosition: 'center_large',
-    defaultScale: 90,
-    defaultBlendMode: 'normal',
-    defaultLogoType: 'primary',
-    description: 'Vehículo de terreno con distintivo institucional en puertas laterales.',
-  },
-  {
-    id: 'tpl_llavero',
-    title: 'Llavero Metálico Acero Grabado Láser',
-    category: 'promocional',
-    categoryLabel: 'Promocionales & Merch',
-    mockupImageUrl: 'https://images.unsplash.com/photo-1614313511387-1436a4480ebb?w=1000&auto=format&fit=crop&q=80',
-    defaultPosition: 'center_large',
+    id: 'tpl_casco_amarillo',
+    title: 'Casco de Seguridad Industrial (Amarillo)',
+    category: 'textil',
+    categoryLabel: 'Indumentaria & Seguridad',
+    mockupImageUrl: '/mockups/safety-helmet-yellow.jpg',
+    defaultPosition: 'custom',
+    defaultPosX: 50,
+    defaultPosY: 63,
     defaultScale: 75,
     defaultBlendMode: 'multiply',
-    defaultLogoType: 'symbol_dark',
-    description: 'Accesorio de merchandising premium con grabado láser en bajo relieve.',
+    defaultLogoType: 'secondary',
+    description: 'Casco de seguridad de alta visibilidad para supervisión técnica y planta.',
   },
   {
-    id: 'tpl_termo',
-    title: 'Termo Metálico / Botella Inox 750ml',
-    category: 'promocional',
-    categoryLabel: 'Promocionales & Merch',
-    mockupImageUrl: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=1000&auto=format&fit=crop&q=80',
-    defaultPosition: 'center_large',
-    defaultScale: 85,
-    defaultBlendMode: 'screen',
-    defaultLogoType: 'symbol',
-    description: 'Botella térmica de doble capa para clientes VIP y bienvenida a colaboradores.',
-  },
-  {
-    id: 'tpl_taza',
-    title: 'Taza Cerámica de Café Mate 11oz',
-    category: 'promocional',
-    categoryLabel: 'Promocionales & Merch',
-    mockupImageUrl: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=1000&auto=format&fit=crop&q=80',
-    defaultPosition: 'center_large',
-    defaultScale: 90,
+    id: 'tpl_casco_blanco',
+    title: 'Casco de Seguridad Industrial (Blanco)',
+    category: 'textil',
+    categoryLabel: 'Indumentaria & Seguridad',
+    mockupImageUrl: '/mockups/safety-helmet-white.jpg',
+    defaultPosition: 'custom',
+    defaultPosX: 50,
+    defaultPosY: 63,
+    defaultScale: 75,
     defaultBlendMode: 'multiply',
     defaultLogoType: 'secondary',
-    description: 'Vajilla para oficina o locales gastronómicos con acabado esmaltado mate.',
-  },
-  {
-    id: 'tpl_bolsa',
-    title: 'Bolsa Kraft Ecológica con Asas Retorcidas',
-    category: 'packaging',
-    categoryLabel: 'Packaging & Bolsas',
-    mockupImageUrl: 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=1000&auto=format&fit=crop&q=80',
-    defaultPosition: 'center_large',
-    defaultScale: 100,
-    defaultBlendMode: 'multiply',
-    defaultLogoType: 'secondary',
-    description: 'Bolsa de papel kraft reciclado 140g para compras retail y take away.',
-  },
-  {
-    id: 'tpl_caja',
-    title: 'Caja de Envíos E-Commerce Postal',
-    category: 'packaging',
-    categoryLabel: 'Packaging & Bolsas',
-    mockupImageUrl: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1000&auto=format&fit=crop&q=80',
-    defaultPosition: 'center_large',
-    defaultScale: 105,
-    defaultBlendMode: 'multiply',
-    defaultLogoType: 'secondary',
-    description: 'Empaque de cartón corrugado automontable con faja o cinta personalizada.',
-  },
-  {
-    id: 'tpl_vaso',
-    title: 'Vaso Doble Pared Térmico Take-Away 16oz',
-    category: 'packaging',
-    categoryLabel: 'Packaging & Bolsas',
-    mockupImageUrl: 'https://images.unsplash.com/photo-1577937927133-66ef06acdf18?w=1000&auto=format&fit=crop&q=80',
-    defaultPosition: 'center_large',
-    defaultScale: 85,
-    defaultBlendMode: 'normal',
-    defaultLogoType: 'primary',
-    description: 'Vaso descartable compostable para cafetería con faja texturizada.',
-  },
-  {
-    id: 'tpl_papeleria',
-    title: 'Papelería Ejecutiva & Tarjetas de Presentación',
-    category: 'papeleria',
-    categoryLabel: 'Papelería Corporativa',
-    mockupImageUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1000&auto=format&fit=crop&q=80',
-    defaultPosition: 'center_large',
-    defaultScale: 90,
-    defaultBlendMode: 'normal',
-    defaultLogoType: 'secondary',
-    description: 'Set de tarjetas en cartulina dúplex 600g con stamping y sobres a juego.',
-  },
-  {
-    id: 'tpl_billboard',
-    title: 'Valla Publicitaria Exterior (Billboard)',
-    category: 'outdoor',
-    categoryLabel: 'Publicidad Exterior (OOH)',
-    mockupImageUrl: 'https://images.unsplash.com/photo-1584824486509-112e4181ff6b?w=1000&auto=format&fit=crop&q=80',
-    defaultPosition: 'center_large',
-    defaultScale: 110,
-    defaultBlendMode: 'screen',
-    defaultLogoType: 'primary',
-    description: 'Panel de gran formato urbano con iluminación nocturna y alto impacto.',
+    description: 'Casco de seguridad normado para ingenieros, jefes de obra y visitas técnicas.',
   },
 ];
 
@@ -338,6 +216,200 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
   const [mockupSearchQuery, setMockupSearchQuery] = useState('');
   const [mockupCategoryFilter, setMockupCategoryFilter] = useState<string>('todos');
   const [activeMockupConfig, setActiveMockupConfig] = useState<BrandGuidelineCustomMockup | null>(null);
+
+  // Referencias e interacción para mover y redimensionar el logo libremente
+  const previewBoxRef = useRef<HTMLDivElement | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const dragStartRef = useRef<{
+    startX: number;
+    startY: number;
+    initialPosX: number;
+    initialPosY: number;
+    initialScale: number;
+  }>({
+    startX: 0,
+    startY: 0,
+    initialPosX: 50,
+    initialPosY: 50,
+    initialScale: 100,
+  });
+
+  const handleLogoPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!activeMockupConfig) return;
+    setIsDragging(true);
+    const curX =
+      activeMockupConfig.posX ??
+      (activeMockupConfig.stampPositionPreset === 'chest_left' ? 38 : 50);
+    const curY =
+      activeMockupConfig.posY ??
+      (activeMockupConfig.stampPositionPreset === 'chest_left' ? 36 : 50);
+    dragStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initialPosX: curX,
+      initialPosY: curY,
+      initialScale: activeMockupConfig.stampScale || 100,
+    };
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
+  };
+
+  const handleLogoPointerMove = (e: React.PointerEvent) => {
+    if (!isDragging || !activeMockupConfig || !previewBoxRef.current) return;
+    const rect = previewBoxRef.current.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const dx = ((e.clientX - dragStartRef.current.startX) / rect.width) * 100;
+    const dy = ((e.clientY - dragStartRef.current.startY) / rect.height) * 100;
+    const newX = Math.round(Math.max(5, Math.min(95, dragStartRef.current.initialPosX + dx)));
+    const newY = Math.round(Math.max(5, Math.min(95, dragStartRef.current.initialPosY + dy)));
+    setActiveMockupConfig((prev) =>
+      prev ? { ...prev, posX: newX, posY: newY, stampPositionPreset: 'custom' } : null
+    );
+  };
+
+  const handleLogoPointerUp = (e: React.PointerEvent) => {
+    if (isDragging) {
+      setIsDragging(false);
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+    }
+  };
+
+  const handleResizePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!activeMockupConfig) return;
+    setIsResizing(true);
+    dragStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initialPosX: activeMockupConfig.posX ?? 50,
+      initialPosY: activeMockupConfig.posY ?? 50,
+      initialScale: activeMockupConfig.stampScale || 100,
+    };
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
+  };
+
+  const handleResizePointerMove = (e: React.PointerEvent) => {
+    if (!isResizing || !activeMockupConfig || !previewBoxRef.current) return;
+    const rect = previewBoxRef.current.getBoundingClientRect();
+    const deltaX = e.clientX - dragStartRef.current.startX;
+    const deltaY = e.clientY - dragStartRef.current.startY;
+    const deltaScale = ((deltaX + deltaY) / (rect.width || 300)) * 110;
+    const newScale = Math.round(
+      Math.max(30, Math.min(220, dragStartRef.current.initialScale + deltaScale))
+    );
+    setActiveMockupConfig((prev) => (prev ? { ...prev, stampScale: newScale } : null));
+  };
+
+  const handleResizePointerUp = (e: React.PointerEvent) => {
+    if (isResizing) {
+      setIsResizing(false);
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+    }
+  };
+
+  const handleMockupContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!activeMockupConfig || !previewBoxRef.current || isDragging || isResizing) return;
+    const rect = previewBoxRef.current.getBoundingClientRect();
+    const clickX = Math.round(Math.max(5, Math.min(95, ((e.clientX - rect.left) / rect.width) * 100)));
+    const clickY = Math.round(Math.max(5, Math.min(95, ((e.clientY - rect.top) / rect.height) * 100)));
+    setActiveMockupConfig((prev) =>
+      prev ? { ...prev, posX: clickX, posY: clickY, stampPositionPreset: 'custom' } : null
+    );
+  };
+
+  // Pegar imagen desde el portapapeles (captura de pantalla o Illustrator)
+  const handlePasteImageFromClipboard = async () => {
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.read) {
+        toast('Presiona Ctrl+V para pegar la imagen copiada directamente.', 'info');
+        return;
+      }
+      const clipboardItems = await navigator.clipboard.read();
+      for (const item of clipboardItems) {
+        const imageType = item.types.find((type) => type.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result === 'string') {
+              const newCustom: BrandGuidelineCustomMockup = {
+                id: `cm_${Date.now()}`,
+                title: `Mockup Captura ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+                category: 'promocional',
+                mockupImageUrl: reader.result,
+                assignedLogoType: 'secondary',
+                stampPositionPreset: 'custom',
+                posX: 50,
+                posY: 50,
+                stampScale: 100,
+                blendMode: 'multiply',
+              };
+              setActiveMockupConfig(newCustom);
+              toast('Mockup pegado desde portapapeles con éxito', 'success');
+            }
+          };
+          reader.readAsDataURL(blob);
+          return;
+        }
+      }
+      toast('No hay ninguna imagen en el portapapeles. Copia o haz captura primero.', 'info');
+    } catch {
+      toast('Presiona Ctrl+V directamente en esta pestaña para pegar una captura.', 'info');
+    }
+  };
+
+  // Listener global de paste para cuando activeTab === 'mockups'
+  useEffect(() => {
+    if (activeTab !== 'mockups') return;
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          const file = items[i].getAsFile();
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = () => {
+              if (typeof reader.result === 'string') {
+                const newCustom: BrandGuidelineCustomMockup = {
+                  id: `cm_${Date.now()}`,
+                  title: `Mockup Pegado ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+                  category: 'promocional',
+                  mockupImageUrl: reader.result,
+                  assignedLogoType: 'secondary',
+                  stampPositionPreset: 'custom',
+                  posX: 50,
+                  posY: 50,
+                  stampScale: 100,
+                  blendMode: 'multiply',
+                };
+                setActiveMockupConfig(newCustom);
+                toast('Mockup pegado desde el portapapeles', 'success');
+              }
+            };
+            reader.readAsDataURL(file);
+            e.preventDefault();
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => window.removeEventListener('paste', handleGlobalPaste);
+  }, [activeTab]);
 
   // Brief
   const [briefOverviewTitle, setBriefOverviewTitle] = useState('');
@@ -751,20 +823,32 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
 
   // Posiciona y escala el estampado en el mockup
   const getMockupStampStyle = (
-    pos: 'chest_left' | 'center_large' | 'back_print' | 'full' | 'subtle' = 'center_large',
+    pos: 'chest_left' | 'center_large' | 'back_print' | 'full' | 'subtle' | 'custom' = 'center_large',
     scale: number = 100,
-    blendMode: 'normal' | 'multiply' | 'screen' = 'normal'
+    blendMode: 'normal' | 'multiply' | 'screen' = 'normal',
+    posX?: number,
+    posY?: number,
+    isInteractive: boolean = false
   ): React.CSSProperties => {
     const scaleRatio = (scale || 100) / 100;
     const base: React.CSSProperties = {
       position: 'absolute',
       transform: 'translate(-50%, -50%)',
-      pointerEvents: 'none',
+      pointerEvents: isInteractive ? 'auto' : 'none',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       mixBlendMode: blendMode,
     };
+    if (posX !== undefined && posY !== undefined) {
+      return {
+        ...base,
+        top: `${posY}%`,
+        left: `${posX}%`,
+        width: `${Math.round(35 * scaleRatio)}%`,
+        height: `${Math.round(35 * scaleRatio)}%`,
+      };
+    }
     switch (pos) {
       case 'chest_left':
         return {
@@ -2337,6 +2421,16 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handlePasteImageFromClipboard}
+                    className="px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-bold flex items-center gap-2 cursor-pointer transition border border-zinc-700 shadow-sm"
+                    title="Pegar imagen copiada de Illustrator o captura de pantalla (Ctrl+V)"
+                  >
+                    <ClipboardPaste className="w-4 h-4 text-amber-400" />
+                    <span>Pegar Captura (Ctrl+V)</span>
+                  </button>
+
                   <label className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold flex items-center gap-2 cursor-pointer transition shadow-md">
                     <Upload className="w-4 h-4" />
                     <span>+ Subir Mockup Personalizado</span>
@@ -2355,10 +2449,12 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
                               title: file.name.replace(/\.[^/.]+$/, ''),
                               category: 'textil',
                               mockupImageUrl: reader.result,
-                              assignedLogoType: 'primary',
-                              stampPositionPreset: 'center_large',
+                              assignedLogoType: 'secondary',
+                              stampPositionPreset: 'custom',
+                              posX: 50,
+                              posY: 50,
                               stampScale: 100,
-                              blendMode: 'normal',
+                              blendMode: 'multiply',
                             };
                             setActiveMockupConfig(newCustom);
                           }
@@ -2454,7 +2550,9 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
                       const stampStyle = getMockupStampStyle(
                         item.stampPositionPreset,
                         item.stampScale,
-                        item.blendMode
+                        item.blendMode,
+                        item.posX,
+                        item.posY
                       );
 
                       return (
@@ -2662,7 +2760,9 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
                                     category: tpl.category,
                                     mockupImageUrl: tpl.mockupImageUrl,
                                     assignedLogoType: tpl.defaultLogoType,
-                                    stampPositionPreset: tpl.defaultPosition,
+                                    stampPositionPreset: tpl.defaultPosition || 'custom',
+                                    posX: tpl.defaultPosX ?? (tpl.defaultPosition === 'chest_left' ? 38 : 50),
+                                    posY: tpl.defaultPosY ?? (tpl.defaultPosition === 'chest_left' ? 36 : 50),
                                     stampScale: tpl.defaultScale,
                                     blendMode: tpl.defaultBlendMode,
                                   };
@@ -2682,57 +2782,143 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
                 })()}
               </div>
 
-              {/* MODAL / DRAWER INTERACTIVO DE CONFIGURACIÓN DEL MOCKUP */}
+              {/* MODAL INTERACTIVO DE CONFIGURACIÓN DEL MOCKUP: ARRASTRE Y REDIMENSIÓN */}
               {activeMockupConfig && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
-                  <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[90vh]">
-                    {/* Visualizador en vivo con el logo */}
-                    <div className="w-full md:w-1/2 bg-zinc-950 p-6 flex flex-col items-center justify-center relative overflow-hidden min-h-[300px]">
-                      <img
-                        src={activeMockupConfig.mockupImageUrl}
-                        alt="Mockup"
-                        className="max-h-72 w-full object-cover rounded-2xl shadow-lg"
-                      />
+                  <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[92vh]">
+                    
+                    {/* Visualizador en vivo con logo arrastrable y redimensionable */}
+                    <div className="w-full md:w-1/2 bg-zinc-950 p-5 flex flex-col items-center justify-between relative overflow-hidden select-none border-b md:border-b-0 md:border-r border-zinc-800">
+                      
+                      {/* Barra superior de estado */}
+                      <div className="w-full flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
+                          <Move className="w-3.5 h-3.5" />
+                          <span>Arrastra el logo libremente</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 px-2.5 py-0.5 rounded-full border border-zinc-800">
+                          X: {activeMockupConfig.posX ?? 50}% • Y: {activeMockupConfig.posY ?? 50}% • {activeMockupConfig.stampScale ?? 100}%
+                        </span>
+                      </div>
+
+                      {/* Contenedor del Mockup con cursor crosshair */}
                       <div
-                        style={getMockupStampStyle(
-                          activeMockupConfig.stampPositionPreset,
-                          activeMockupConfig.stampScale,
-                          activeMockupConfig.blendMode
-                        )}
+                        ref={previewBoxRef}
+                        onClick={handleMockupContainerClick}
+                        className="relative w-full aspect-square max-h-72 rounded-2xl overflow-hidden shadow-2xl border border-zinc-800 bg-zinc-900 cursor-crosshair group/box"
+                        title="Haz clic o arrastra para ubicar el logo en cualquier punto"
                       >
-                        {resolveMockupLogoUrl(
-                          activeMockupConfig.assignedLogoType,
-                          activeMockupConfig.customLogoVersionId
-                        ) ? (
-                          <img
-                            src={resolveMockupLogoUrl(
+                        <img
+                          src={activeMockupConfig.mockupImageUrl}
+                          alt="Mockup"
+                          className="w-full h-full object-cover pointer-events-none select-none"
+                          draggable={false}
+                        />
+
+                        {/* Guías ópticas sutiles al arrastrar */}
+                        {isDragging && (
+                          <>
+                            <div
+                              className="absolute top-0 bottom-0 border-l border-amber-400/50 pointer-events-none"
+                              style={{ left: `${activeMockupConfig.posX ?? 50}%` }}
+                            />
+                            <div
+                              className="absolute left-0 right-0 border-t border-amber-400/50 pointer-events-none"
+                              style={{ top: `${activeMockupConfig.posY ?? 50}%` }}
+                            />
+                          </>
+                        )}
+
+                        {/* Caja Interactiva del Logo */}
+                        <div
+                          style={getMockupStampStyle(
+                            activeMockupConfig.stampPositionPreset,
+                            activeMockupConfig.stampScale,
+                            activeMockupConfig.blendMode,
+                            activeMockupConfig.posX,
+                            activeMockupConfig.posY,
+                            true
+                          )}
+                          onPointerDown={handleLogoPointerDown}
+                          onPointerMove={handleLogoPointerMove}
+                          onPointerUp={handleLogoPointerUp}
+                          className={`cursor-grab active:cursor-grabbing border-2 ${
+                            isDragging
+                              ? 'border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.6)] ring-2 ring-amber-400/50'
+                              : 'border-dashed border-amber-400/80 hover:border-amber-400 hover:shadow-lg'
+                          } rounded-xl p-1 transition-all select-none group/logo`}
+                        >
+                          {/* Logo renderizado */}
+                          <div className="w-full h-full flex items-center justify-center pointer-events-none">
+                            {resolveMockupLogoUrl(
                               activeMockupConfig.assignedLogoType,
                               activeMockupConfig.customLogoVersionId
+                            ) ? (
+                              <img
+                                src={resolveMockupLogoUrl(
+                                  activeMockupConfig.assignedLogoType,
+                                  activeMockupConfig.customLogoVersionId
+                                )}
+                                alt="Logo estampado"
+                                className="max-h-full max-w-full object-contain filter drop-shadow-md pointer-events-none"
+                                draggable={false}
+                              />
+                            ) : (
+                              <span className="text-[11px] font-bold text-white bg-black/70 px-2 py-0.5 rounded shadow">
+                                {brandName || 'TU LOGO'}
+                              </span>
                             )}
-                            alt="Logo estampado"
-                            className="max-h-full max-w-full object-contain filter drop-shadow-md"
-                          />
-                        ) : (
-                          <span className="text-xs font-bold text-white bg-black/60 px-2.5 py-1 rounded">
-                            {brandName || 'TU LOGO'}
-                          </span>
-                        )}
+                          </div>
+
+                          {/* Tooltip de mover */}
+                          <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-amber-500 text-zinc-950 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded shadow pointer-events-none whitespace-nowrap opacity-0 group-hover/logo:opacity-100 transition-opacity">
+                            Arrastrar
+                          </div>
+
+                          {/* Manija de Redimensión en la esquina inferior derecha */}
+                          <div
+                            onPointerDown={handleResizePointerDown}
+                            onPointerMove={handleResizePointerMove}
+                            onPointerUp={handleResizePointerUp}
+                            className="absolute -bottom-2 -right-2 w-5 h-5 bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-full border-2 border-white shadow-xl cursor-se-resize flex items-center justify-center pointer-events-auto transition hover:scale-125 z-10"
+                            title="Arrastra para redimensionar el logo"
+                          >
+                            <div className="w-1.5 h-1.5 bg-zinc-950 rounded-full" />
+                          </div>
+                        </div>
                       </div>
-                      <span className="text-[10px] font-mono text-zinc-400 mt-3">
-                        Vista previa con logo estampado en tiempo real
-                      </span>
+
+                      {/* Pie del visualizador con ayuda y botón de centrado */}
+                      <div className="w-full flex items-center justify-between text-[11px] text-zinc-400 mt-2 px-1">
+                        <span>💡 Clic o arrastra para ubicar</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveMockupConfig((prev) =>
+                              prev ? { ...prev, posX: 50, posY: 50, stampScale: 100 } : null
+                            );
+                          }}
+                          className="text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>Centrar (50%, 50%)</span>
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Controles de Configuración */}
-                    <div className="w-full md:w-1/2 p-6 flex flex-col justify-between space-y-4 overflow-y-auto">
+                    {/* Controles de Configuración a la derecha */}
+                    <div className="w-full md:w-1/2 p-6 flex flex-col justify-between space-y-4 overflow-y-auto max-h-[85vh]">
                       <div className="space-y-4">
                         <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
                           <div>
-                            <h4 className="text-sm font-bold text-zinc-900 dark:text-white">
-                              Configurar Estampado del Mockup
+                            <h4 className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                              <span>Configurar Mockup</span>
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                Estudio 3D
+                              </span>
                             </h4>
                             <p className="text-[11px] text-zinc-500">
-                              Define qué logo usar y su posición en este soporte.
+                              Mueve, escala y ajusta el logo sobre el soporte.
                             </p>
                           </div>
                           <button
@@ -2744,7 +2930,7 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
                           </button>
                         </div>
 
-                        {/* Título del Mockup */}
+                        {/* Título */}
                         <div>
                           <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1">
                             Título en la Lámina
@@ -2758,14 +2944,14 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
                                 title: e.target.value,
                               })
                             }
-                            className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-bold"
+                            className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-bold text-zinc-900 dark:text-white"
                           />
                         </div>
 
-                        {/* ¿Qué logo estampar? */}
+                        {/* Selector de Logo */}
                         <div>
                           <label className="block text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-1">
-                            ¿Qué Logo Estampar en este Mockup?
+                            ¿Qué Logo Estampar?
                           </label>
                           <select
                             value={
@@ -2808,73 +2994,176 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
                           </select>
                         </div>
 
-                        {/* Posición y Escala */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              Posición del Logo
-                            </label>
-                            <select
-                              value={activeMockupConfig.stampPositionPreset || 'center_large'}
-                              onChange={(e) =>
-                                setActiveMockupConfig({
-                                  ...activeMockupConfig,
-                                  stampPositionPreset: e.target.value as any,
-                                })
-                              }
-                              className="w-full px-2.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-semibold"
-                            >
-                              <option value="chest_left">Pecho Izq (Escudo)</option>
-                              <option value="center_large">Pecho Centro Grande</option>
-                              <option value="back_print">Espalda Completa</option>
-                              <option value="full">Completo</option>
-                              <option value="subtle">Sutil / Pequeño</option>
-                            </select>
+                        {/* Controles de Posición X e Y */}
+                        <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                              <Move className="w-3.5 h-3.5 text-amber-500" />
+                              <span>Posición (X, Y)</span>
+                            </span>
+                            <div className="flex items-center gap-1">
+                              {activeMockupConfig.mockupImageUrl.includes('business-card') && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setActiveMockupConfig((prev) =>
+                                      prev ? { ...prev, posX: 32.5, posY: 48.5, stampPositionPreset: 'custom' } : null
+                                    )
+                                  }
+                                  className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 cursor-pointer"
+                                >
+                                  [Logo Here]
+                                </button>
+                              )}
+                              {activeMockupConfig.mockupImageUrl.includes('commercial-van') && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setActiveMockupConfig((prev) =>
+                                      prev ? { ...prev, posX: 66, posY: 44, stampPositionPreset: 'custom' } : null
+                                    )
+                                  }
+                                  className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 cursor-pointer"
+                                >
+                                  Lateral Van
+                                </button>
+                              )}
+                              {activeMockupConfig.mockupImageUrl.includes('safety-helmet') && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setActiveMockupConfig((prev) =>
+                                      prev ? { ...prev, posX: 50, posY: 63, stampPositionPreset: 'custom' } : null
+                                    )
+                                  }
+                                  className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 cursor-pointer"
+                                >
+                                  Frontal Casco
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setActiveMockupConfig((prev) =>
+                                    prev ? { ...prev, posX: 50, posY: 50, stampPositionPreset: 'custom' } : null
+                                  )
+                                }
+                                className="text-[10px] font-bold px-2 py-0.5 rounded bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 text-zinc-800 dark:text-zinc-200 cursor-pointer"
+                              >
+                                Centrar
+                              </button>
+                            </div>
                           </div>
 
-                          <div>
-                            <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                              Modo de Fusión
-                            </label>
-                            <select
-                              value={activeMockupConfig.blendMode || 'normal'}
-                              onChange={(e) =>
-                                setActiveMockupConfig({
-                                  ...activeMockupConfig,
-                                  blendMode: e.target.value as any,
-                                })
-                              }
-                              className="w-full px-2.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-semibold"
-                            >
-                              <option value="normal">Normal (Directo)</option>
-                              <option value="multiply">Multiply (Sombras / Telas Claras)</option>
-                              <option value="screen">Screen (Telas Oscuras)</option>
-                            </select>
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div>
+                              <div className="flex justify-between text-[11px] font-semibold text-zinc-500 mb-1">
+                                <span>Horizontal (X)</span>
+                                <span className="font-mono text-amber-500 font-bold">{activeMockupConfig.posX ?? 50}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min={5}
+                                max={95}
+                                value={activeMockupConfig.posX ?? 50}
+                                onChange={(e) =>
+                                  setActiveMockupConfig((prev) =>
+                                    prev ? { ...prev, posX: Number(e.target.value), stampPositionPreset: 'custom' } : null
+                                  )
+                                }
+                                className="w-full accent-amber-500 cursor-pointer"
+                              />
+                            </div>
+                            <div>
+                              <div className="flex justify-between text-[11px] font-semibold text-zinc-500 mb-1">
+                                <span>Vertical (Y)</span>
+                                <span className="font-mono text-amber-500 font-bold">{activeMockupConfig.posY ?? 50}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min={5}
+                                max={95}
+                                value={activeMockupConfig.posY ?? 50}
+                                onChange={(e) =>
+                                  setActiveMockupConfig((prev) =>
+                                    prev ? { ...prev, posY: Number(e.target.value), stampPositionPreset: 'custom' } : null
+                                  )
+                                }
+                                className="w-full accent-amber-500 cursor-pointer"
+                              />
+                            </div>
                           </div>
                         </div>
 
-                        <div>
-                          <div className="flex items-center justify-between text-xs font-bold mb-1">
-                            <span className="text-zinc-700 dark:text-zinc-300">
-                              Escala del Estampado
+                        {/* Redimensionar / Escala */}
+                        <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-800 space-y-2">
+                          <div className="flex items-center justify-between text-xs font-bold">
+                            <span className="text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                              <ZoomIn className="w-3.5 h-3.5 text-amber-500" />
+                              <span>Tamaño del Logo (Escala)</span>
                             </span>
-                            <span className="font-mono text-amber-500">
+                            <span className="font-mono text-amber-500 text-sm font-bold">
                               {activeMockupConfig.stampScale || 100}%
                             </span>
                           </div>
-                          <input
-                            type="range"
-                            min={40}
-                            max={160}
-                            value={activeMockupConfig.stampScale || 100}
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setActiveMockupConfig((prev) =>
+                                  prev ? { ...prev, stampScale: Math.max(30, (prev.stampScale || 100) - 10) } : null
+                                )
+                              }
+                              className="w-7 h-7 rounded-lg bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600 font-black text-sm flex items-center justify-center cursor-pointer text-zinc-800 dark:text-zinc-200"
+                            >
+                              -
+                            </button>
+                            <input
+                              type="range"
+                              min={30}
+                              max={200}
+                              value={activeMockupConfig.stampScale || 100}
+                              onChange={(e) =>
+                                setActiveMockupConfig({
+                                  ...activeMockupConfig,
+                                  stampScale: Number(e.target.value),
+                                })
+                              }
+                              className="flex-1 accent-amber-500 cursor-pointer"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setActiveMockupConfig((prev) =>
+                                  prev ? { ...prev, stampScale: Math.min(200, (prev.stampScale || 100) + 10) } : null
+                                )
+                              }
+                              className="w-7 h-7 rounded-lg bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600 font-black text-sm flex items-center justify-center cursor-pointer text-zinc-800 dark:text-zinc-200"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Modo de Fusión */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                            Modo de Fusión (Blending)
+                          </label>
+                          <select
+                            value={activeMockupConfig.blendMode || 'normal'}
                             onChange={(e) =>
                               setActiveMockupConfig({
                                 ...activeMockupConfig,
-                                stampScale: Number(e.target.value),
+                                blendMode: e.target.value as any,
                               })
                             }
-                            className="w-full accent-amber-500 cursor-pointer"
-                          />
+                            className="w-full px-2.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-semibold text-zinc-900 dark:text-white"
+                          >
+                            <option value="normal">Normal (Directo con color fiel)</option>
+                            <option value="multiply">Multiply (Integra sombras naturales y texturas)</option>
+                            <option value="screen">Screen (Para prendas y fondos oscuros)</option>
+                          </select>
                         </div>
                       </div>
 
