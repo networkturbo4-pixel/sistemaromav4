@@ -8,14 +8,15 @@ const genai_1 = require("@google/genai");
 const router = (0, express_1.Router)();
 // Inicialización de cliente Gemini si la clave está configurada
 const getGeminiClient = async (tenantId) => {
-    let apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    let apiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
     if (tenantId) {
         const tenant = await db_1.db.getTenantById(tenantId);
         if (tenant?.aiConfig?.geminiApiKey) {
-            apiKey = tenant.aiConfig.geminiApiKey;
+            apiKey = tenant.aiConfig.geminiApiKey.trim();
         }
     }
-    if (!apiKey)
+    // Si la clave no está configurada o es un token de sesión/OAuth (AQ...) no usamos Gemini
+    if (!apiKey || apiKey.startsWith('AQ.'))
         return null;
     return new genai_1.GoogleGenAI({ apiKey });
 };
@@ -163,10 +164,12 @@ async function generateContentWithResilience(client, preferredModel, requestPara
     let lastError = null;
     for (const model of modelsToTry) {
         try {
-            const res = await client.models.generateContent({
+            const callPromise = client.models.generateContent({
                 ...requestParams,
                 model,
             });
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_GEMINI')), 5000));
+            const res = (await Promise.race([callPromise, timeoutPromise]));
             return { response: res, modelUsed: model };
         }
         catch (err) {
@@ -555,6 +558,200 @@ ${mode === 'hook'
  * Endpoint de Ejecución Segura de Acciones (Human-in-the-Loop)
  * Recibe la acción aprobada por el usuario, valida permisos y la aplica en la DB.
  */
+// =============================================================================
+// ASISTENTE ROMITA PARA CORREOS: REDACCIÓN INTELIGENTE Y AUTORELLENADO (TAB)
+// =============================================================================
+/**
+ * POST /api/romita/generate-email
+ * Redacta o mejora correos corporativos completos usando Romita AI
+ */
+router.post('/generate-email', auth_1.requireAuth, async (req, res) => {
+    try {
+        const { prompt, tone = 'formal', recipient = '', currentSubject = '', existingBody = '', action = 'compose', modelPreference = 'gemini-3.8-flash', } = req.body;
+        const tenantId = req.auth?.tenant?.id || 'default-tenant';
+        const gemini = await getGeminiClient(tenantId);
+        const toneDescriptions = {
+            formal: 'Muy profesional, corporativo, respetuoso y pulcro',
+            amable: 'Cálido, cercano, empático pero manteniendo profesionalismo de agencia',
+            comercial: 'Persuasivo, orientado a beneficios, conversión y cierre de negocios',
+            urgente: 'Firme, directo, destacando plazos y necesidad de pronta respuesta',
+        };
+        const selectedTone = toneDescriptions[tone] || toneDescriptions.formal;
+        if (gemini) {
+            try {
+                const systemPrompt = `Eres Romita, la Directora de Comunicación y Asistente Ejecutiva de la Agencia Roma.
+Tu tarea es redactar un correo electrónico corporativo de alto nivel.
+Tono solicitado: ${selectedTone}.
+Destinatario previsto: "${recipient || 'Cliente / Colaborador'}"
+Asunto previo (si existe): "${currentSubject}"
+Texto previo o borrador a pulir (si existe): "${existingBody}"
+
+INSTRUCCIONES CLAVE:
+1. Responde ÚNICAMENTE con un JSON válido con la siguiente estructura:
+{
+  "subject": "Línea de asunto concisa, profesional y de alto impacto",
+  "bodyHtml": "<p>Párrafos bien formateados con etiquetas HTML limpias (<p>, <strong>, <ul>, <li>, <br/>). NO incluyas markdown, doctypes ni etiquetas <html>/<body>.</p>"
+}
+2. Estructura: Saludo adecuado, introducción al grano, desarrollo con puntos destacados si aplica, llamada a la acción clara y despedida cordial de agencia.
+3. Acción solicitada: ${action === 'improve'
+                    ? 'Mejora y eleva la redacción del texto previo preservando la intención.'
+                    : action === 'shorter'
+                        ? 'Sintetiza el mensaje en 2 o 3 párrafos directos y contundentes.'
+                        : action === 'reply'
+                            ? 'Redacta una respuesta formal y resolutiva al correo recibido.'
+                            : 'Redacta el correo completo desde cero según el requerimiento del usuario.'}`;
+                const userPrompt = prompt
+                    ? `Requerimiento para el correo: ${prompt}`
+                    : `Redacta el correo adecuado para este asunto y contexto: ${currentSubject || 'Comunicación oficial de la agencia'}`;
+                const { response, modelUsed } = await generateContentWithResilience(gemini, modelPreference || 'gemini-3.8-flash', {
+                    contents: userPrompt,
+                    systemInstruction: systemPrompt,
+                });
+                const rawText = response.text?.trim() || '';
+                let cleanJsonStr = rawText;
+                if (cleanJsonStr.includes('```json')) {
+                    cleanJsonStr = cleanJsonStr.split('```json')[1].split('```')[0].trim();
+                }
+                else if (cleanJsonStr.includes('```')) {
+                    cleanJsonStr = cleanJsonStr.split('```')[1].split('```')[0].trim();
+                }
+                try {
+                    const parsed = JSON.parse(cleanJsonStr);
+                    return res.json({
+                        success: true,
+                        subject: parsed.subject || currentSubject || 'Mensaje de Agencia Roma',
+                        bodyHtml: parsed.bodyHtml || rawText,
+                        modelUsed,
+                    });
+                }
+                catch (jsonErr) {
+                    // Si no vino en JSON estricto, formatear como párrafos
+                    const formattedHtml = rawText
+                        .split('\n\n')
+                        .map((p) => `<p>${p.replace(/\n/g, '<br/>')}</p>`)
+                        .join('');
+                    return res.json({
+                        success: true,
+                        subject: currentSubject || 'Comunicación Oficial',
+                        bodyHtml: formattedHtml,
+                        modelUsed,
+                    });
+                }
+            }
+            catch (geminiErr) {
+                console.warn('[Romita AI] Fallback a redacción local para correo:', geminiErr.message);
+            }
+        }
+        // Fallback inteligente sin IA o si la API excede cuotas
+        let fallbackSubject = currentSubject || 'Propuesta y Actualización - Agencia Roma';
+        let fallbackHtml = '';
+        if (prompt && /factura|cobro|pago|vencid/i.test(prompt)) {
+            fallbackSubject = 'Estado de Cuenta y Recordatorio de Pago - Agencia Roma';
+            fallbackHtml = `
+        <p>Estimado/a cliente,</p>
+        <p>Esperamos que te encuentres muy bien. Te escribimos desde el área administrativa de <strong>Agencia Roma</strong> para compartirte el estado actualizado de tu cuenta y recordarte amablemente el pago correspondiente al servicio en curso.</p>
+        <p>Agradecemos puedas confirmarnos una fecha estimada o enviarnos el comprobante en cuanto sea emitido para mantener la continuidad de los entregables.</p>
+        <p>Quedamos a tu entera disposición para resolver cualquier duda contable.</p>
+        <p>Saludos cordiales,<br/><strong>Administración | Agencia Roma</strong></p>
+      `;
+        }
+        else if (prompt && /reuni[oó]n|meet|cita|agendar/i.test(prompt)) {
+            fallbackSubject = 'Coordinación de Reunión de Avance - Agencia Roma';
+            fallbackHtml = `
+        <p>Hola,</p>
+        <p>Nos ponemos en contacto para coordinar una breve reunión de revisión sobre el avance de los proyectos en desarrollo.</p>
+        <p>¿Qué día y horario te resultaría más cómodo entre mañana o el transcurso de esta semana? Podemos reunirnos mediante Google Meet en un espacio de 20 minutos.</p>
+        <p>Quedamos a la espera de tu confirmación para enviarte el enlace de acceso.</p>
+        <p>Un cordial saludo,<br/><strong>Equipo de Cuentas | Agencia Roma</strong></p>
+      `;
+        }
+        else {
+            fallbackSubject = currentSubject || `Comunicación Oficial: ${prompt ? prompt.slice(0, 45) : 'Servicios y Proyectos'}`;
+            fallbackHtml = `
+        <p>Estimado/a,</p>
+        <p>Es un gusto saludarte. Nos comunicamos en relación a ${prompt ? `<strong>${prompt}</strong>` : 'los alcances de tu proyecto con nuestra agencia'}.</p>
+        <p>En <strong>Agencia Roma</strong> nuestro compromiso es asegurar que cada detalle técnico y creativo cumpla con los más altos estándares de calidad y entrega puntual.</p>
+        <p>Quedamos atentos a tus comentarios o requerimientos adicionales.</p>
+        <p>Atentamente,<br/><strong>Dirección General | Agencia Roma</strong></p>
+      `;
+        }
+        return res.json({
+            success: true,
+            subject: fallbackSubject,
+            bodyHtml: fallbackHtml.trim(),
+            modelUsed: 'romita-heuristic-engine',
+        });
+    }
+    catch (err) {
+        console.error('Error en /api/romita/generate-email:', err);
+        return res.status(500).json({ error: err.message || 'Error al generar correo' });
+    }
+});
+/**
+ * POST /api/romita/autocomplete-email
+ * Sugiere en tiempo real la continuación de la frase para autorellenar con la tecla TAB
+ */
+router.post('/autocomplete-email', auth_1.requireAuth, async (req, res) => {
+    try {
+        const { textBefore = '', subject = '' } = req.body;
+        const cleanBefore = String(textBefore).trim();
+        if (!cleanBefore || cleanBefore.length < 5) {
+            return res.json({ completion: '' });
+        }
+        // Heurísticas instantáneas locales (< 2ms) para frases comunes de correo
+        const lower = cleanBefore.toLowerCase();
+        const commonCompletions = [
+            { match: /quedo a la espera de/i, completion: ' su pronta respuesta y confirmación.' },
+            { match: /quedo a su/i, completion: ' entera disposición para cualquier duda o consulta.' },
+            { match: /quedamos a su/i, completion: ' entera disposición para resolver cualquier duda.' },
+            { match: /quedamos atentos a/i, completion: ' sus valiosos comentarios sobre el proyecto.' },
+            { match: /adjunto a este/i, completion: ' mensaje encontrará el archivo correspondiente.' },
+            { match: /adjunto a este correo/i, completion: ' la cotización detallada para su revisión.' },
+            { match: /agradezco de antemano/i, completion: ' su tiempo y pronta colaboración.' },
+            { match: /muchas gracias por/i, completion: ' su confianza y preferencia en nuestros servicios.' },
+            { match: /no dude en/i, completion: ' contactarnos si requiere asistencia adicional.' },
+            { match: /en caso de tener/i, completion: ' alguna inquietud, no dude en hacérnosla saber.' },
+            { match: /le escribo para/i, completion: ' coordinar los próximos pasos del proyecto acordado.' },
+            { match: /nos comunicamos para/i, completion: ' presentarle la propuesta formal de la agencia.' },
+            { match: /saludos/i, completion: ' cordiales y excelente día.' },
+            { match: /atentamente/i, completion: ', Equipo de Dirección de Agencia Roma.' },
+            { match: /un cordial/i, completion: ' saludo y quedamos en contacto permanente.' },
+        ];
+        for (const rule of commonCompletions) {
+            if (rule.match.test(cleanBefore)) {
+                return res.json({ completion: rule.completion });
+            }
+        }
+        // Si no coincide con diccionario estático, consultar modelo ultraligero
+        const tenantId = req.auth?.tenant?.id || 'default-tenant';
+        const gemini = await getGeminiClient(tenantId);
+        if (gemini) {
+            try {
+                const lastPart = cleanBefore.slice(-140);
+                const { response } = await generateContentWithResilience(gemini, 'gemini-3.5-flash-lite', {
+                    contents: `Completa la siguiente frase de un correo formal en español.
+Asunto del correo: "${subject || 'General'}"
+Texto escrito hasta ahora: "...${lastPart}"
+
+REGLA ESTRICTA:
+Responde ÚNICAMENTE con las próximas 3 a 7 palabras exactas para completar la frase de forma natural. Sin comillas, sin explicaciones, sin repetir lo que ya está escrito.`,
+                });
+                let completion = (response.text || '').trim().replace(/^["']|["']$/g, '');
+                if (completion && !completion.startsWith(' ') && !cleanBefore.endsWith(' ')) {
+                    completion = ' ' + completion;
+                }
+                return res.json({ completion: completion || '' });
+            }
+            catch {
+                // Silencioso en caso de error para no interrumpir el tipeo del usuario
+            }
+        }
+        return res.json({ completion: '' });
+    }
+    catch (err) {
+        return res.json({ completion: '' });
+    }
+});
 router.post('/execute', auth_1.requireAuth, async (req, res) => {
     try {
         const { action } = req.body;

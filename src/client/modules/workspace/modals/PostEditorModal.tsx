@@ -379,6 +379,12 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
     };
     setAiGenerationLabel(labels[mode] || 'Copy Inteligente');
 
+    // Timer de seguridad: garantiza que el skeleton nunca se quede trabado
+    const safetyTimer = setTimeout(() => {
+      setIsGeneratingWithAI(false);
+      setAiGenerationLabel('');
+    }, 7000);
+
     try {
       const res = await apiFetch<{
         success: boolean;
@@ -396,6 +402,8 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
           mode,
         }),
       });
+
+      clearTimeout(safetyTimer);
 
       if (res?.text) {
         if (mode === 'brief') {
@@ -420,8 +428,10 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
         }
       }
     } catch (err: any) {
+      clearTimeout(safetyTimer);
       toast(err.message || 'Error al generar texto con IA', 'error');
     } finally {
+      clearTimeout(safetyTimer);
       setIsGeneratingWithAI(false);
       setAiGenerationLabel('');
     }
