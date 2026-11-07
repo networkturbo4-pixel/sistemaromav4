@@ -2144,7 +2144,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
     switch (slide.type) {
       case 'cover':
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-5 sm:p-10 md:p-16 ${bgClass} select-none overflow-y-auto sm:overflow-y-hidden`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-5 sm:p-10 md:p-16 ${bgClass} select-none overflow-y-auto sm:overflow-y-hidden`}>
             <div className="flex items-center justify-between">
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
                 Manual de Identidad Visual
@@ -2183,7 +2183,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
       case 'brief':
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-5 sm:p-10 md:p-16 ${bgClass} select-none overflow-y-auto sm:overflow-y-hidden`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-5 sm:p-10 md:p-16 ${bgClass} select-none overflow-y-auto sm:overflow-y-hidden`}>
             <div>
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
                 Resumen del Brief
@@ -2223,7 +2223,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
       case 'goals':
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-5 sm:p-10 md:p-16 ${bgClass} select-none overflow-y-auto sm:overflow-y-hidden`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-5 sm:p-10 md:p-16 ${bgClass} select-none overflow-y-auto sm:overflow-y-hidden`}>
             <div>
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
                 Objetivos y Pilares de Marca
@@ -2255,7 +2255,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
       case 'direction':
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-5 sm:p-10 md:p-16 ${bgClass} select-none overflow-y-auto sm:overflow-y-hidden`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-5 sm:p-10 md:p-16 ${bgClass} select-none overflow-y-auto sm:overflow-y-hidden`}>
             <div className="flex items-center justify-between border-b pb-3 border-zinc-500/20">
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
                 {translateDisplayText(guideline.directionName, 'Propuesta Principal')}
@@ -2290,7 +2290,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
       case 'before_after':
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-6 sm:p-12 ${bgClass} select-none`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-6 sm:p-12 ${bgClass} select-none`}>
             <div className="flex items-center justify-between">
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
                 Evolución de Marca • Comparador Interactivo Antes vs. Después
@@ -2366,7 +2366,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
       case 'clearspace_donts':
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-6 sm:p-12 ${bgClass} select-none`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-5 sm:p-12 ${bgClass} select-none`}>
             <div className="flex justify-between items-center">
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
                 Área de Resguardo ({guideline.clearspaceUnit || '1x'}) y Usos Incorrectos
@@ -2496,7 +2496,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
         };
 
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-6 sm:p-12 md:p-14 ${bgClass} select-none`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-6 sm:p-12 md:p-14 ${bgClass} select-none`}>
             <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
               <div>
                 <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60 block">
@@ -2622,7 +2622,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
       case 'typography':
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-6 sm:p-12 md:p-16 ${bgClass} select-none`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-6 sm:p-12 md:p-16 ${bgClass} select-none`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
                 Sistema Tipográfico ({primaryFont})
@@ -2824,7 +2824,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
       case 'mockup_appicon':
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-8 sm:p-14 ${bgClass} select-none`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-8 sm:p-14 ${bgClass} select-none`}>
             <div className="flex justify-between items-center">
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
                 Retícula Constructiva de Icono de App y Pantalla de Inicio
@@ -2873,7 +2873,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
       case 'mockup_desktop':
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-6 sm:p-12 ${bgClass} select-none`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-6 sm:p-12 ${bgClass} select-none`}>
             <div className="flex justify-between items-center mb-2">
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
                 Experiencia de Interfaz Web (Navegador de Escritorio)
@@ -2957,7 +2957,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
       case 'stat':
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-8 sm:p-14 md:p-20 ${bgClass} select-none`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-8 sm:p-14 md:p-20 ${bgClass} select-none`}>
             <div>
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
                 Indicador Clave de Impacto
@@ -2988,7 +2988,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
       case 'merch_apparel':
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-6 sm:p-10 ${bgClass} select-none`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-6 sm:p-10 ${bgClass} select-none`}>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
               <div>
                 <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60 block">
@@ -3018,7 +3018,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
       case 'merch_collaterals':
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-6 sm:p-10 ${bgClass} select-none`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-6 sm:p-10 ${bgClass} select-none`}>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
               <div>
                 <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60 block">
@@ -3052,7 +3052,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
         const primaryBrandHex = guideline.colors?.[0]?.hex || '#F59E0B';
 
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-6 sm:p-10 md:p-12 ${bgClass} select-none`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-6 sm:p-10 md:p-12 ${bgClass} select-none`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60 block">
@@ -3249,7 +3249,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
         )}`;
 
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-6 sm:p-10 md:p-12 ${bgClass} select-none`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-6 sm:p-10 md:p-12 ${bgClass} select-none`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60 block">
@@ -3389,7 +3389,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
         const brandAccent = guideline.colors?.[0]?.hex || '#F59E0B';
 
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-6 sm:p-10 md:p-12 ${bgClass} select-none`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-6 sm:p-10 md:p-12 ${bgClass} select-none`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60 block">
@@ -3556,7 +3556,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
         const accentHex = guideline.colors?.[1]?.hex || '#F59E0B';
 
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-6 sm:p-10 md:p-12 ${bgClass} select-none`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-6 sm:p-10 md:p-12 ${bgClass} select-none`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60 block">
@@ -3699,7 +3699,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
         const handleName = guideline.brandName.toLowerCase().replace(/\s+/g, '');
 
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-6 sm:p-10 md:p-12 ${bgClass} select-none`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-6 sm:p-10 md:p-12 ${bgClass} select-none`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60 block">
@@ -3878,7 +3878,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
       case 'other_ideas':
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-8 sm:p-14 ${bgClass} select-none`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-8 sm:p-14 ${bgClass} select-none`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
                 Variaciones del Símbolo, Iconos y Exploración Visual
@@ -3958,7 +3958,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
       case 'next_steps':
         return (
-          <div className={`w-full h-full flex flex-col justify-between p-6 sm:p-12 md:p-16 ${bgClass} select-none`}>
+          <div className={`w-full min-h-full flex flex-col justify-between p-6 sm:p-12 md:p-16 ${bgClass} select-none`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
@@ -4388,12 +4388,18 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
               className={`w-full overflow-hidden shadow-2xl relative transition-all duration-300 ${
+                theme === 'dark' ? 'bg-[#111111]' : 'bg-white'
+              } ${
                 isCinemaMode || isFullscreen
                   ? 'h-screen max-h-none rounded-none border-0'
                   : 'aspect-[16/10] sm:aspect-[16/9] min-h-[480px] sm:min-h-0 max-h-[85vh] rounded-2xl sm:rounded-3xl border border-black/10 dark:border-white/10'
               }`}
             >
-              <div className="w-full h-full overflow-y-auto sm:overflow-y-hidden">
+              <div
+                className={`w-full h-full overflow-y-auto sm:overflow-y-hidden ${
+                  theme === 'dark' ? 'bg-[#111111]' : 'bg-white'
+                }`}
+              >
                 {renderSlideContent(currentSlideIndex)}
               </div>
 
