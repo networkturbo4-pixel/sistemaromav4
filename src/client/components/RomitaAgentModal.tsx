@@ -381,7 +381,7 @@ export const RomitaAgentModal: React.FC<RomitaAgentModalProps> = ({
               {/* HISTORIAL DE MENSAJES */}
               <div
                 ref={scrollRef}
-                className="overflow-y-auto p-3.5 space-y-2.5 max-h-[320px] text-xs scrollbar-thin"
+                className="overflow-y-auto p-3.5 space-y-2.5 max-h-[185px] sm:max-h-[300px] text-xs scrollbar-thin"
                 style={{
                   backgroundColor: 'var(--app-bg)',
                 }}

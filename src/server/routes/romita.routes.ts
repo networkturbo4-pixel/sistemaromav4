@@ -628,7 +628,7 @@ router.post('/test-connection', requireAuth, async (req: AuthenticatedRequest, r
     }
 
     if (!keyToTest) {
-      return res.status(400).json({
+      return res.json({
         ok: false,
         error: 'No se ha proporcionado una API Key de Gemini para probar.',
       });
@@ -653,9 +653,9 @@ router.post('/test-connection', requireAuth, async (req: AuthenticatedRequest, r
       message: `¡Conexión exitosa con Google Gemini (${model})! Tiempo de respuesta: ${latencyMs}ms.`,
     });
   } catch (err: any) {
-    console.error('Error probando conexión Gemini:', err);
     const friendlyError = formatGeminiError(err);
-    return res.status(400).json({
+    console.warn('Aviso de prueba de conexión Gemini:', friendlyError);
+    return res.json({
       ok: false,
       error: friendlyError,
     });

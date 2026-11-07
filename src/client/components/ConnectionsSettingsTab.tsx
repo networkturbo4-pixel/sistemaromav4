@@ -105,8 +105,9 @@ export const ConnectionsSettingsTab: React.FC = () => {
     try {
       const res = await apiFetch<{
         ok: boolean;
-        latencyMs: number;
-        message: string;
+        latencyMs?: number;
+        message?: string;
+        error?: string;
       }>('/api/romita/test-connection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -115,6 +116,17 @@ export const ConnectionsSettingsTab: React.FC = () => {
           model: preferredModel,
         }),
       });
+
+      if (!res.ok) {
+        const friendly = parseFriendlyError(res.error);
+        setTestResult({
+          ok: false,
+          message: friendly,
+        });
+        setStatus('error');
+        showToast(friendly, 'warning', { duration: 7000 });
+        return;
+      }
 
       setTestResult({
         ok: true,
@@ -130,7 +142,7 @@ export const ConnectionsSettingsTab: React.FC = () => {
         message: friendly,
       });
       setStatus('error');
-      showToast(friendly, 'error', { duration: 8000 });
+      showToast(friendly, 'warning', { duration: 7000 });
     } finally {
       setIsTesting(false);
     }
