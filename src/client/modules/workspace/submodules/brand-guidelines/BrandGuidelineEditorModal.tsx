@@ -37,6 +37,76 @@ export interface MockupCatalogTemplate {
 
 export const MOCKUP_CATALOG_TEMPLATES: MockupCatalogTemplate[] = [
   {
+    id: 'tpl_camisa_larga',
+    title: 'Camisa Ejecutiva Oxford (Manga Larga)',
+    category: 'textil',
+    categoryLabel: 'Indumentaria Corporativa',
+    mockupImageUrl: '/mockups/camisa-manga-larga.jpg',
+    defaultPosition: 'custom',
+    defaultPosX: 60,
+    defaultPosY: 38,
+    defaultScale: 70,
+    defaultBlendMode: 'multiply',
+    defaultLogoType: 'secondary',
+    description: 'Camisa formal blanca de vestir para directivos, ejecutivos y atención comercial.',
+  },
+  {
+    id: 'tpl_camisa_corta',
+    title: 'Camisa Ejecutiva con Bolsillo (Manga Corta)',
+    category: 'textil',
+    categoryLabel: 'Indumentaria Corporativa',
+    mockupImageUrl: '/mockups/camisa-manga-corta.jpg',
+    defaultPosition: 'custom',
+    defaultPosX: 61,
+    defaultPosY: 40,
+    defaultScale: 68,
+    defaultBlendMode: 'multiply',
+    defaultLogoType: 'secondary',
+    description: 'Camisa institucional blanca manga corta con bolsillo superior para bordado.',
+  },
+  {
+    id: 'tpl_chaleco_reflectivo',
+    title: 'Chaleco de Seguridad Reflectivo de Alta Visibilidad',
+    category: 'textil',
+    categoryLabel: 'Indumentaria & Seguridad',
+    mockupImageUrl: '/mockups/chaleco-reflectivo.jpg',
+    defaultPosition: 'custom',
+    defaultPosX: 34,
+    defaultPosY: 41,
+    defaultScale: 65,
+    defaultBlendMode: 'multiply',
+    defaultLogoType: 'secondary',
+    description: 'Chaleco normado amarillo neón con bandas reflectantes y bolsillos multifunción.',
+  },
+  {
+    id: 'tpl_lapicero_ejecutivo',
+    title: 'Lapicero / Pluma Estilográfica Premium',
+    category: 'promocional',
+    categoryLabel: 'Promocionales & Merch',
+    mockupImageUrl: '/mockups/lapicero-ejecutivo.jpg',
+    defaultPosition: 'custom',
+    defaultPosX: 55,
+    defaultPosY: 51.5,
+    defaultScale: 50,
+    defaultBlendMode: 'screen',
+    defaultLogoType: 'symbol',
+    description: 'Instrumento de escritura de alta gama para firmas, obsequios protocolares y eventos.',
+  },
+  {
+    id: 'tpl_gorra_azul',
+    title: 'Gorra Estructurada Premium (Azul Marino)',
+    category: 'textil',
+    categoryLabel: 'Indumentaria & Merch',
+    mockupImageUrl: '/mockups/gorra-azul-marino.jpg',
+    defaultPosition: 'custom',
+    defaultPosX: 50,
+    defaultPosY: 46,
+    defaultScale: 75,
+    defaultBlendMode: 'normal',
+    defaultLogoType: 'primary',
+    description: 'Gorra de sarga 6 paneles con bordado frontal en relieve para personal y merchandising.',
+  },
+  {
     id: 'tpl_tarjeta_presentacion',
     title: 'Tarjeta de Presentación Minimalista',
     category: 'papeleria',
@@ -3002,6 +3072,71 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
                               <span>Posición (X, Y)</span>
                             </span>
                             <div className="flex items-center gap-1">
+                              {activeMockupConfig.mockupImageUrl.includes('camisa-manga-larga') && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setActiveMockupConfig((prev) =>
+                                      prev ? { ...prev, posX: 60, posY: 38, stampScale: 70, stampPositionPreset: 'custom' } : null
+                                    )
+                                  }
+                                  className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 cursor-pointer"
+                                >
+                                  Pecho Izq
+                                </button>
+                              )}
+                              {activeMockupConfig.mockupImageUrl.includes('camisa-manga-corta') && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setActiveMockupConfig((prev) =>
+                                      prev ? { ...prev, posX: 61, posY: 40, stampScale: 68, stampPositionPreset: 'custom' } : null
+                                    )
+                                  }
+                                  className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 cursor-pointer"
+                                >
+                                  Bolsillo
+                                </button>
+                              )}
+                              {activeMockupConfig.mockupImageUrl.includes('chaleco-reflectivo') && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setActiveMockupConfig((prev) =>
+                                      prev ? { ...prev, posX: 34, posY: 41, stampScale: 65, stampPositionPreset: 'custom' } : null
+                                    )
+                                  }
+                                  className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 cursor-pointer"
+                                >
+                                  Pecho Chaleco
+                                </button>
+                              )}
+                              {activeMockupConfig.mockupImageUrl.includes('lapicero-ejecutivo') && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setActiveMockupConfig((prev) =>
+                                      prev ? { ...prev, posX: 55, posY: 51.5, stampScale: 50, stampPositionPreset: 'custom' } : null
+                                    )
+                                  }
+                                  className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 cursor-pointer"
+                                >
+                                  Cuerpo Pluma
+                                </button>
+                              )}
+                              {activeMockupConfig.mockupImageUrl.includes('gorra-azul-marino') && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setActiveMockupConfig((prev) =>
+                                      prev ? { ...prev, posX: 50, posY: 46, stampScale: 75, stampPositionPreset: 'custom' } : null
+                                    )
+                                  }
+                                  className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 cursor-pointer"
+                                >
+                                  Frontal Gorra
+                                </button>
+                              )}
                               {activeMockupConfig.mockupImageUrl.includes('business-card') && (
                                 <button
                                   type="button"
