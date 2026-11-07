@@ -159,20 +159,146 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
   // Próximos pasos
   const [nextSteps, setNextSteps] = useState<BrandGuidelineStep[]>([]);
 
+  const DEFAULT_SPANISH_STEPS: BrandGuidelineStep[] = [
+    {
+      id: 'ns1',
+      step: '01',
+      title: 'Revisión y Comentarios',
+      description: 'Comparte tus apreciaciones sobre la propuesta de identidad visual y sus aplicaciones.',
+    },
+    {
+      id: 'ns2',
+      step: '02',
+      title: 'Ajustes y Refinamiento (si aplica)',
+      description: 'Realizaremos los ajustes necesarios según tus comentarios y prioridades de marca.',
+    },
+    {
+      id: 'ns3',
+      step: '03',
+      title: 'Aprobación Oficial',
+      description: 'Una vez aprobada la identidad, prepararemos los artes finales y vectores de producción.',
+    },
+    {
+      id: 'ns4',
+      step: '04',
+      title: 'Entrega de Archivos Editables',
+      description: 'Entrega del kit completo de marca (.AI, .SVG, .PNG, .PDF, fuentes y manual de uso).',
+    },
+  ];
+
+  const DEFAULT_SPANISH_GOALS: BrandGuidelineGoal[] = [
+    {
+      id: 'g1',
+      number: '01',
+      title: 'Modernización Visual',
+      description:
+        'Actualizar la identidad visual y verbal de la marca para proyectar solidez, modernidad y cercanía con su audiencia actual.',
+    },
+    {
+      id: 'g2',
+      number: '02',
+      title: 'Diferenciación Competitiva',
+      description:
+        'Destacar con claridad en el mercado enfatizando el posicionamiento único, los valores y la propuesta de valor frente a la competencia.',
+    },
+    {
+      id: 'g3',
+      number: '03',
+      title: 'Versatilidad y Claridad',
+      description:
+        'Consolidar un sistema gráfico limpio, memorable y adaptable a soportes digitales, impresos, textiles y redes sociales.',
+    },
+  ];
+
+  const translateLegacyStep = (s: BrandGuidelineStep, idx: number): BrandGuidelineStep => {
+    const t = (s.title || '').trim();
+    const d = (s.description || '').trim();
+    const mapTitle: Record<string, string> = {
+      'Review & Feedback': 'Revisión y Comentarios',
+      'Revisions (if necessary)': 'Ajustes y Refinamiento (si aplica)',
+      'Final Approval': 'Aprobación Oficial',
+      'File Delivery': 'Entrega de Archivos Editables',
+    };
+    const mapDesc: Record<string, string> = {
+      'Share your thoughts on the logo design.':
+        'Comparte tus apreciaciones sobre la propuesta de identidad visual y sus aplicaciones.',
+      'Share your thoughts on the logo design. Let us know if any refinements are needed.':
+        'Comparte tus apreciaciones sobre la propuesta de identidad visual y sus aplicaciones.',
+      'We will refine the design based on your feedback.':
+        'Realizaremos los ajustes necesarios según tus comentarios y prioridades de marca.',
+      'We will refine the design based on your feedback and aesthetic priorities.':
+        'Realizaremos los ajustes necesarios según tus comentarios y prioridades de marca.',
+      'Once approved, we will proceed with finalizing vectors.':
+        'Una vez aprobada la identidad, prepararemos los artes finales y vectores de producción.',
+      'Once approved, we will proceed with finalizing the logo suite and production vectors.':
+        'Una vez aprobada la identidad, prepararemos los artes finales y vectores de producción.',
+      'Delivery of all logo formats and production assets.':
+        'Entrega del kit completo de marca (.AI, .SVG, .PNG, .PDF, fuentes y manual de uso).',
+      'You will receive all logo formats for print, digital, mobile, and branding guidelines.':
+        'Entrega del kit completo de marca (.AI, .SVG, .PNG, .PDF, fuentes y manual de uso).',
+    };
+    return {
+      ...s,
+      id: s.id || `ns_${idx + 1}`,
+      step: s.step || String(idx + 1).padStart(2, '0'),
+      title: mapTitle[t] || t,
+      description: mapDesc[d] || d,
+    };
+  };
+
+  const translateLegacyGoal = (g: BrandGuidelineGoal, idx: number): BrandGuidelineGoal => {
+    const t = (g.title || '').trim();
+    const mapTitle: Record<string, { title: string; desc: string }> = {
+      Modernization: {
+        title: 'Modernización Visual',
+        desc: 'Actualizar la identidad visual y verbal de la marca para proyectar solidez, modernidad y cercanía con su audiencia actual.',
+      },
+      'Competitive Differentiation': {
+        title: 'Diferenciación Competitiva',
+        desc: 'Destacar con claridad en el mercado enfatizando el posicionamiento único, los valores y la propuesta de valor frente a la competencia.',
+      },
+      Simplification: {
+        title: 'Versatilidad y Claridad',
+        desc: 'Consolidar un sistema gráfico limpio, memorable y adaptable a soportes digitales, impresos, textiles y redes sociales.',
+      },
+    };
+    if (mapTitle[t]) {
+      return {
+        ...g,
+        id: g.id || `g_${idx + 1}`,
+        number: g.number || String(idx + 1).padStart(2, '0'),
+        title: mapTitle[t].title,
+        description: mapTitle[t].desc,
+      };
+    }
+    return g;
+  };
+
   useEffect(() => {
     if (guideline) {
       setBrandName(guideline.brandName || '');
       setClientName(guideline.clientName || '');
       setDesignerName(guideline.designerName || '');
-      setRound(guideline.round || 'Round 1');
+      setRound(
+        guideline.round === 'Round 1' ? 'Ronda 1' : guideline.round || 'Ronda 1'
+      );
       setDate(guideline.date || '');
       setTagline(guideline.tagline || '');
       setThemeDefault(guideline.themeDefault || 'dark');
       setViewModeDefault(guideline.viewModeDefault || 'deck');
       setRequirePin(Boolean(guideline.requirePin));
       setPublicPin(guideline.publicPin || '');
-      setDirectionName(guideline.directionName || 'Direction One');
-      setDirectionRationale(guideline.directionRationale || '');
+      setDirectionName(
+        !guideline.directionName || guideline.directionName === 'Direction One'
+          ? 'Propuesta Principal'
+          : guideline.directionName
+      );
+      setDirectionRationale(
+        !guideline.directionRationale ||
+          guideline.directionRationale.startsWith('This direction provides a brief overview')
+          ? 'Esta propuesta sintetiza la esencia, los valores y la personalidad de la marca mediante una construcción geométrica equilibrada, garantizando máxima legibilidad y pregnancia tanto en medios digitales como impresos.'
+          : guideline.directionRationale
+      );
       setLogoPrimaryUrl(guideline.logoPrimaryUrl || '');
       setLogoSecondaryUrl(guideline.logoSecondaryUrl || '');
       setLogoSymbolUrl(guideline.logoSymbolUrl || '');
@@ -180,11 +306,27 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
       setMockupStampMode(guideline.mockupStampMode || 'auto');
       setOtherIdeas(
         guideline.otherIdeas && guideline.otherIdeas.length > 0
-          ? guideline.otherIdeas
+          ? guideline.otherIdeas.map((idea, idx) => ({
+              ...idea,
+              title:
+                idea.title === 'Modular Quadrant'
+                  ? 'Isotipo Principal 01'
+                  : idea.title === 'Dynamic Checkered Matrix'
+                  ? 'Monograma 02'
+                  : idea.title === 'Architectural Geometric Petals'
+                  ? 'Sello / Emblema 03'
+                  : idea.title === 'Hourglass Convergence'
+                  ? 'Icono App / Favicon 04'
+                  : idea.title === 'Falcon Monogram Shield'
+                  ? 'Símbolo Simplificado 05'
+                  : idea.title === 'Crossed Kinetic Ribbon'
+                  ? 'Marca de Agua 06'
+                  : idea.title || `Icono 0${idx + 1}`,
+            }))
           : [
               { id: 'oi1', title: 'Isotipo Principal / Variación 01', imageUrl: '' },
               { id: 'oi2', title: 'Monograma / Variación 02', imageUrl: '' },
-              { id: 'oi3', title: 'Sello / Badge 03', imageUrl: '' },
+              { id: 'oi3', title: 'Sello / Emblema 03', imageUrl: '' },
               { id: 'oi4', title: 'Icono App / Favicon 04', imageUrl: '' },
               { id: 'oi5', title: 'Símbolo Simplificado 05', imageUrl: '' },
               { id: 'oi6', title: 'Marca de Agua / Símbolo 06', imageUrl: '' },
@@ -192,7 +334,11 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
       );
       setIsRebrand(Boolean(guideline.isRebrand));
       setLogoBeforeUrl(guideline.logoBeforeUrl || '');
-      setBrandBeforeLabel(guideline.brandBeforeLabel || 'Identidad Anterior');
+      setBrandBeforeLabel(
+        !guideline.brandBeforeLabel || guideline.brandBeforeLabel.startsWith('Legacy Brand')
+          ? 'Identidad Anterior'
+          : guideline.brandBeforeLabel
+      );
       setClearspaceUnit(guideline.clearspaceUnit || '1x');
       setStampPosition(guideline.stampPosition || 'chest_left');
       setStampScale(guideline.stampScale || 100);
@@ -201,7 +347,23 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
       setIconCornerRadius(guideline.iconCornerRadius || '6px');
       setDonts(
         guideline.donts && guideline.donts.length > 0
-          ? guideline.donts
+          ? guideline.donts.map((d) => ({
+              ...d,
+              title:
+                d.title === 'Do not stretch or distort proportions'
+                  ? 'No deformar ni estirar horizontal/verticalmente'
+                  : d.title === 'Do not rotate or tilt at arbitrary angles'
+                  ? 'No inclinar ni rotar en ángulos arbitrarios'
+                  : d.title === 'Do not apply unauthorized gradients or colors'
+                  ? 'No alterar los colores oficiales de la marca'
+                  : d.title === 'Do not add heavy drop shadows or outlines'
+                  ? 'No aplicar sombras paralelas ni trazos invasivos'
+                  : d.title === 'Do not place on low-contrast backgrounds'
+                  ? 'No usar sobre fondos sin contraste suficiente'
+                  : d.title === 'Do not rearrange symbol and logotype lockup'
+                  ? 'No alterar la proporción entre isotipo y logotipo'
+                  : d.title,
+            }))
           : [
               { id: 'd1', title: 'No deformar ni estirar horizontal/verticalmente', ruleType: 'stretch' },
               { id: 'd2', title: 'No inclinar ni rotar en ángulos arbitrarios', ruleType: 'rotate' },
@@ -211,35 +373,70 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
               { id: 'd6', title: 'No alterar la proporción entre isotipo y logotipo', ruleType: 'rearrange' },
             ]
       );
-      setBriefOverviewTitle(guideline.briefOverviewTitle || '');
-      setBriefOverviewText(guideline.briefOverviewText || '');
-      setBriefSecondaryText(guideline.briefSecondaryText || '');
-      setGoals(guideline.goals || []);
+      setBriefOverviewTitle(
+        !guideline.briefOverviewTitle ||
+          guideline.briefOverviewTitle.startsWith('A brief project summary')
+          ? 'Resumen ejecutivo del proyecto de identidad visual, destacando el propósito, alcance y objetivos estratégicos de la marca.'
+          : guideline.briefOverviewTitle
+      );
+      setBriefOverviewText(
+        !guideline.briefOverviewText ||
+          guideline.briefOverviewText.startsWith('This project overview provides')
+          ? 'Este resumen describe el propósito y los objetivos clave de la identidad visual. Destaca los pilares de posicionamiento, modernización y proyección comercial alineados con los valores esenciales de la organización.'
+          : guideline.briefOverviewText
+      );
+      setBriefSecondaryText(
+        !guideline.briefSecondaryText ||
+          guideline.briefSecondaryText.startsWith('Additionally, this section describes')
+          ? 'Asimismo, esta sección define el estilo visual, el carácter tipográfico y cómo el nuevo sistema gráfico se adapta con coherencia a todos los puntos de contacto físicos y digitales.'
+          : guideline.briefSecondaryText
+      );
+      setGoals(
+        guideline.goals && guideline.goals.length > 0
+          ? guideline.goals.map(translateLegacyGoal)
+          : DEFAULT_SPANISH_GOALS
+      );
       setColors(guideline.colors || []);
-      setTypography(guideline.typography || []);
-      setStatNumber(guideline.statNumber || '');
-      setStatLabel(guideline.statLabel || '');
+      setTypography(
+        (guideline.typography || []).map((f) => ({
+          ...f,
+          sampleText:
+            !f.sampleText || f.sampleText.startsWith('The quick brown fox')
+              ? 'El veloz murciélago hindú comía feliz cardillo y kiwi'
+              : f.sampleText,
+        }))
+      );
+      setStatNumber(guideline.statNumber || '+100%');
+      setStatLabel(
+        !guideline.statLabel || guideline.statLabel.startsWith('Key performance metric')
+          ? 'Indicador clave de posicionamiento, alcance e impacto visual de la marca'
+          : guideline.statLabel
+      );
       setMockupMobileUrlWebsite(guideline.mockupMobileUrlWebsite || '');
       setMockupMobileScreenUrl(guideline.mockupMobileScreenUrl || '');
       setMockupDesktopScreenUrl(guideline.mockupDesktopScreenUrl || '');
       setDriveFolderId(guideline.driveFolderId || '');
       setDriveFolderName(guideline.driveFolderName || '');
       setDriveFolderUrl(guideline.driveFolderUrl || '');
-      setNextSteps(guideline.nextSteps || []);
+      setNextSteps(
+        guideline.nextSteps && guideline.nextSteps.length > 0
+          ? guideline.nextSteps.map(translateLegacyStep)
+          : DEFAULT_SPANISH_STEPS
+      );
     } else {
       setBrandName('');
       setClientName('');
       setDesignerName('Equipo Creativo Roma');
-      setRound('Round 1');
+      setRound('Ronda 1');
       setDate(new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }));
       setTagline('');
       setThemeDefault('dark');
       setViewModeDefault('deck');
       setRequirePin(true);
       setPublicPin('1234');
-      setDirectionName('Direction One');
+      setDirectionName('Propuesta Principal');
       setDirectionRationale(
-        'This direction provides a brief overview of the logo concept, focusing on its inspiration, design rationale, and core message.'
+        'Esta propuesta sintetiza la esencia, los valores y la personalidad de la marca mediante una construcción geométrica equilibrada, garantizando máxima legibilidad y pregnancia tanto en medios digitales como impresos.'
       );
       setLogoPrimaryUrl('');
       setLogoSecondaryUrl('');
@@ -249,7 +446,7 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
       setOtherIdeas([
         { id: 'oi1', title: 'Isotipo Principal / Variación 01', imageUrl: '' },
         { id: 'oi2', title: 'Monograma / Variación 02', imageUrl: '' },
-        { id: 'oi3', title: 'Sello / Badge 03', imageUrl: '' },
+        { id: 'oi3', title: 'Sello / Emblema 03', imageUrl: '' },
         { id: 'oi4', title: 'Icono App / Favicon 04', imageUrl: '' },
         { id: 'oi5', title: 'Símbolo Simplificado 05', imageUrl: '' },
         { id: 'oi6', title: 'Marca de Agua / Símbolo 06', imageUrl: '' },
@@ -272,42 +469,20 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
         { id: 'd6', title: 'No alterar la proporción entre isotipo y logotipo', ruleType: 'rearrange' },
       ]);
       setBriefOverviewTitle(
-        'A brief project summary highlighting the purpose, key objectives, and goals of the redesign.'
+        'Resumen ejecutivo del proyecto de identidad visual, destacando el propósito, alcance y objetivos estratégicos de la marca.'
       );
       setBriefOverviewText(
-        'This project overview provides a concise summary of the rebranding project, outlining the purpose and key objectives of the redesign.'
+        'Este resumen describe el propósito y los objetivos clave de la identidad visual. Destaca los pilares de posicionamiento, modernización y proyección comercial alineados con los valores esenciales de la organización.'
       );
       setBriefSecondaryText(
-        'Additionally, this section describes the desired look and feel of the new logo and core values.'
+        'Asimismo, esta sección define el estilo visual, el carácter tipográfico y cómo el nuevo sistema gráfico se adapta con coherencia a todos los puntos de contacto físicos y digitales.'
       );
-      setGoals([
-        {
-          id: '1',
-          number: '01',
-          title: 'Modernization',
-          description:
-            'Update the brand visual identity to feel modern and aligned with contemporary standards.',
-        },
-        {
-          id: '2',
-          number: '02',
-          title: 'Competitive Differentiation',
-          description:
-            'Refine the brand to stand out clearly from competitors with unique positioning.',
-        },
-        {
-          id: '3',
-          number: '03',
-          title: 'Simplification',
-          description:
-            'Streamline complex brand elements into a clean and recognizable system.',
-        },
-      ]);
+      setGoals(DEFAULT_SPANISH_GOALS);
       setColors([
-        { id: '1', name: 'Pitch Black', hex: '#111111', role: 'dark', pantone: 'Black 6 C', rgb: '17, 17, 17', cmyk: '0, 0, 0, 93' },
-        { id: '2', name: 'Slate Gray', hex: '#636569', role: 'secondary', pantone: 'Cool Gray 9 C', rgb: '99, 101, 105', cmyk: '6, 4, 0, 59' },
-        { id: '3', name: 'Silver Mist', hex: '#CACBCE', role: 'neutral', pantone: 'Cool Gray 3 C', rgb: '202, 203, 206', cmyk: '2, 1, 0, 19' },
-        { id: '4', name: 'Pure Canvas', hex: '#FFFFFF', role: 'light', pantone: 'Bright White', rgb: '255, 255, 255', cmyk: '0, 0, 0, 0' },
+        { id: '1', name: 'Negro Obsidiana', hex: '#111111', role: 'dark', pantone: 'Black 6 C', rgb: '17, 17, 17', cmyk: '0, 0, 0, 93' },
+        { id: '2', name: 'Gris Pizarra', hex: '#636569', role: 'secondary', pantone: 'Cool Gray 9 C', rgb: '99, 101, 105', cmyk: '6, 4, 0, 59' },
+        { id: '3', name: 'Plata Neblina', hex: '#CACBCE', role: 'neutral', pantone: 'Cool Gray 3 C', rgb: '202, 203, 206', cmyk: '2, 1, 0, 19' },
+        { id: '4', name: 'Lienzo Puro', hex: '#FFFFFF', role: 'light', pantone: 'Bright White', rgb: '255, 255, 255', cmyk: '0, 0, 0, 0' },
       ]);
       setTypography([
         {
@@ -315,30 +490,25 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
           role: 'headings',
           fontFamily: 'Inter',
           weight: 'Regular / SemiBold',
-          sampleText: 'The quick brown fox jumps over the lazy dog',
+          sampleText: 'El veloz murciélago hindú comía feliz cardillo y kiwi',
         },
         {
           id: '2',
           role: 'body',
           fontFamily: 'Inter',
           weight: 'Regular',
-          sampleText: 'The quick brown fox jumps over the lazy dog',
+          sampleText: 'El veloz murciélago hindú comía feliz cardillo y kiwi',
         },
       ]);
-      setStatNumber('$2.5M');
-      setStatLabel('Key performance metric & market target');
-      setMockupMobileUrlWebsite('www.brandname.com');
+      setStatNumber('+100%');
+      setStatLabel('Indicador clave de posicionamiento, alcance e impacto visual de la marca');
+      setMockupMobileUrlWebsite('www.mimarca.com');
       setMockupMobileScreenUrl('');
       setMockupDesktopScreenUrl('');
       setDriveFolderId('');
       setDriveFolderName('');
       setDriveFolderUrl('');
-      setNextSteps([
-        { id: '1', step: '01', title: 'Review & Feedback', description: 'Share your thoughts on the logo design.' },
-        { id: '2', step: '02', title: 'Revisions (if necessary)', description: 'We will refine the design based on your feedback.' },
-        { id: '3', step: '03', title: 'Final Approval', description: 'Once approved, we will proceed with finalizing vectors.' },
-        { id: '4', step: '04', title: 'File Delivery', description: 'Delivery of all logo formats and production assets.' },
-      ]);
+      setNextSteps(DEFAULT_SPANISH_STEPS);
     }
   }, [guideline, isOpen]);
 
@@ -386,7 +556,7 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
           return;
         }
 
-        const roleNames = ['Brand Primary', 'Brand Secondary', 'Accent Tone', 'Surface Neutral'];
+        const roleNames = ['Color Primario', 'Color Secundario', 'Tono de Acento', 'Neutro de Superficie'];
         const extracted: BrandGuidelineColor[] = sorted.map((item, idx) => {
           const hex = `#${item.r.toString(16).padStart(2, '0')}${item.g
             .toString(16)
@@ -394,7 +564,7 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
           const specs = hexToColorSpecs(hex);
           return {
             id: `ext_${Date.now()}_${idx}`,
-            name: roleNames[idx] || `Brand Color ${idx + 1}`,
+            name: roleNames[idx] || `Color de Marca ${idx + 1}`,
             hex,
             rgb: specs.rgb,
             cmyk: specs.cmyk,
@@ -407,7 +577,7 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
           const darkSpecs = hexToColorSpecs('#111111');
           extracted.push({
             id: `ext_${Date.now()}_dark`,
-            name: 'Obsidian Core',
+            name: 'Negro Obsidiana',
             hex: '#111111',
             rgb: darkSpecs.rgb,
             cmyk: darkSpecs.cmyk,
@@ -721,7 +891,7 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
       ...colors,
       {
         id: `c_${Date.now()}`,
-        name: 'Brand Accent',
+        name: 'Color de Acento',
         hex: '#3B82F6',
         role: 'accent',
         rgb: specs.rgb,
@@ -2035,40 +2205,99 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
               </div>
 
               <div className="space-y-3 pt-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500">
-                  Pilares de Marca (01, 02, 03)
-                </h4>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                      Pilares Estratégicos de Marca ({goals.length})
+                    </h4>
+                    <p className="text-[11px] text-zinc-400">
+                      Puedes agregar, editar o eliminar pilares de la marca.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setGoals(DEFAULT_SPANISH_GOALS.map((g) => ({ ...g })))}
+                      className="px-2.5 py-1.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-[11px] font-bold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer transition"
+                    >
+                      Restaurar por Defecto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextIndex = goals.length + 1;
+                        setGoals([
+                          ...goals,
+                          {
+                            id: `g_${Date.now()}`,
+                            number: nextIndex < 10 ? `0${nextIndex}` : String(nextIndex),
+                            title: 'Nuevo Pilar de Marca',
+                            description: 'Describe el objetivo estratégico o valor diferencial de este pilar.',
+                          },
+                        ]);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer hover:opacity-90 transition"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Agregar Pilar</span>
+                    </button>
+                  </div>
+                </div>
+
                 {goals.map((g, idx) => (
                   <div
                     key={g.id || idx}
                     className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 space-y-2"
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono font-bold text-sm text-zinc-400">
-                        {g.number || `0${idx + 1}`}
-                      </span>
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="text"
+                        value={g.number || (idx + 1 < 10 ? `0${idx + 1}` : String(idx + 1))}
+                        onChange={(e) => {
+                          const updated = [...goals];
+                          updated[idx] = { ...updated[idx], number: e.target.value };
+                          setGoals(updated);
+                        }}
+                        className="w-12 px-2 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 font-mono font-bold text-xs text-center text-zinc-600 dark:text-zinc-300"
+                      />
                       <input
                         type="text"
                         value={g.title}
                         onChange={(e) => {
                           const updated = [...goals];
-                          updated[idx].title = e.target.value;
+                          updated[idx] = { ...updated[idx], title: e.target.value };
                           setGoals(updated);
                         }}
                         placeholder="Título del Pilar"
-                        className="flex-1 px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 text-xs font-bold"
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-bold"
                       />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const filtered = goals.filter((_, i) => i !== idx);
+                          setGoals(
+                            filtered.map((item, i) => ({
+                              ...item,
+                              number: i + 1 < 10 ? `0${i + 1}` : String(i + 1),
+                            }))
+                          );
+                        }}
+                        title="Eliminar pilar"
+                        className="p-2 rounded-lg text-zinc-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                     <textarea
                       rows={2}
                       value={g.description}
                       onChange={(e) => {
                         const updated = [...goals];
-                        updated[idx].description = e.target.value;
+                        updated[idx] = { ...updated[idx], description: e.target.value };
                         setGoals(updated);
                       }}
                       placeholder="Descripción del pilar estratégico"
-                      className="w-full p-2 rounded-lg border border-zinc-300 dark:border-zinc-700 text-xs"
+                      className="w-full p-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
                     />
                   </div>
                 ))}
@@ -2356,7 +2585,7 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
                     type="text"
                     value={statLabel}
                     onChange={(e) => setStatLabel(e.target.value)}
-                    placeholder="Ej: Key performance metric"
+                    placeholder="Ej: Métrica clave de rendimiento y alcance"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm"
                   />
                 </div>
@@ -2368,7 +2597,7 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
                     type="text"
                     value={mockupMobileUrlWebsite}
                     onChange={(e) => setMockupMobileUrlWebsite(e.target.value)}
-                    placeholder="www.pixeltruck.com"
+                    placeholder="www.tumarca.com"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm font-mono"
                   />
                 </div>
@@ -2377,43 +2606,121 @@ export const BrandGuidelineEditorModal: React.FC<BrandGuidelineEditorModalProps>
           )}
 
           {/* =============================================================== */}
-          {/* TAB 7: PRÓXIMOS PASOS                                           */}
+          {/* TAB 7: PRÓXIMOS PASOS (HOJA DE RUTA EDITABLE Y ELIMINABLE)      */}
           {/* =============================================================== */}
           {activeTab === 'steps' && (
-            <div className="space-y-3">
-              <h4 className="text-sm font-bold text-zinc-900 dark:text-white">Hoja de Ruta / Cierre</h4>
-              {nextSteps.map((step, idx) => (
-                <div
-                  key={step.id || idx}
-                  className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex items-center gap-3"
-                >
-                  <span className="font-mono font-bold text-xs text-zinc-400">
-                    {step.step || `0${idx + 1}`}
-                  </span>
-                  <input
-                    type="text"
-                    value={step.title}
-                    onChange={(e) => {
-                      const updated = [...nextSteps];
-                      updated[idx].title = e.target.value;
-                      setNextSteps(updated);
-                    }}
-                    placeholder="Fase"
-                    className="w-1/3 px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 text-xs font-bold"
-                  />
-                  <input
-                    type="text"
-                    value={step.description}
-                    onChange={(e) => {
-                      const updated = [...nextSteps];
-                      updated[idx].description = e.target.value;
-                      setNextSteps(updated);
-                    }}
-                    placeholder="Descripción"
-                    className="flex-1 px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 text-xs"
-                  />
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-bold text-zinc-900 dark:text-white">
+                    Hoja de Ruta / Cierre del Proyecto ({nextSteps.length} etapas)
+                  </h4>
+                  <p className="text-xs text-zinc-500">
+                    Agrega, edita o elimina los pasos de cierre que verá el cliente en la última lámina de la presentación.
+                  </p>
                 </div>
-              ))}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNextSteps(DEFAULT_SPANISH_STEPS.map((s) => ({ ...s })))}
+                    className="px-3 py-1.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer transition"
+                  >
+                    Restaurar Pasos en Español
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextIdx = nextSteps.length + 1;
+                      setNextSteps([
+                        ...nextSteps,
+                        {
+                          id: `ns_${Date.now()}`,
+                          step: nextIdx < 10 ? `0${nextIdx}` : String(nextIdx),
+                          title: 'Nueva Etapa de Entrega',
+                          description: 'Descripción detallada de este paso dentro de la hoja de ruta.',
+                        },
+                      ]);
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer hover:opacity-90 transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Agregar Paso</span>
+                  </button>
+                </div>
+              </div>
+
+              {nextSteps.length === 0 ? (
+                <div className="p-8 rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800 text-center space-y-2">
+                  <p className="text-xs text-zinc-500">
+                    No hay etapas en la hoja de ruta. Haz clic en <strong>Agregar Paso</strong> o en <strong>Restaurar Pasos en Español</strong>.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {nextSteps.map((step, idx) => (
+                    <div
+                      key={step.id || idx}
+                      className="p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col sm:flex-row sm:items-center gap-3"
+                    >
+                      <div className="flex items-center gap-2.5 sm:w-5/12">
+                        <input
+                          type="text"
+                          value={step.step || (idx + 1 < 10 ? `0${idx + 1}` : String(idx + 1))}
+                          onChange={(e) => {
+                            const updated = [...nextSteps];
+                            updated[idx] = { ...updated[idx], step: e.target.value };
+                            setNextSteps(updated);
+                          }}
+                          title="Número de paso"
+                          className="w-12 px-2 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 font-mono font-bold text-xs text-center text-zinc-600 dark:text-zinc-300 shrink-0"
+                        />
+                        <input
+                          type="text"
+                          value={step.title}
+                          onChange={(e) => {
+                            const updated = [...nextSteps];
+                            updated[idx] = { ...updated[idx], title: e.target.value };
+                            setNextSteps(updated);
+                          }}
+                          placeholder="Título de la etapa (ej. Revisión y Comentarios)"
+                          className="flex-1 px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-bold text-zinc-900 dark:text-white"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-1">
+                        <input
+                          type="text"
+                          value={step.description}
+                          onChange={(e) => {
+                            const updated = [...nextSteps];
+                            updated[idx] = { ...updated[idx], description: e.target.value };
+                            setNextSteps(updated);
+                          }}
+                          placeholder="Descripción de la etapa..."
+                          className="flex-1 px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-700 dark:text-zinc-300"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const filtered = nextSteps.filter((_, i) => i !== idx);
+                            setNextSteps(
+                              filtered.map((item, i) => ({
+                                ...item,
+                                step: i + 1 < 10 ? `0${i + 1}` : String(i + 1),
+                              }))
+                            );
+                          }}
+                          title="Eliminar este paso"
+                          className="p-2 rounded-xl text-zinc-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer transition shrink-0"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

@@ -142,17 +142,17 @@ export const BrandGuidelinesSubmoduleView: React.FC<BrandGuidelinesSubmoduleView
               </button>
             )}
             <span className="px-3 py-1 rounded-full text-[11px] font-black tracking-wider uppercase bg-amber-500/10 text-amber-500 border border-amber-500/20 inline-block">
-              Identidad Visual & Pitch Decks
+              Identidad Visual &amp; Manuales de Marca
             </span>
             <span className="text-xs text-zinc-400 font-mono hidden sm:inline">
-              Swiss Style • Auto-Mockups • Type Tester • Aprobaciones
+              Estilo Editorial • Auto-Mockups • Probador de Fuentes • Aprobaciones
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-zinc-900 dark:text-white tracking-tight">
-            Brand Guidelines
+            Manuales de Marca (Brand Guidelines)
           </h1>
           <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1 max-w-2xl">
-            Manuales interactivos 16:9 con auto-estampado en prendas y dispositivos, conversión HEX/RGB/CMYK, Type Tester en vivo, Safe Zone, slider Antes/Después, aprobación con notificaciones y exportación PDF.
+            Manuales interactivos 16:9 con auto-estampado en prendas y dispositivos, conversión HEX/RGB/CMYK, probador tipográfico en vivo, área de resguardo, comparador Antes/Después, aprobación con notificaciones y exportación PDF.
           </p>
         </div>
 
@@ -166,7 +166,7 @@ export const BrandGuidelinesSubmoduleView: React.FC<BrandGuidelinesSubmoduleView
             className="px-4 py-2.5 bg-zinc-900 hover:bg-black dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>Nuevo Brand Guideline</span>
+            <span>Nuevo Manual de Marca</span>
           </button>
         </div>
       </div>
@@ -234,8 +234,8 @@ export const BrandGuidelinesSubmoduleView: React.FC<BrandGuidelinesSubmoduleView
                 {/* Vista Previa de la Portada en Miniatura */}
                 <div className="aspect-[16/9] w-full rounded-2xl bg-[#111111] text-white p-5 flex flex-col justify-between mb-4 border border-zinc-800 shadow-inner group-hover:scale-[1.01] transition-transform">
                   <div className="flex justify-between items-center text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
-                    <span>Pitch Deck</span>
-                    <span>{bg.round || 'Round 1'}</span>
+                    <span>Manual de Marca</span>
+                    <span>{bg.round === 'Round 1' ? 'Ronda 1' : bg.round || 'Ronda 1'}</span>
                   </div>
 
                   <div className="my-auto flex items-center gap-3">
@@ -390,7 +390,7 @@ export const BrandGuidelinesSubmoduleView: React.FC<BrandGuidelinesSubmoduleView
                     onClick={(e) => handleOpenPublicView(bg.publicToken, e)}
                     className="px-3 py-1.5 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs hover:opacity-90 transition cursor-pointer"
                   >
-                    <span>Ver Deck</span>
+                    <span>Ver Presentación</span>
                     <ExternalLink className="w-3 h-3" />
                   </button>
                 </div>

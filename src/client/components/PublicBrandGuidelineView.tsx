@@ -55,10 +55,10 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
   // Auto-Play Showreel
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
 
-  // Type Tester en Vivo (Slide Tipografía)
+  // Probador Tipográfico en Vivo (Lámina de Tipografía)
   const [typeTesterMode, setTypeTesterMode] = useState(false);
   const [typeTesterText, setTypeTesterText] = useState(
-    'The quick brown fox jumps over the lazy dog'
+    'El veloz murciélago hindú comía feliz cardillo y kiwi'
   );
   const [typeTesterSize, setTypeTesterSize] = useState(42);
   const [typeTesterWeight, setTypeTesterWeight] = useState<'300' | '400' | '600' | '700'>('400');
@@ -200,15 +200,87 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
     }
   };
 
+  // Traducción automática en vivo para textos por defecto antiguos guardados en inglés
+  const translateDisplayText = (val: string | undefined, fallback: string): string => {
+    if (!val) return fallback;
+    const map: Record<string, string> = {
+      'Round 1': 'Ronda 1',
+      'Round 2': 'Ronda 2',
+      'Direction One': 'Propuesta Principal',
+      'Legacy Brand Identity (2019)': 'Identidad Anterior',
+      'Modernization': 'Modernización Visual',
+      'Competitive Differentiation': 'Diferenciación Competitiva',
+      'Simplification': 'Versatilidad y Claridad',
+      'Review & Feedback': 'Revisión y Comentarios',
+      'Revisions (if necessary)': 'Ajustes y Refinamiento (si aplica)',
+      'Final Approval': 'Aprobación Oficial',
+      'File Delivery': 'Entrega de Archivos Editables',
+      'Do not stretch or distort proportions': 'No deformar ni estirar horizontal/verticalmente',
+      'Do not rotate or tilt at arbitrary angles': 'No inclinar ni rotar en ángulos arbitrarios',
+      'Do not apply unauthorized gradients or colors': 'No alterar los colores oficiales de la marca',
+      'Do not add heavy drop shadows or outlines': 'No aplicar sombras paralelas ni trazos invasivos',
+      'Do not place on low-contrast backgrounds': 'No usar sobre fondos sin contraste suficiente',
+      'Do not rearrange symbol and logotype lockup': 'No alterar la proporción entre isotipo y logotipo',
+      'Modular Quadrant': 'Isotipo Principal / Variación 01',
+      'Dynamic Checkered Matrix': 'Monograma / Variación 02',
+      'Architectural Geometric Petals': 'Sello / Emblema 03',
+      'Hourglass Convergence': 'Icono App / Favicon 04',
+      'Falcon Monogram Shield': 'Símbolo Simplificado 05',
+      'Crossed Kinetic Ribbon': 'Marca de Agua / Símbolo 06',
+    };
+    if (map[val.trim()]) return map[val.trim()];
+    if (val.startsWith('A brief project summary')) {
+      return 'Resumen ejecutivo del proyecto de identidad visual, destacando el propósito, alcance y objetivos estratégicos de la marca.';
+    }
+    if (val.startsWith('This project overview')) {
+      return 'Este resumen describe el propósito y los objetivos clave de la identidad visual. Destaca los pilares de posicionamiento, modernización y proyección comercial alineados con los valores esenciales de la organización.';
+    }
+    if (val.startsWith('Additionally, this section')) {
+      return 'Asimismo, esta sección define el estilo visual, el carácter tipográfico y cómo el nuevo sistema gráfico se adapta con coherencia a todos los puntos de contacto físicos y digitales.';
+    }
+    if (val.startsWith('This direction provides a brief overview') || val.startsWith('This section provides a brief overview')) {
+      return 'Esta propuesta sintetiza la esencia, los valores y la personalidad de la marca mediante una construcción geométrica equilibrada, garantizando máxima legibilidad y pregnancia tanto en medios digitales como impresos.';
+    }
+    if (val.startsWith("Update the brand's visual")) {
+      return 'Actualizar la identidad visual y verbal de la marca para proyectar una imagen contemporánea, sólida y alineada con los estándares actuales del mercado.';
+    }
+    if (val.startsWith('Refine the brand to stand out')) {
+      return 'Destacar frente a la competencia mediante un posicionamiento único, memorable y con personalidad propia en cada punto de contacto.';
+    }
+    if (val.startsWith('Streamline complex or outdated')) {
+      return 'Sintetizar los elementos gráficos en un sistema limpio, escalable y fácil de aplicar tanto en soportes digitales como en impresos y merchandising.';
+    }
+    if (val.startsWith('Share your thoughts on the logo design')) {
+      return 'Comparte tus apreciaciones sobre la propuesta de identidad visual y si deseas algún ajuste puntual.';
+    }
+    if (val.startsWith('We will refine the design based on your feedback')) {
+      return 'Afinaremos los detalles gráficos y cromáticos en base a tus comentarios y prioridades.';
+    }
+    if (val.startsWith('Once approved, we will proceed')) {
+      return 'Una vez aprobada la propuesta, prepararemos el paquete maestro de vectores y artes finales.';
+    }
+    if (val.startsWith('You will receive all logo formats') || val.startsWith('Delivery of all logo formats')) {
+      return 'Recibirás todos los formatos oficiales para impresión, redes sociales, web y manual de marca.';
+    }
+    if (val.startsWith('Key performance metric')) {
+      return 'Indicador clave de posicionamiento, alcance e impacto visual de la marca.';
+    }
+    return val;
+  };
+
   // Catálogo completo de diapositivas (Con Antes/Después condicional solo si es Rebrand)
   const slides = useMemo(() => {
     if (!guideline) return [];
 
     const raw: Array<{ id: string; type: string; label: string }> = [
       { id: 'cover', type: 'cover', label: 'Portada' },
-      { id: 'brief', type: 'brief', label: 'Brief Overview' },
-      { id: 'goals', type: 'goals', label: 'Strategic Pillars' },
-      { id: 'direction', type: 'direction', label: guideline.directionName || 'Direction One' },
+      { id: 'brief', type: 'brief', label: 'Resumen del Brief' },
+      { id: 'goals', type: 'goals', label: 'Pilares Estratégicos' },
+      {
+        id: 'direction',
+        type: 'direction',
+        label: translateDisplayText(guideline.directionName, 'Propuesta Principal'),
+      },
     ];
 
     // Solo mostrar lámina Antes vs. Después cuando la marca sea un Rebranding
@@ -217,14 +289,14 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
     }
 
     raw.push(
-      { id: 'geometry_icons', type: 'geometry_icons', label: 'Retícula Áurea, Tamaños Mínimos & Iconografía' },
-      { id: 'clearspace_donts', type: 'clearspace_donts', label: 'Safe Zone & Reglas de Uso' },
-      { id: 'contrast', type: 'contrast', label: 'Contrast Test 50/50' },
+      { id: 'geometry_icons', type: 'geometry_icons', label: 'Retícula Áurea, Tamaños Mínimos e Iconografía' },
+      { id: 'clearspace_donts', type: 'clearspace_donts', label: 'Área de Resguardo y Usos Incorrectos' },
+      { id: 'contrast', type: 'contrast', label: 'Prueba de Contraste 50/50' },
       { id: 'palette', type: 'palette', label: 'Sistema de Color + Auditor WCAG' },
-      { id: 'typography', type: 'typography', label: 'Tipografía & Type Tester' },
-      { id: 'mockup_mobile', type: 'mockup_mobile', label: 'Experiencia Mobile' },
-      { id: 'mockup_appicon', type: 'mockup_appicon', label: 'Geometría de App Icon' },
-      { id: 'mockup_desktop', type: 'mockup_desktop', label: 'Experiencia Web macOS' }
+      { id: 'typography', type: 'typography', label: 'Tipografía y Probador en Vivo' },
+      { id: 'mockup_mobile', type: 'mockup_mobile', label: 'Experiencia Móvil' },
+      { id: 'mockup_appicon', type: 'mockup_appicon', label: 'Geometría de Icono de App' },
+      { id: 'mockup_desktop', type: 'mockup_desktop', label: 'Experiencia Web de Escritorio' }
     );
 
     if (guideline.statNumber) {
@@ -232,19 +304,19 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
     }
 
     raw.push(
-      { id: 'merch_apparel', type: 'merch_apparel', label: 'Apparel Mockups (Displacement + Posición)' },
-      { id: 'merch_collaterals', type: 'merch_collaterals', label: 'Accesorios, Lanyard QR & MacBook' },
-      { id: 'stationery_kit', type: 'stationery_kit', label: 'Papelería Corporativa (Stationery Kit)' },
-      { id: 'packaging_kit', type: 'packaging_kit', label: 'Packaging, Cajas Gourmet & Bolsas Kraft' },
-      { id: 'ooh_fleet', type: 'ooh_fleet', label: 'Señalética Exterior (Billboard) & Flota' },
-      { id: 'social_kit', type: 'social_kit', label: 'Social Media Kit (Instagram & LinkedIn)' }
+      { id: 'merch_apparel', type: 'merch_apparel', label: 'Indumentaria y Prendas (Mockups 3D)' },
+      { id: 'merch_collaterals', type: 'merch_collaterals', label: 'Accesorios, Credencial QR y Portátil' },
+      { id: 'stationery_kit', type: 'stationery_kit', label: 'Papelería Corporativa Ejecutiva' },
+      { id: 'packaging_kit', type: 'packaging_kit', label: 'Empaques, Cajas y Bolsas Kraft' },
+      { id: 'ooh_fleet', type: 'ooh_fleet', label: 'Vallas Publicitarias, Letrero y Flota' },
+      { id: 'social_kit', type: 'social_kit', label: 'Kit de Redes Sociales (Instagram y LinkedIn)' }
     );
 
     if (guideline.otherIdeas && guideline.otherIdeas.length > 0) {
-      raw.push({ id: 'other_ideas', type: 'other_ideas', label: 'Exploración de Símbolos' });
+      raw.push({ id: 'other_ideas', type: 'other_ideas', label: 'Exploración de Símbolos e Iconos' });
     }
 
-    raw.push({ id: 'next_steps', type: 'next_steps', label: 'Aprobación & Brand Assets Kit' });
+    raw.push({ id: 'next_steps', type: 'next_steps', label: 'Próximos Pasos, Aprobación y Descargas' });
 
     return raw.map((item, idx) => ({
       id: item.id,
@@ -420,10 +492,10 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
       fillDarkSlide();
       doc.setFontSize(10);
       doc.setTextColor(150, 150, 150);
-      doc.text('BRAND GUIDELINES & IDENTITY PITCH DECK', 20, 22);
+      doc.text('MANUAL DE IDENTIDAD VISUAL & PRESENTACIÓN DE MARCA', 20, 22);
       doc.setFontSize(38);
       doc.setTextColor(255, 255, 255);
-      doc.text(`Logo identity for`, 20, 78);
+      doc.text(`Identidad visual para`, 20, 78);
       doc.text(`{${guideline.brandName}}`, 20, 96);
       if (guideline.tagline) {
         doc.setFontSize(13);
@@ -432,17 +504,17 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
       }
       doc.setFontSize(9);
       doc.setTextColor(120, 120, 120);
-      doc.text(`${guideline.date || '2026'}   |   ${guideline.round || 'Round 1'}   |   Designed by ${guideline.designerName || 'Roma Studio'}`, 20, 152);
+      doc.text(`${guideline.date || '2026'}   |   ${translateDisplayText(guideline.round, 'Ronda 1')}   |   Diseñado por ${guideline.designerName || 'Equipo Creativo Roma'}`, 20, 152);
 
       // PÁGINA 2: BRIEF & OBJETIVOS
       doc.addPage([297, 167], 'landscape');
       fillDarkSlide();
       doc.setFontSize(10);
       doc.setTextColor(150, 150, 150);
-      doc.text('02 • BRIEF OVERVIEW & STRATEGIC PILLARS', 20, 22);
+      doc.text('02 • RESUMEN DEL BRIEF Y PILARES ESTRATÉGICOS', 20, 22);
       doc.setFontSize(18);
       doc.setTextColor(255, 255, 255);
-      const splitTitle = doc.splitTextToSize(guideline.briefOverviewTitle || '', 250);
+      const splitTitle = doc.splitTextToSize(translateDisplayText(guideline.briefOverviewTitle, ''), 250);
       doc.text(splitTitle, 20, 42);
 
       (guideline.goals || []).slice(0, 3).forEach((g, idx) => {
@@ -452,10 +524,10 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
         doc.text(g.number || `0${idx + 1}`, x, 88);
         doc.setFontSize(13);
         doc.setTextColor(255, 255, 255);
-        doc.text(g.title, x, 100);
+        doc.text(translateDisplayText(g.title, g.title), x, 100);
         doc.setFontSize(9);
         doc.setTextColor(160, 160, 160);
-        const descLines = doc.splitTextToSize(g.description || '', 78);
+        const descLines = doc.splitTextToSize(translateDisplayText(g.description, ''), 78);
         doc.text(descLines, x, 110);
       });
 
@@ -464,7 +536,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
       fillDarkSlide();
       doc.setFontSize(10);
       doc.setTextColor(150, 150, 150);
-      doc.text('03 • CHROMATIC SYSTEM (HEX / RGB / CMYK / PANTONE)', 20, 22);
+      doc.text('03 • SISTEMA CROMÁTICO (HEX / RGB / CMYK / PANTONE)', 20, 22);
 
       const cols = guideline.colors || [];
       const boxW = Math.min(62, Math.floor(255 / Math.max(1, cols.length)));
@@ -494,24 +566,24 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
       fillDarkSlide();
       doc.setFontSize(10);
       doc.setTextColor(150, 150, 150);
-      doc.text('04 • TYPOGRAPHY & NEXT STEPS', 20, 22);
+      doc.text('04 • SISTEMA TIPOGRÁFICO Y PRÓXIMOS PASOS', 20, 22);
       doc.setFontSize(24);
       doc.setTextColor(255, 255, 255);
-      doc.text(`Primary Typeface: ${guideline.typography?.[0]?.fontFamily || 'Inter'}`, 20, 45);
+      doc.text(`Tipografía Principal: ${guideline.typography?.[0]?.fontFamily || 'Inter'}`, 20, 45);
       doc.setFontSize(14);
       doc.setTextColor(180, 180, 180);
-      doc.text('The quick brown fox jumps over the lazy dog', 20, 58);
+      doc.text('El veloz murciélago hindú comía feliz cardillo y kiwi', 20, 58);
       doc.setFontSize(10);
-      doc.text('AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz 1234567890', 20, 68);
+      doc.text('AaBbCcDdEeFfGgHhIiJjKkLlMmNnÑñOoPpQqRrSsTtUuVvWwXxYyZz 1234567890', 20, 68);
 
       (guideline.nextSteps || []).forEach((s, idx) => {
         const y = 95 + idx * 14;
         doc.setFontSize(11);
         doc.setTextColor(255, 255, 255);
-        doc.text(`${s.step || `0${idx + 1}`}  ${s.title}:`, 20, y);
+        doc.text(`${s.step || `0${idx + 1}`}  ${translateDisplayText(s.title, s.title)}:`, 20, y);
         doc.setFontSize(10);
         doc.setTextColor(160, 160, 160);
-        doc.text(s.description || '', 78, y);
+        doc.text(translateDisplayText(s.description, ''), 82, y);
       });
 
       doc.save(`${guideline.brandName.toLowerCase().replace(/\s+/g, '-')}-brand-guidelines.pdf`);
@@ -739,16 +811,16 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
         ))}
       </div>
 
-      {/* Selector de Colorway */}
+      {/* Selector de Color */}
       <div className="flex items-center gap-1.5 bg-black/10 dark:bg-white/10 px-2.5 py-1 rounded-full">
-        <span className="text-[9px] font-mono uppercase opacity-70 mr-1">Colorway:</span>
+        <span className="text-[9px] font-mono uppercase opacity-70 mr-1">Color:</span>
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             setMockupColorway('obsidian');
           }}
-          title="Obsidian Black"
+          title="Negro Obsidiana"
           className={`w-4 h-4 rounded-full bg-[#141414] border cursor-pointer transition-transform ${
             mockupColorway === 'obsidian' ? 'scale-125 ring-2 ring-amber-400 border-white' : 'border-zinc-500'
           }`}
@@ -759,7 +831,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             e.stopPropagation();
             setMockupColorway('offwhite');
           }}
-          title="Studio Off-White"
+          title="Blanco Crudo de Estudio"
           className={`w-4 h-4 rounded-full bg-[#F0EFEA] border cursor-pointer transition-transform ${
             mockupColorway === 'offwhite' ? 'scale-125 ring-2 ring-amber-400 border-zinc-900' : 'border-zinc-400'
           }`}
@@ -815,14 +887,14 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
     const sceneMode = guideline?.photoSceneMode || 'studio_3d';
 
     const labels: Record<string, { title: string; spec: string }> = {
-      sweatshirt: { title: 'Heavyweight Crewneck', spec: '480 GSM French Terry • Displacement Print' },
-      tshirt: { title: 'Boxy Studio T-Shirt', spec: '300 GSM Combed Cotton • Silkscreen' },
-      hoodie: { title: 'Oversized Fleece Hoodie', spec: '520 GSM Heavy Fleece • Custom Print' },
-      cap: { title: '6-Panel Structured Cap', spec: 'Brushed Twill • 3D Puff Embroidery' },
-      tote: { title: 'Heavy Duck Canvas Tote', spec: '16oz Raw Canvas • Reinforced Handles' },
-      thermos: { title: 'Insulated Matte Flask', spec: 'Powder-Coated Steel • Laser Etched' },
-      lanyard: { title: 'RFID Access Pass + QR', spec: 'Satin Ribbon • Polycarbonate Badge' },
-      macbook: { title: 'MacBook Pro + Die-Cut', spec: 'Anodized Aluminum • Vinyl Contour' },
+      sweatshirt: { title: 'Polera / Crewneck Pesado', spec: 'Algodón French Terry 480g • Estampado Textil' },
+      tshirt: { title: 'Camiseta Corte Boxy', spec: 'Algodón Peinado 300g • Serigrafía HD' },
+      hoodie: { title: 'Hoodie / Polera con Capucha', spec: 'Franela Pesada 520g • Estampado de Marca' },
+      cap: { title: 'Gorra Estructurada 6 Paneles', spec: 'Sarga Cepillada • Bordado 3D en Relieve' },
+      tote: { title: 'Bolso Tote de Lona Gruesa', spec: 'Lona Cruda 16oz • Asas Reforzadas' },
+      thermos: { title: 'Termo de Acero Mate', spec: 'Acero Termoaislante • Grabado Láser' },
+      lanyard: { title: 'Fotocheck RFID + QR Vivo', spec: 'Cinta Satinada • Credencial Policarbonato' },
+      macbook: { title: 'MacBook Pro + Sticker Troquelado', spec: 'Aluminio Anodizado • Vinilo de Corte' },
     };
 
     const isDarkBackdrop =
@@ -1332,7 +1404,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
           <div className={`w-full h-full flex flex-col justify-between p-8 sm:p-14 md:p-20 ${bgClass} select-none`}>
             <div className="flex items-center justify-between">
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
-                Brand Identity Guidelines
+                Manual de Identidad Visual
               </span>
               {guideline.status === 'approved' && (
                 <span className="px-3 py-1 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
@@ -1346,7 +1418,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                 style={{ fontFamily: primaryFont }}
                 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-semibold tracking-[-0.03em] leading-[1.05]"
               >
-                Logo identity for <br />
+                Identidad visual para <br />
                 <span className={isDark ? 'text-zinc-200' : 'text-zinc-800'}>
                   &#123;{guideline.brandName || guideline.clientName}&#125;
                 </span>
@@ -1360,8 +1432,8 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
             <div className={`pt-6 border-t ${borderSubtle} flex flex-wrap items-center justify-between gap-4 text-[10px] sm:text-xs font-mono opacity-60`}>
               <span>{guideline.date || '2026'}</span>
-              <span>{guideline.round || 'Round 1'}</span>
-              <span>Designed by {guideline.designerName || 'Roma Agencia'}</span>
+              <span>{translateDisplayText(guideline.round, 'Ronda 1')}</span>
+              <span>Diseñado por {guideline.designerName || 'Roma Agencia'}</span>
             </div>
           </div>
         );
@@ -1371,31 +1443,37 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
           <div className={`w-full h-full flex flex-col justify-between p-8 sm:p-14 md:p-20 ${bgClass} select-none`}>
             <div>
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
-                Brief Overview
+                Resumen del Brief
               </span>
               <h2
                 style={{ fontFamily: primaryFont }}
                 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-medium tracking-tight mt-3 sm:mt-5 max-w-3xl leading-snug"
               >
-                {guideline.briefOverviewTitle ||
-                  'A brief project summary highlighting the purpose, key objectives, and goals of the redesign.'}
+                {translateDisplayText(
+                  guideline.briefOverviewTitle,
+                  'Resumen ejecutivo del proyecto de identidad visual, destacando el propósito, alcance y objetivos estratégicos de la marca.'
+                )}
               </h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-12 mt-6 sm:mt-10 pt-6 border-t border-dashed opacity-90 border-zinc-500/20 text-xs sm:text-sm md:text-base leading-relaxed">
               <p className={textMuted}>
-                {guideline.briefOverviewText ||
-                  'This project overview should provide a concise summary of the rebranding project, outlining the purpose and key objectives of the redesign.'}
+                {translateDisplayText(
+                  guideline.briefOverviewText,
+                  'Este resumen describe el propósito y los objetivos clave de la identidad visual. Destaca los pilares de posicionamiento, modernización y proyección comercial alineados con los valores esenciales de la organización.'
+                )}
               </p>
               <p className={textMuted}>
-                {guideline.briefSecondaryText ||
-                  'Additionally, this section briefly describes the desired look and feel of the new logo, any key elements to retain or change, and how the new design aligns with modern digital touchpoints.'}
+                {translateDisplayText(
+                  guideline.briefSecondaryText,
+                  'Asimismo, esta sección define el estilo visual, el carácter tipográfico y cómo el nuevo sistema gráfico se adapta con coherencia a todos los puntos de contacto físicos y digitales.'
+                )}
               </p>
             </div>
 
             <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-4">
-              <span>Logo identity for &#123;{guideline.brandName}&#125;</span>
-              <span>Slide 02</span>
+              <span>Identidad visual para &#123;{guideline.brandName}&#125;</span>
+              <span>Lámina 02</span>
             </div>
           </div>
         );
@@ -1405,25 +1483,29 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
           <div className={`w-full h-full flex flex-col justify-between p-8 sm:p-14 md:p-20 ${bgClass} select-none`}>
             <div>
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
-                Rebrand Goals
+                Objetivos y Pilares de Marca
               </span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-10 lg:gap-14 my-auto">
-              {(guideline.goals || []).slice(0, 3).map((goal, idx) => (
+              {(guideline.goals || []).map((goal, idx) => (
                 <div key={goal.id || idx} className="space-y-3 sm:space-y-4">
                   <span className="text-3xl sm:text-5xl md:text-6xl font-light tracking-tighter opacity-80 block">
                     {goal.number || `0${idx + 1}`}
                   </span>
-                  <h3 className="text-base sm:text-xl font-semibold tracking-tight">{goal.title}</h3>
-                  <p className={`text-xs sm:text-sm ${textMuted} leading-relaxed`}>{goal.description}</p>
+                  <h3 className="text-base sm:text-xl font-semibold tracking-tight">
+                    {translateDisplayText(goal.title, goal.title)}
+                  </h3>
+                  <p className={`text-xs sm:text-sm ${textMuted} leading-relaxed`}>
+                    {translateDisplayText(goal.description, goal.description)}
+                  </p>
                 </div>
               ))}
             </div>
 
             <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-4 border-t border-zinc-500/10">
-              <span>Strategic Brand Pillars</span>
-              <span>Slide 03</span>
+              <span>Pilares Estratégicos de Marca</span>
+              <span>Lámina 03</span>
             </div>
           </div>
         );
@@ -1433,19 +1515,21 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
           <div className={`w-full h-full flex flex-col justify-between p-8 sm:p-14 md:p-20 ${bgClass} select-none`}>
             <div className="flex items-center justify-between border-b pb-4 border-zinc-500/20">
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
-                {guideline.directionName || 'Direction One'}
+                {translateDisplayText(guideline.directionName, 'Propuesta Principal')}
               </span>
-              <span className="text-[10px] font-mono opacity-40">Primary Lockup</span>
+              <span className="text-[10px] font-mono opacity-40">Versión Principal del Logo</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center my-auto">
               <div className="md:col-span-5 space-y-4 border-l-2 border-zinc-500/30 pl-4 sm:pl-6">
                 <span className="text-[10px] uppercase font-mono tracking-wider opacity-50 block">
-                  Concept Narrative
+                  Narrativa y Racional Conceptual
                 </span>
                 <p className={`text-xs sm:text-sm md:text-base ${textMuted} leading-relaxed`}>
-                  {guideline.directionRationale ||
-                    "This section provides a brief overview of the logo concept, focusing on its inspiration, design rationale, and core message. The copy explains the logo's meaning and intended impact."}
+                  {translateDisplayText(
+                    guideline.directionRationale,
+                    'Esta propuesta sintetiza la esencia, los valores y la personalidad de la marca mediante una construcción geométrica equilibrada, garantizando máxima legibilidad y pregnancia tanto en medios digitales como impresos.'
+                  )}
                 </p>
               </div>
 
@@ -1455,8 +1539,8 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             </div>
 
             <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-4">
-              <span>Logo identity for &#123;{guideline.brandName}&#125;</span>
-              <span>Slide 04</span>
+              <span>Identidad visual para &#123;{guideline.brandName}&#125;</span>
+              <span>Lámina 04</span>
             </div>
           </div>
         );
@@ -1466,7 +1550,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
           <div className={`w-full h-full flex flex-col justify-between p-6 sm:p-12 ${bgClass} select-none`}>
             <div className="flex items-center justify-between">
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
-                Brand Evolution • Interactive Before & After Slider
+                Evolución de Marca • Comparador Interactivo Antes vs. Después
               </span>
               <span className="text-[10px] font-mono opacity-50">
                 Desliza la barra para comparar ({beforeAfterPos}%)
@@ -1478,7 +1562,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               {/* Fondo: DESPUÉS (Nueva Propuesta) */}
               <div className="absolute inset-0 bg-[#111111] text-white flex flex-col items-center justify-center p-8">
                 <span className="absolute top-3 right-4 text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  Propuesta Nueva ({guideline.round || '2026'})
+                  Propuesta Nueva ({translateDisplayText(guideline.round, '2026')})
                 </span>
                 {renderBrandStamp('light', 'max-h-24 sm:max-h-32', 'text-3xl sm:text-5xl')}
               </div>
@@ -1489,7 +1573,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                 style={{ width: `${beforeAfterPos}%` }}
               >
                 <span className="absolute top-3 left-4 text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-zinc-800/80 text-zinc-200 whitespace-nowrap">
-                  {guideline.brandBeforeLabel || 'Identidad Anterior'}
+                  {translateDisplayText(guideline.brandBeforeLabel, 'Identidad Anterior')}
                 </span>
                 <div className="w-full flex items-center justify-center px-8">
                   {guideline.logoBeforeUrl ? (
@@ -1504,7 +1588,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                         {guideline.brandName.toUpperCase()}
                       </span>
                       <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">
-                        Legacy Serif Mark
+                        Versión Anterior
                       </span>
                     </div>
                   )}
@@ -1531,8 +1615,8 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             </div>
 
             <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-2">
-              <span>Rebrand Comparison</span>
-              <span>Slide 05</span>
+              <span>Comparativa de Rebranding</span>
+              <span>Lámina 05</span>
             </div>
           </div>
         );
@@ -1542,9 +1626,9 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
           <div className={`w-full h-full flex flex-col justify-between p-6 sm:p-12 ${bgClass} select-none`}>
             <div className="flex justify-between items-center">
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
-                Safe Zone ({guideline.clearspaceUnit || '1x'}) & Misuse Rules (Don&apos;ts)
+                Área de Resguardo ({guideline.clearspaceUnit || '1x'}) y Usos Incorrectos
               </span>
-              <span className="text-[10px] font-mono opacity-50">Brand Protection Standards</span>
+              <span className="text-[10px] font-mono opacity-50">Normas de Protección de Marca</span>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center my-auto">
@@ -1573,7 +1657,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                 </div>
               </div>
 
-              {/* Derecha: Usos Incorrectos (Don'ts) */}
+              {/* Derecha: Usos Incorrectos */}
               <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                 {(guideline.donts || []).slice(0, 6).map((rule, idx) => (
                   <div
@@ -1581,7 +1665,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                     className="p-3 rounded-xl border border-rose-500/25 bg-rose-950/10 flex flex-col justify-between min-h-[105px]"
                   >
                     <div className="flex items-center justify-between text-[10px] font-mono text-rose-400">
-                      <span>✕ DON&apos;T</span>
+                      <span>✕ EVITAR</span>
                       <span>0{idx + 1}</span>
                     </div>
 
@@ -1605,15 +1689,17 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                       </div>
                     </div>
 
-                    <p className="text-[10px] text-zinc-400 leading-tight line-clamp-2">{rule.title}</p>
+                    <p className="text-[10px] text-zinc-400 leading-tight line-clamp-2">
+                      {translateDisplayText(rule.title, rule.title)}
+                    </p>
                   </div>
                 ))}
               </div>
             </div>
 
             <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-2">
-              <span>Clearspace & Brand Integrity Rules</span>
-              <span>Slide 06</span>
+              <span>Área de Resguardo e Integridad de Marca</span>
+              <span>Lámina 06</span>
             </div>
           </div>
         );
@@ -1623,22 +1709,22 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
           <div className="w-full h-full grid grid-cols-1 md:grid-cols-2 select-none">
             <div className="bg-[#111111] text-white flex flex-col justify-between p-8 sm:p-14">
               <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">
-                Primary Dark Ground
+                Fondo Oscuro Principal
               </span>
               <div className="my-auto flex items-center justify-center py-10">
                 {renderBrandStamp('light', 'max-h-24', 'text-2xl sm:text-4xl')}
               </div>
-              <span className="text-[10px] font-mono text-zinc-600">Background #111111</span>
+              <span className="text-[10px] font-mono text-zinc-600">Fondo #111111 (Versión Negativa)</span>
             </div>
 
             <div className="bg-[#F4F4F5] text-zinc-950 flex flex-col justify-between p-8 sm:p-14">
               <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">
-                Primary Light Ground
+                Fondo Claro Principal
               </span>
               <div className="my-auto flex items-center justify-center py-10">
                 {renderBrandStamp('dark', 'max-h-24', 'text-2xl sm:text-4xl')}
               </div>
-              <span className="text-[10px] font-mono text-zinc-500">Background #F4F4F5 (Positive Contrast)</span>
+              <span className="text-[10px] font-mono text-zinc-500">Fondo #F4F4F5 (Contraste Positivo)</span>
             </div>
           </div>
         );
@@ -1671,7 +1757,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
               <div>
                 <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60 block">
-                  Chromatic System • Interactive Swatches &amp; WCAG 2.1 Auditor
+                  Sistema Cromático • Muestras Interactivas y Auditor WCAG 2.1
                 </span>
               </div>
 
@@ -1785,7 +1871,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
             <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-3">
               <span>Haz clic en cualquier tarjeta para copiar {colorCopyFormat} • Auditor WCAG 2.1 Integrado</span>
-              <span>Chromatic System</span>
+              <span>Sistema Cromático</span>
             </div>
           </div>
         );
@@ -1796,7 +1882,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
           <div className={`w-full h-full flex flex-col justify-between p-6 sm:p-12 md:p-16 ${bgClass} select-none`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
-                Typography System ({primaryFont})
+                Sistema Tipográfico ({primaryFont})
               </span>
 
               {/* Toggle Especímen Clásico vs Type Tester Interactivo */}
@@ -1810,7 +1896,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                 }`}
               >
                 <Sliders className="w-3.5 h-3.5" />
-                <span>{typeTesterMode ? 'Ver Especímen Estándar' : 'Abrir Type Tester en Vivo'}</span>
+                <span>{typeTesterMode ? 'Ver Especímen Estándar' : 'Probar Fuente en Vivo'}</span>
               </button>
             </div>
 
@@ -1833,10 +1919,10 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                   <div className="flex items-center gap-1.5">
                     {(
                       [
-                        { w: '300', label: 'Light' },
+                        { w: '300', label: 'Ligera' },
                         { w: '400', label: 'Regular' },
-                        { w: '600', label: 'SemiBold' },
-                        { w: '700', label: 'Bold' },
+                        { w: '600', label: 'SemiNegrita' },
+                        { w: '700', label: 'Negrita' },
                       ] as const
                     ).map((item) => (
                       <button
@@ -1873,7 +1959,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               <div className="space-y-6 sm:space-y-10 my-auto">
                 <div className="space-y-2 border-b pb-5 border-zinc-500/20">
                   <div className="flex justify-between items-baseline text-xs font-mono opacity-60">
-                    <span>Headings</span>
+                    <span>Titulares</span>
                     <span>
                       {primaryFont} ({guideline.typography?.[0]?.weight || 'Regular / SemiBold'})
                     </span>
@@ -1882,31 +1968,31 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                     style={{ fontFamily: primaryFont }}
                     className="text-2xl sm:text-4xl md:text-5xl font-normal tracking-[-0.03em] leading-tight"
                   >
-                    The quick brown fox jumps over the lazy dog
+                    El veloz murciélago hindú comía feliz cardillo y kiwi
                   </h3>
                   <div className="flex justify-end text-[10px] sm:text-xs font-mono opacity-50 tracking-wider">
-                    AaBbCcDdEeFfGgHhIiJjKkLlMm OoPpQqRrSsTtUuVvWwYyZz 1234567890
+                    AaBbCcDdEeFfGgHhIiJjKkLlMmNnÑñ OoPpQqRrSsTtUuVvWwYyZz 1234567890
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <div className="flex justify-between items-baseline text-xs font-mono opacity-60">
-                    <span>Body &amp; Editorial Copy</span>
+                    <span>Cuerpo de Texto y Párrafos</span>
                     <span>{guideline.typography?.[1]?.fontFamily || primaryFont} Regular</span>
                   </div>
                   <p
                     style={{ fontFamily: guideline.typography?.[1]?.fontFamily || primaryFont }}
                     className="text-lg sm:text-2xl md:text-3xl font-light tracking-tight opacity-90 leading-snug"
                   >
-                    The quick brown fox jumps over the lazy dog
+                    El veloz murciélago hindú comía feliz cardillo y kiwi
                   </p>
                 </div>
               </div>
             )}
 
             <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-2">
-              <span>Typographic Hierarchy &amp; Live Specimen</span>
-              <span>Slide 09</span>
+              <span>Jerarquía Tipográfica y Especímen en Vivo</span>
+              <span>Lámina 09</span>
             </div>
           </div>
         );
@@ -1954,25 +2040,25 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                     <div className="p-4 rounded-2xl bg-zinc-900/90 border border-white/10 shadow-xl flex flex-col items-center text-center space-y-2.5">
                       {renderBrandStamp('light', 'h-9', 'text-lg')}
                       <p className="text-[11px] text-zinc-400 leading-snug">
-                        {guideline.tagline || 'Next-Gen Mobile Ecosystem'}
+                        {guideline.tagline || 'Ecosistema Digital de Nueva Generación'}
                       </p>
                       <div
                         style={{ backgroundColor: guideline.colors?.[0]?.hex || '#FFFFFF' }}
                         className="w-full py-1.5 rounded-xl text-[10px] font-bold text-zinc-950 shadow-md"
                       >
-                        Get Started →
+                        Comenzar →
                       </div>
                     </div>
 
                     {/* Mini Widgets de Interfaz */}
                     <div className="grid grid-cols-2 gap-2">
                       <div className="p-2.5 rounded-xl bg-zinc-900/70 border border-white/5 text-left">
-                        <span className="text-[8px] font-mono text-zinc-500 uppercase block">Active</span>
+                        <span className="text-[8px] font-mono text-zinc-500 uppercase block">Alcance</span>
                         <span className="text-xs font-bold text-white">{guideline.statNumber || '+98.4%'}</span>
                       </div>
                       <div className="p-2.5 rounded-xl bg-zinc-900/70 border border-white/5 text-left">
-                        <span className="text-[8px] font-mono text-zinc-500 uppercase block">System</span>
-                        <span className="text-xs font-bold text-emerald-400">Online</span>
+                        <span className="text-[8px] font-mono text-zinc-500 uppercase block">Sistema</span>
+                        <span className="text-xs font-bold text-emerald-400">En Línea</span>
                       </div>
                     </div>
                   </div>
@@ -1998,7 +2084,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
           <div className={`w-full h-full flex flex-col justify-between p-8 sm:p-14 ${bgClass} select-none`}>
             <div className="flex justify-between items-center">
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
-                App Icon Construction Grid &amp; iOS Home Screen
+                Retícula Constructiva de Icono de App y Pantalla de Inicio
               </span>
             </div>
 
@@ -2021,7 +2107,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               <div className="bg-zinc-950 p-6 rounded-3xl border border-zinc-800 text-white space-y-4 max-w-sm mx-auto w-full shadow-2xl">
                 <div className="flex justify-between items-center text-xs text-zinc-400 font-mono">
                   <span>9:41</span>
-                  <span>iOS 18 App Icon</span>
+                  <span>Icono de Aplicación Móvil</span>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-zinc-800 to-zinc-950 border border-zinc-700 flex items-center justify-center p-2 shadow-xl">
@@ -2029,15 +2115,15 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                   </div>
                   <div>
                     <h5 className="font-semibold text-sm">{guideline.brandName}</h5>
-                    <span className="text-[11px] text-zinc-400">Official Golden Ratio Squircle</span>
+                    <span className="text-[11px] text-zinc-400">Proporción Áurea Oficial</span>
                   </div>
                 </div>
               </div>
             </div>
 
             <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-4">
-              <span>App Icon Proportion &amp; Tangents</span>
-              <span>Slide 11</span>
+              <span>Proporción del Icono y Tangentes</span>
+              <span>Lámina 11</span>
             </div>
           </div>
         );
@@ -2047,9 +2133,9 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
           <div className={`w-full h-full flex flex-col justify-between p-6 sm:p-12 ${bgClass} select-none`}>
             <div className="flex justify-between items-center mb-2">
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
-                Web Interface Experience (macOS Sequoia Browser)
+                Experiencia de Interfaz Web (Navegador de Escritorio)
               </span>
-              <span className="text-[10px] font-mono opacity-50">1440px Responsive Grid</span>
+              <span className="text-[10px] font-mono opacity-50">Retícula Responsiva 1440px</span>
             </div>
 
             <div className="my-auto w-full max-w-4xl mx-auto rounded-2xl overflow-hidden border border-zinc-700/70 shadow-[0_25px_60px_rgba(0,0,0,0.55)] bg-zinc-950">
@@ -2078,13 +2164,13 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                 <div className="flex items-center justify-between border-b border-white/10 pb-3.5 z-10">
                   {renderBrandStamp('light', 'h-6', 'text-sm')}
                   <div className="flex items-center gap-4 text-xs text-zinc-400 font-medium">
-                    <span className="hidden sm:inline">Product</span>
-                    <span className="hidden sm:inline">Ecosystem</span>
+                    <span className="hidden sm:inline">Servicios</span>
+                    <span className="hidden sm:inline">Nosotros</span>
                     <span
                       style={{ backgroundColor: guideline.colors?.[0]?.hex || '#FFFFFF' }}
                       className="px-3 py-1 rounded-full text-[10px] font-bold text-zinc-950"
                     >
-                      Launch App
+                      Contactar
                     </span>
                   </div>
                 </div>
@@ -2092,19 +2178,21 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                 <div className="py-5 grid grid-cols-1 md:grid-cols-12 gap-6 items-center z-10">
                   <div className="md:col-span-8 space-y-2">
                     <span className="px-2.5 py-0.5 rounded-full bg-white/10 text-[10px] font-mono text-zinc-300">
-                      ✦ {guideline.directionName || 'Official Digital Flagship'}
+                      ✦ {translateDisplayText(guideline.directionName, 'Plataforma Digital Oficial')}
                     </span>
                     <h3 className="text-xl sm:text-3xl font-bold tracking-tight leading-tight">
-                      {guideline.tagline || 'Next-generation digital brand ecosystem.'}
+                      {guideline.tagline || 'Ecosistema digital de marca de última generación.'}
                     </h3>
                     <p className="text-zinc-400 text-xs max-w-lg">
-                      {guideline.briefOverviewText?.slice(0, 110) ||
-                        'Designed for clarity, instant recognition and scalable digital products.'}
+                      {translateDisplayText(
+                        guideline.briefOverviewText,
+                        'Diseñado para ofrecer claridad, reconocimiento inmediato y presencia digital escalable.'
+                      ).slice(0, 120)}
                     </p>
                   </div>
 
                   <div className="md:col-span-4 p-3.5 rounded-xl bg-white/5 border border-white/10 backdrop-blur-md space-y-1.5">
-                    <span className="text-[9px] font-mono uppercase text-zinc-400">Performance</span>
+                    <span className="text-[9px] font-mono uppercase text-zinc-400">Rendimiento</span>
                     <div className="text-2xl font-bold">{guideline.statNumber || '99.9%'}</div>
                     <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
                       <div
@@ -2118,8 +2206,8 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             </div>
 
             <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-2">
-              <span>Desktop Browser Application</span>
-              <span>Slide 12</span>
+              <span>Aplicación Web de Escritorio</span>
+              <span>Lámina 12</span>
             </div>
           </div>
         );
@@ -2129,7 +2217,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
           <div className={`w-full h-full flex flex-col justify-between p-8 sm:p-14 md:p-20 ${bgClass} select-none`}>
             <div>
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
-                Key Performance Metric
+                Indicador Clave de Impacto
               </span>
             </div>
 
@@ -2138,16 +2226,19 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                 style={{ fontFamily: primaryFont }}
                 className="text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-semibold tracking-[-0.04em] leading-none block"
               >
-                {guideline.statNumber || '$2.5M'}
+                {guideline.statNumber || '+100%'}
               </span>
               <p className={`text-sm sm:text-xl font-normal ${textMuted} max-w-2xl`}>
-                {guideline.statLabel || 'Projected target reach, ecosystem valuation and scalable impact.'}
+                {translateDisplayText(
+                  guideline.statLabel,
+                  'Indicador clave de posicionamiento, alcance proyectado e impacto visual de la marca.'
+                )}
               </p>
             </div>
 
             <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-4 border-t border-zinc-500/10">
-              <span>Impact &amp; Projections</span>
-              <span>Slide 13</span>
+              <span>Impacto y Proyecciones</span>
+              <span>Lámina 13</span>
             </div>
           </div>
         );
@@ -2158,7 +2249,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
               <div>
                 <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60 block">
-                  Apparel Lookbook • 3D Studio Garment Mockups
+                  Catálogo de Indumentaria • Mockups de Prendas en Estudio 3D
                 </span>
                 <span className="text-[10px] font-mono opacity-50">
                   Haz clic en cualquier prenda para inspección 3D a pantalla completa
@@ -2167,7 +2258,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               {renderColorwaySelector()}
             </div>
 
-            {/* 4 Prendas de Estudio Hiper-Detalladas con Selector de Colorway y Zoom */}
+            {/* 4 Prendas de Estudio Hiper-Detalladas con Selector de Color y Zoom */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 my-auto">
               {renderStudioMockupCard('sweatshirt')}
               {renderStudioMockupCard('tshirt')}
@@ -2176,8 +2267,8 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             </div>
 
             <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-2">
-              <span>Apparel &amp; Textile Applications • Click en cualquier prenda para Zoom</span>
-              <span>Slide 14</span>
+              <span>Aplicaciones Textiles • Haz clic en cualquier prenda para ampliar</span>
+              <span>Lámina 14</span>
             </div>
           </div>
         );
@@ -2188,7 +2279,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
               <div>
                 <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60 block">
-                  Brand Collaterals • Tote Bag, Insulated Flask, RFID Pass &amp; MacBook Pro
+                  Artículos Promocionales • Bolso Tote, Termo, Fotocheck QR y Portátil
                 </span>
                 <span className="text-[10px] font-mono opacity-50">
                   Haz clic en cualquier artículo para inspección detallada
@@ -2206,8 +2297,8 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             </div>
 
             <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-2">
-              <span>Stationery, Merch &amp; Hardware Stickers • Click para Zoom</span>
-              <span>Collaterals</span>
+              <span>Merchandising, Credenciales y Stickers • Haz clic para ampliar</span>
+              <span>Artículos Corporativos</span>
             </div>
           </div>
         );
@@ -2222,14 +2313,14 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60 block">
-                  Geometric Grid, Minimum Scale &amp; Iconography System
+                  Retícula Geométrica, Escala Mínima y Sistema Iconográfico
                 </span>
                 <h3 className="text-base sm:text-xl font-bold tracking-tight">
                   Arquitectura Geométrica, Legibilidad y Sistema de Iconos
                 </h3>
               </div>
               <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-amber-400/15 text-amber-400 border border-amber-400/30">
-                Golden Ratio φ = 1.618 • Stroke {strokeW}px
+                Proporción Áurea φ = 1.618 • Trazo {strokeW}
               </span>
             </div>
 
@@ -2237,7 +2328,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               {/* 1. Retícula Constructiva Geométrica con Círculos Tangentes y Ángulos */}
               <div className="lg:col-span-5 rounded-2xl border border-zinc-700/50 bg-[#0B0C10] text-white p-4 flex flex-col justify-between relative overflow-hidden min-h-[235px]">
                 <div className="flex items-center justify-between text-[10px] font-mono text-cyan-400 z-10">
-                  <span>01 • GEOMETRIC CONSTRUCTION GRID</span>
+                  <span>01 • RETÍCULA DE CONSTRUCCIÓN GEOMÉTRICA</span>
                   <span>45° / 90° / φ</span>
                 </div>
 
@@ -2297,7 +2388,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                 </div>
 
                 <div className="flex justify-between text-[9px] font-mono text-zinc-400 z-10">
-                  <span>Proporción Áurea &amp; Tangentes</span>
+                  <span>Proporción Áurea y Tangentes</span>
                   <span>Tolerancia Óptica ±0.5%</span>
                 </div>
               </div>
@@ -2305,15 +2396,15 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               {/* 2. Escala de Tamaños Mínimos de Reproducción */}
               <div className="lg:col-span-4 rounded-2xl border border-zinc-700/50 bg-zinc-900/80 text-white p-4 flex flex-col justify-between min-h-[235px]">
                 <div className="flex items-center justify-between text-[10px] font-mono text-amber-400">
-                  <span>02 • MINIMUM REPRODUCTION SIZES</span>
-                  <span>LEGIBILITY</span>
+                  <span>02 • TAMAÑOS MÍNIMOS DE REPRODUCCIÓN</span>
+                  <span>LEGIBILIDAD</span>
                 </div>
 
                 <div className="space-y-3 my-auto py-2">
                   {[
-                    { label: 'Desktop Header', sizeInfo: '64px / 25mm', scaleClass: 'scale-100', hClass: 'h-7', preferSym: false },
-                    { label: 'Mobile Navbar', sizeInfo: '32px / 15mm Textil', scaleClass: 'scale-90', hClass: 'h-5', preferSym: false },
-                    { label: 'App Badge / Watch', sizeInfo: '24px / 10mm (Isotipo)', scaleClass: 'scale-95', hClass: 'h-5', preferSym: true },
+                    { label: 'Cabecera Web Desktop', sizeInfo: '64px / 25mm', scaleClass: 'scale-100', hClass: 'h-7', preferSym: false },
+                    { label: 'Navegación Móvil', sizeInfo: '32px / 15mm Textil', scaleClass: 'scale-90', hClass: 'h-5', preferSym: false },
+                    { label: 'Icono App / Reloj', sizeInfo: '24px / 10mm (Isotipo)', scaleClass: 'scale-95', hClass: 'h-5', preferSym: true },
                     { label: 'Favicon / Micro', sizeInfo: '16px / 6mm (Isotipo)', scaleClass: 'scale-85', hClass: 'h-4', preferSym: true },
                   ].map((item, idx) => (
                     <div
@@ -2339,7 +2430,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               {/* 3. Sistema Iconográfico y Estilo de Ilustración */}
               <div className="lg:col-span-3 rounded-2xl border border-zinc-700/50 bg-zinc-900/80 text-white p-4 flex flex-col justify-between min-h-[235px]">
                 <div className="flex items-center justify-between text-[10px] font-mono text-emerald-400">
-                  <span>03 • ICON SYSTEM</span>
+                  <span>03 • SISTEMA DE ICONOS</span>
                   <span>
                     {strokeW} / R{cornerR}
                   </span>
@@ -2368,11 +2459,11 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                         className="aspect-square bg-black/50 border border-white/10 flex items-center justify-center p-2 hover:border-amber-400 transition"
                       >
                         {customIconUrl ? (
-                          <img src={customIconUrl} alt={`Icon ${idx + 1}`} className="w-7 h-7 object-contain" />
+                          <img src={customIconUrl} alt={`Icono ${idx + 1}`} className="w-7 h-7 object-contain" />
                         ) : idx === 0 && (guideline.logoSymbolUrl || guideline.logoSymbolDarkUrl) ? (
                           <img
                             src={guideline.logoSymbolUrl || guideline.logoSymbolDarkUrl}
-                            alt="Brand Symbol"
+                            alt="Símbolo de Marca"
                             className="w-7 h-7 object-contain"
                           />
                         ) : (
@@ -2394,14 +2485,14 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                 </div>
 
                 <div className="text-[9px] font-mono text-zinc-400">
-                  Grid 24×24px • Stroke {strokeW}px • Corner {cornerR}px
+                  Retícula 24×24px • Trazo {strokeW} • Radio {cornerR}
                 </div>
               </div>
             </div>
 
             <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-1">
-              <span>Optical Construction, Minimum Reproduction &amp; Custom Iconography</span>
-              <span>Geometry &amp; Icons</span>
+              <span>Construcción Óptica, Tamaños Mínimos e Iconografía Personalizada</span>
+              <span>Geometría e Iconos</span>
             </div>
           </div>
         );
@@ -2419,13 +2510,13 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60 block">
-                  Corporate Stationery System • Print &amp; Executive Collaterals
+                  Sistema de Papelería Corporativa • Impresos Ejecutivos
                 </span>
                 <h3 className="text-base sm:text-xl font-bold tracking-tight">
                   Papelería Corporativa (Hoja A4, Tarjetas de Presentación, Sobre DL y Carpeta)
                 </h3>
               </div>
-              <span className="text-[10px] font-mono opacity-60">Cotton Paper 350g • Foil Stamping</span>
+              <span className="text-[10px] font-mono opacity-60">Papel Algodón 350g • Acabado Mate</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 my-auto items-stretch">
@@ -2452,7 +2543,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                 </div>
 
                 <div className="pt-2 border-t border-zinc-300 flex items-center justify-between text-[8px] font-mono text-zinc-500">
-                  <span>{guideline.brandName.toUpperCase()} OFFICIAL LETTERHEAD</span>
+                  <span>{guideline.brandName.toUpperCase()} • HOJA MEMBRETADA</span>
                   <span>WWW.{guideline.brandName.replace(/\s+/g, '').toUpperCase()}.COM</span>
                 </div>
               </div>
@@ -2465,14 +2556,14 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                   style={{ backgroundColor: primaryHex }}
                 >
                   <div className="flex justify-between items-center text-[8px] font-mono opacity-60">
-                    <span>BUSINESS CARD • FRONT</span>
+                    <span>TARJETA DE PRESENTACIÓN • ANVERSO</span>
                     <span>85 × 55 MM</span>
                   </div>
                   <div className="my-auto flex items-center justify-center py-2">
                     {renderBrandStamp('light', 'h-5', 'text-sm')}
                   </div>
                   <div className="text-[8px] font-mono opacity-60 text-right">
-                    {guideline.tagline || 'BRAND IDENTITY'}
+                    {guideline.tagline || 'IDENTIDAD OFICIAL'}
                   </div>
                 </div>
 
@@ -2513,20 +2604,20 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                     <div className="scale-75 origin-left">
                       {renderBrandStamp('dark', 'h-3.5', 'text-xs')}
                     </div>
-                    <span className="text-[8px] font-mono text-zinc-500 pr-3">DL ENVELOPE 220×110</span>
+                    <span className="text-[8px] font-mono text-zinc-500 pr-3">SOBRE DL 220×110</span>
                   </div>
                   <div className="my-auto pl-12">
                     <div className="h-1.5 w-28 rounded bg-zinc-400/70 mb-1" />
                     <div className="h-1 w-20 rounded bg-zinc-400/50" />
                   </div>
-                  <span className="text-[8px] font-mono text-zinc-500">PRIORITY CORPORATE MAIL</span>
+                  <span className="text-[8px] font-mono text-zinc-500">CORRESPONDENCIA CORPORATIVA</span>
                 </div>
 
                 {/* Carpeta Corporativa */}
                 <div className="flex-1 rounded-2xl bg-zinc-900 text-white p-4 shadow-xl border border-zinc-700 flex flex-col justify-between relative overflow-hidden">
                   <div className="flex items-center justify-between text-[8px] font-mono text-zinc-400">
-                    <span>PRESENTATION FOLDER</span>
-                    <span>UV SPOT VARNISH</span>
+                    <span>CARPETA EJECUTIVA</span>
+                    <span>BARNIZ UV SECTORIZADO</span>
                   </div>
                   <div className="my-auto flex items-center justify-between">
                     {renderBrandStamp('light', 'h-5', 'text-sm')}
@@ -2543,8 +2634,8 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             </div>
 
             <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-1">
-              <span>Stationery Kit • A4 Letterhead, Double-Sided Business Cards, DL Envelope &amp; Folder</span>
-              <span>Stationery Kit</span>
+              <span>Papelería Corporativa • Hoja A4, Tarjetas Doble Cara, Sobre DL y Carpeta</span>
+              <span>Papelería</span>
             </div>
           </div>
         );
@@ -2559,10 +2650,10 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60 block">
-                  Packaging, Food/Delivery Box, Coffee Cup &amp; Kraft Carrier
+                  Empaques, Caja de Envío / Delivery, Vaso Térmico y Bolsa Kraft
                 </span>
                 <h3 className="text-base sm:text-xl font-bold tracking-tight">
-                  Sistema de Packaging, Cajas de Entrega, Vaso Térmico y Bolsa Kraft
+                  Sistema de Empaques, Cajas de Entrega, Vaso Térmico y Bolsa Kraft
                 </h3>
               </div>
               {renderColorwaySelector()}
@@ -2572,7 +2663,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               {/* 1. Caja de Pizza / E-Commerce Delivery Box */}
               <div className="rounded-2xl p-4 bg-gradient-to-b from-[#232329] to-[#121216] text-white border border-zinc-700/70 flex flex-col items-center justify-between min-h-[225px] relative overflow-hidden">
                 <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-400 self-start">
-                  01 • Delivery / Pizza Box
+                  01 • Caja de Envío / Gourmet
                 </span>
                 <div className="my-auto relative flex items-center justify-center">
                   <svg viewBox="0 0 210 155" className="w-40 h-32 drop-shadow-[0_14px_16px_rgba(0,0,0,0.45)]">
@@ -2611,15 +2702,15 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                   </div>
                 </div>
                 <div className="w-full text-left">
-                  <div className="text-[11px] font-bold">Gourmet Delivery Box</div>
-                  <div className="text-[9px] font-mono text-zinc-400">Corrugated E-Flute • Security Seal</div>
+                  <div className="text-[11px] font-bold">Caja de Entrega Gourmet</div>
+                  <div className="text-[9px] font-mono text-zinc-400">Cartón Microcorrugado • Sello de Seguridad</div>
                 </div>
               </div>
 
               {/* 2. Vaso de Café / Bebida con Faja Térmica */}
               <div className="rounded-2xl p-4 bg-gradient-to-b from-[#F4F4F1] to-[#D8D7D0] text-zinc-900 border border-black/10 flex flex-col items-center justify-between min-h-[225px] relative overflow-hidden">
                 <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-500 self-start">
-                  02 • Hot/Cold Beverage Cup
+                  02 • Vaso Térmico 16oz
                 </span>
                 <div className="my-auto relative flex items-center justify-center">
                   <svg viewBox="0 0 160 185" className="w-32 h-36 drop-shadow-[0_14px_14px_rgba(0,0,0,0.25)]">
@@ -2637,15 +2728,15 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                   </div>
                 </div>
                 <div className="w-full text-left">
-                  <div className="text-[11px] font-bold">16oz Double-Wall Cup</div>
-                  <div className="text-[9px] font-mono text-zinc-600">Embossed Sleeve • Matte Sip Lid</div>
+                  <div className="text-[11px] font-bold">Vaso Doble Pared 16oz</div>
+                  <div className="text-[9px] font-mono text-zinc-600">Faja Texturizada • Tapa Mate</div>
                 </div>
               </div>
 
               {/* 3. Bolsa Kraft Takeaway / Retail */}
               <div className="rounded-2xl p-4 bg-gradient-to-b from-[#F4F4F1] to-[#D8D7D0] text-zinc-900 border border-black/10 flex flex-col items-center justify-between min-h-[225px] relative overflow-hidden">
                 <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-500 self-start">
-                  03 • Kraft Takeaway Bag
+                  03 • Bolsa Kraft Impresa
                 </span>
                 <div className="my-auto relative flex items-center justify-center">
                   <svg viewBox="0 0 175 190" className="w-32 h-36 drop-shadow-[0_14px_15px_rgba(0,0,0,0.28)]">
@@ -2668,15 +2759,15 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                   </div>
                 </div>
                 <div className="w-full text-left">
-                  <div className="text-[11px] font-bold">Eco Kraft Carrier Bag</div>
-                  <div className="text-[9px] font-mono text-zinc-600">140 GSM Virgin Kraft • Soy Ink</div>
+                  <div className="text-[11px] font-bold">Bolsa Ecológica Kraft</div>
+                  <div className="text-[9px] font-mono text-zinc-600">Papel Kraft 140g • Tinta Ecológica</div>
                 </div>
               </div>
 
               {/* 4. Etiqueta Colgante Troquelada (Die-Cut Hang Tag) */}
               <div className="rounded-2xl p-4 bg-gradient-to-b from-[#232329] to-[#121216] text-white border border-zinc-700/70 flex flex-col items-center justify-between min-h-[225px] relative overflow-hidden">
                 <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-400 self-start">
-                  04 • Die-Cut Seal &amp; Tag
+                  04 • Etiqueta Troquelada
                 </span>
                 <div className="my-auto relative flex items-center justify-center">
                   <svg viewBox="0 0 160 185" className="w-32 h-36 drop-shadow-[0_14px_16px_rgba(0,0,0,0.45)]">
@@ -2697,15 +2788,15 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                   </div>
                 </div>
                 <div className="w-full text-left">
-                  <div className="text-[11px] font-bold">Luxury Hang Tag</div>
-                  <div className="text-[9px] font-mono text-zinc-400">600 GSM Duplex • Metallic Eyelets</div>
+                  <div className="text-[11px] font-bold">Etiqueta Hang Tag Premium</div>
+                  <div className="text-[9px] font-mono text-zinc-400">Cartulina Dúplex 600g • Ojal Metálico</div>
                 </div>
               </div>
             </div>
 
             <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-1">
-              <span>Packaging &amp; Delivery Applications • Food, Retail &amp; E-Commerce</span>
-              <span>Packaging Kit</span>
+              <span>Empaques y Bolsas de Entrega • Gastronomía, Retail y E-Commerce</span>
+              <span>Kit de Empaques</span>
             </div>
           </div>
         );
@@ -2720,21 +2811,21 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60 block">
-                  OOH Advertising, Storefront Signage &amp; Delivery Fleet
+                  Publicidad Exterior (OOH), Fachada Comercial y Flota de Reparto
                 </span>
                 <h3 className="text-base sm:text-xl font-bold tracking-tight">
                   Señalética Exterior, Valla Autopista, Letrero Luminoso y Flota Vehicular
                 </h3>
               </div>
-              <span className="text-[10px] font-mono opacity-60">Outdoor Backlit LED • 3M Cast Vinyl Wrap</span>
+              <span className="text-[10px] font-mono opacity-60">Iluminación LED • Vinilo Vehicular 3M</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-auto">
               {/* 1. Valla Publicitaria (Highway Billboard) */}
               <div className="rounded-2xl p-4 bg-gradient-to-b from-[#0F172A] via-[#1E293B] to-[#090D16] text-white border border-slate-700/70 flex flex-col justify-between min-h-[245px] relative overflow-hidden">
                 <div className="flex justify-between items-center text-[9px] font-mono text-sky-300">
-                  <span>01 • HIGHWAY BILLBOARD 14×48 FT</span>
-                  <span>LED ILLUMINATED</span>
+                  <span>01 • VALLA PUBLICITARIA 14×48 FT</span>
+                  <span>ILUMINACIÓN LED</span>
                 </div>
 
                 <div className="my-auto flex flex-col items-center">
@@ -2778,8 +2869,8 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               {/* 2. Letrero Luminoso Redondo de Fachada Comercial (Blade Sign) */}
               <div className="rounded-2xl p-4 bg-gradient-to-b from-[#1C1917] to-[#0C0A09] text-white border border-stone-700/70 flex flex-col justify-between min-h-[245px] relative overflow-hidden">
                 <div className="flex justify-between items-center text-[9px] font-mono text-amber-300">
-                  <span>02 • STOREFRONT BLADE SIGN</span>
-                  <span>DOUBLE-SIDED ACRYLIC</span>
+                  <span>02 • LETRERO LUMINOSO DE FACHADA</span>
+                  <span>ACRÍLICO DOBLE CARA</span>
                 </div>
 
                 <div className="my-auto flex items-center justify-center relative py-2">
@@ -2808,8 +2899,8 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
               {/* 3. Furgoneta de Reparto Rotulada (Delivery Van Wrap) */}
               <div className="rounded-2xl p-4 bg-gradient-to-b from-[#F4F4F1] to-[#D4D4CE] text-zinc-900 border border-black/10 flex flex-col justify-between min-h-[245px] relative overflow-hidden">
                 <div className="flex justify-between items-center text-[9px] font-mono text-zinc-600">
-                  <span>03 • COMMERCIAL FLEET WRAP</span>
-                  <span>CARGO VAN</span>
+                  <span>03 • ROTULACIÓN DE FLOTA COMERCIAL</span>
+                  <span>FURGONETA DE REPARTO</span>
                 </div>
 
                 <div className="my-auto relative flex items-center justify-center">
@@ -2845,8 +2936,8 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             </div>
 
             <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-1">
-              <span>OOH &amp; Fleet • Billboards, Commercial Signage &amp; Delivery Vehicles</span>
-              <span>OOH &amp; Fleet</span>
+              <span>Vallas Publicitarias, Señalética Comercial y Flota Vehicular</span>
+              <span>Vía Pública y Flota</span>
             </div>
           </div>
         );
@@ -2863,13 +2954,13 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60 block">
-                  Social Media Kit • Live Instagram Grid &amp; Corporate LinkedIn Header
+                  Kit de Redes Sociales • Grilla de Instagram en Vivo y Portada de LinkedIn
                 </span>
                 <h3 className="text-base sm:text-xl font-bold tracking-tight">
-                  Ecosistema Digital &amp; Social Media Kit en Vivo
+                  Ecosistema Digital y Kit de Redes Sociales en Vivo
                 </h3>
               </div>
-              <span className="text-[10px] font-mono opacity-60">@{handleName} • 1080×1350px Feed</span>
+              <span className="text-[10px] font-mono opacity-60">@{handleName} • Feed 1080×1350px</span>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 my-auto items-center">
@@ -2927,12 +3018,12 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                 {/* Grilla de 6 Posts de Instagram con la Paleta y Tipografía de la Marca */}
                 <div className="grid grid-cols-3 gap-1.5 pt-1">
                   {[
-                    { bg: primaryHex, text: guideline.brandName, sub: 'LAUNCH' },
-                    { bg: secondaryHex, text: guideline.tagline || 'NEW ERA', sub: 'MANIFESTO' },
-                    { bg: '#18181B', text: 'QUALITY FIRST', sub: '01 / 06' },
-                    { bg: '#F4F4F5', text: guideline.brandName, sub: 'MINIMAL', darkText: true },
-                    { bg: thirdHex, text: 'SIGNATURE SERIES', sub: 'COLLECTION' },
-                    { bg: primaryHex, text: `@${handleName}`, sub: 'FOLLOW US' },
+                    { bg: primaryHex, text: guideline.brandName, sub: 'LANZAMIENTO' },
+                    { bg: secondaryHex, text: guideline.tagline || 'NUEVA ETAPA', sub: 'MANIFIESTO' },
+                    { bg: '#18181B', text: 'CALIDAD SUPERIOR', sub: '01 / 06' },
+                    { bg: '#F4F4F5', text: guideline.brandName, sub: 'IDENTIDAD', darkText: true },
+                    { bg: thirdHex, text: 'EDICIÓN ESPECIAL', sub: 'COLECCIÓN' },
+                    { bg: primaryHex, text: `@${handleName}`, sub: 'SÍGUENOS' },
                   ].map((post, idx) => (
                     <div
                       key={idx}
@@ -2971,7 +3062,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                   >
                     <div className="space-y-1 z-10">
                       <span className="text-[8px] font-mono uppercase tracking-widest text-white/70">
-                        LINKEDIN CORPORATE HEADER • 1584 × 396 PX
+                        PORTADA CORPORATIVA LINKEDIN • 1584 × 396 PX
                       </span>
                       <h4
                         className="text-lg font-bold text-white"
@@ -2995,14 +3086,14 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                         </div>
                       </div>
                       <div>
-                        <div className="text-xs font-bold">{guideline.brandName} Official</div>
+                        <div className="text-xs font-bold">{guideline.brandName} Oficial</div>
                         <div className="text-[10px] text-zinc-400">
-                          Corporate Page • Brand Identity System
+                          Página Corporativa • Sistema de Identidad Visual
                         </div>
                       </div>
                     </div>
                     <span className="px-2.5 py-1 rounded-full bg-sky-500/20 text-sky-400 text-[9px] font-mono">
-                      LinkedIn Verified
+                      Perfil Verificado
                     </span>
                   </div>
                 </div>
@@ -3026,8 +3117,8 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             </div>
 
             <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-1">
-              <span>Social Media Kit • Instagram Feed Grid, Highlights &amp; LinkedIn Cover</span>
-              <span>Social Kit</span>
+              <span>Kit de Redes Sociales • Grilla de Instagram, Destacadas y Portada de LinkedIn</span>
+              <span>Redes Sociales</span>
             </div>
           </div>
         );
@@ -3038,10 +3129,10 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
           <div className={`w-full h-full flex flex-col justify-between p-8 sm:p-14 ${bgClass} select-none`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
-                Other Ideas, Icons &amp; Symbol Exploration
+                Variaciones del Símbolo, Iconos y Exploración Visual
               </span>
               <span className="text-[10px] font-mono opacity-40">
-                Variaciones del Símbolo &amp; Sistema de Iconos
+                Matriz de Símbolos e Iconografía
               </span>
             </div>
 
@@ -3099,14 +3190,16 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                       <div className="w-10 h-10 border-4 border-current rotate-45 rounded-lg" />
                     )}
                   </div>
-                  <span className="text-[11px] font-mono opacity-60 text-center">{idea.title}</span>
+                  <span className="text-[11px] font-mono opacity-60 text-center">
+                    {translateDisplayText(idea.title, idea.title)}
+                  </span>
                 </div>
               ))}
             </div>
 
             <div className="flex justify-between items-center text-[10px] font-mono opacity-40 pt-4">
-              <span>Alternative Marks &amp; Custom Icons Matrix</span>
-              <span>Symbol Exploration</span>
+              <span>Símbolos Alternativos y Matriz de Iconos</span>
+              <span>Exploración de Símbolos</span>
             </div>
           </div>
         );
@@ -3117,9 +3210,9 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className="text-[10px] sm:text-xs font-mono tracking-widest uppercase opacity-60">
-                  Next Steps, Approval &amp; Brand Assets Kit
+                  Hoja de Ruta, Aprobación y Kit de Archivos Editables
                 </span>
-                <h2 className="text-2xl sm:text-4xl font-semibold tracking-tight mt-1">Next Steps</h2>
+                <h2 className="text-2xl sm:text-4xl font-semibold tracking-tight mt-1">Próximos Pasos</h2>
               </div>
 
               {/* Botones de Acción Final para el Cliente */}
@@ -3151,7 +3244,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center my-auto">
-              {/* Izquierda: Roadmap 01 - 04 */}
+              {/* Izquierda: Hoja de Ruta */}
               <div className="lg:col-span-7 space-y-3 sm:space-y-4">
                 {(guideline.nextSteps || []).map((step, idx) => (
                   <div key={step.id || idx} className="flex items-start gap-3.5">
@@ -3159,18 +3252,22 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                       {step.step || `0${idx + 1}`}
                     </span>
                     <div>
-                      <h4 className="text-xs sm:text-sm font-bold">{step.title}</h4>
-                      <p className={`text-xs ${textMuted} leading-relaxed`}>{step.description}</p>
+                      <h4 className="text-xs sm:text-sm font-bold">
+                        {translateDisplayText(step.title, step.title)}
+                      </h4>
+                      <p className={`text-xs ${textMuted} leading-relaxed`}>
+                        {translateDisplayText(step.description, step.description)}
+                      </p>
                     </div>
                   </div>
                 ))}
               </div>
 
-              {/* Derecha: Centro de Descargas (Brand Assets Kit & Google Drive) */}
+              {/* Derecha: Centro de Descargas (Kit de Archivos y Google Drive) */}
               <div className="lg:col-span-5 p-5 rounded-2xl border border-zinc-700/50 bg-zinc-900/60 text-white space-y-3">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-amber-400" />
-                  <h4 className="text-xs font-bold uppercase tracking-wider">Brand Assets Kit</h4>
+                  <h4 className="text-xs font-bold uppercase tracking-wider">Kit de Archivos de Marca</h4>
                 </div>
                 <p className="text-[11px] text-zinc-400 leading-relaxed">
                   Descarga el manual en PDF 16:9, los tokens de color o accede a la carpeta de editables en Google Drive.
@@ -3200,7 +3297,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                   >
                     <span className="flex items-center gap-2">
                       <FileDown className="w-4 h-4" />
-                      <span>{exportingPdf ? 'Generando PDF 16:9...' : 'Descargar Pitch Deck (PDF 16:9)'}</span>
+                      <span>{exportingPdf ? 'Generando PDF 16:9...' : 'Descargar Manual de Marca (PDF 16:9)'}</span>
                     </span>
                     <Download className="w-3.5 h-3.5" />
                   </button>
@@ -3218,7 +3315,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             </div>
 
             <div className="pt-4 border-t border-zinc-500/20 flex justify-between items-center text-xs font-mono opacity-60">
-              <span className="text-lg sm:text-xl font-bold tracking-tight">Thank you</span>
+              <span className="text-lg sm:text-xl font-bold tracking-tight">Muchas gracias</span>
               <span>
                 {guideline.brandName} © {guideline.date || '2026'}
               </span>
@@ -3236,7 +3333,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
       <div className="min-h-screen bg-[#111111] flex flex-col items-center justify-center text-white">
         <div className="w-12 h-12 border-2 border-zinc-700 border-t-white rounded-full animate-spin mb-4" />
         <p className="text-xs font-mono text-zinc-400 tracking-wider uppercase">
-          Cargando Brand Pitch Deck...
+          Cargando Manual de Identidad Visual...
         </p>
       </div>
     );
@@ -3837,7 +3934,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <span className="text-[10px] font-mono uppercase tracking-widest text-amber-400 block">
-                  Studio 3D Mockup Inspector • Vista Ampliada
+                  Inspector 3D de Mockups • Vista Ampliada
                 </span>
                 <h3 className="text-base sm:text-lg font-bold tracking-tight">
                   {guideline?.brandName} — Aplicación de Identidad
@@ -3898,14 +3995,14 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
                       : 'bg-zinc-800 text-zinc-400'
                   }`}
                 >
-                  {useDisplacementFilter ? '✓ Displacement Map ON' : 'Displacement Map OFF'}
+                  {useDisplacementFilter ? '✓ Pliegues Textiles ON' : 'Pliegues Textiles OFF'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setRot3D({ x: 0, y: 0 })}
                   className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[10px] font-mono text-white cursor-pointer"
                 >
-                  Reset 3D
+                  Restablecer 3D
                 </button>
               </div>
             </div>
@@ -3914,13 +4011,13 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
             <div className="flex items-center justify-center gap-1.5 flex-wrap pt-2">
               {(
                 [
-                  { id: 'sweatshirt', label: 'Sweatshirt' },
-                  { id: 'tshirt', label: 'T-Shirt' },
+                  { id: 'sweatshirt', label: 'Polera' },
+                  { id: 'tshirt', label: 'Camiseta' },
                   { id: 'hoodie', label: 'Hoodie' },
-                  { id: 'cap', label: 'Cap' },
-                  { id: 'tote', label: 'Tote Bag' },
-                  { id: 'thermos', label: 'Thermos' },
-                  { id: 'lanyard', label: 'ID Lanyard QR' },
+                  { id: 'cap', label: 'Gorra' },
+                  { id: 'tote', label: 'Bolso Tote' },
+                  { id: 'thermos', label: 'Termo' },
+                  { id: 'lanyard', label: 'Credencial QR' },
                   { id: 'macbook', label: 'MacBook Pro' },
                 ] as const
               ).map((m) => (
@@ -3944,7 +4041,7 @@ export const PublicBrandGuidelineView: React.FC<PublicBrandGuidelineViewProps> =
 
       {!(isCinemaMode || isFullscreen) && (
         <footer className="py-3 text-center text-[10px] font-mono text-zinc-400">
-          Teclas: ← → Navegar • &apos;P&apos; Auto-Play Showreel • &apos;T&apos; Tema Dark/Light • &apos;G&apos; Vista 2x2 • &apos;F&apos; Pantalla Completa • Click en Mockup para Zoom 3D
+          Teclas: ← → Navegar • &apos;P&apos; Reproducción Automática • &apos;T&apos; Tema Oscuro/Claro • &apos;G&apos; Vista 2x2 • &apos;F&apos; Pantalla Completa • Haz clic en un Mockup para Zoom 3D
         </footer>
       )}
     </div>
