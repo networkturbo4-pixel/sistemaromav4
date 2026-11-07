@@ -14,7 +14,6 @@ import {
   ChevronLeft,
   Paperclip,
   Reply,
-  ExternalLink,
   Download,
   CheckCircle2,
   AlertCircle,
@@ -202,7 +201,7 @@ export const EmailsSubmoduleView: React.FC<EmailsSubmoduleViewProps> = ({ onBack
   };
 
   const foldersList: Array<{ id: EmailFolder; label: string; icon: React.ReactNode }> = [
-    { id: 'inbox', label: 'Bandeja de entrada', icon: <Inbox className="w-4 h-4" /> },
+    { id: 'inbox', label: 'Bandeja', icon: <Inbox className="w-4 h-4" /> },
     { id: 'starred', label: 'Destacados', icon: <Star className="w-4 h-4" /> },
     { id: 'sent', label: 'Enviados', icon: <Send className="w-4 h-4" /> },
     { id: 'drafts', label: 'Borradores', icon: <FileText className="w-4 h-4" /> },
@@ -212,115 +211,151 @@ export const EmailsSubmoduleView: React.FC<EmailsSubmoduleViewProps> = ({ onBack
   const currentAccount = accounts.find((a) => a.id === selectedAccountId);
 
   return (
-    <div className="space-y-4 animate-fadeIn">
-      {/* Barra Superior / Header del Módulo */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          {onBackToHub && (
-            <button
-              type="button"
-              onClick={onBackToHub}
-              className="p-2 -ml-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
-              title="Volver a Workspace Hub"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-          )}
+    <div className="space-y-3 sm:space-y-4 animate-fadeIn pb-24 lg:pb-6">
+      {/* Cabecera del Módulo (Responsive) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-xs space-y-3">
+        {/* Fila 1: Título, Volver y Acciones Principales */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            {onBackToHub && (
+              <button
+                type="button"
+                onClick={onBackToHub}
+                className="p-1.5 sm:p-2 -ml-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer shrink-0"
+                title="Volver a Workspace"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+            )}
 
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-            <Mail className="w-5 h-5 sm:w-6 sm:h-6" />
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+              <Mail className="w-5 h-5" />
+            </div>
+
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm sm:text-lg font-black text-slate-900 dark:text-white tracking-tight truncate">
+                  Correos
+                </h1>
+                {unreadCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500 text-white shrink-0">
+                    {unreadCount}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
+                {currentAccount
+                  ? `${currentAccount.name} (${currentAccount.email})`
+                  : 'Buzón corporativo con tu dominio'}
+              </p>
+            </div>
           </div>
 
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
-                Correos Corporativos
-              </h1>
-              {unreadCount > 0 && (
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-500 text-white">
-                  {unreadCount} nuevos
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              {currentAccount
-                ? `${currentAccount.name} (${currentAccount.email})`
-                : 'Conexión SMTP / IMAP directa con tu dominio'}
-            </p>
+          {/* Acciones Rápidas */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => loadMessages(true)}
+              disabled={refreshing || loading}
+              className="p-2 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer disabled:opacity-50 inline-flex items-center gap-1.5"
+              title="Sincronizar bandeja IMAP ahora"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-blue-500' : ''}`} />
+              <span className="hidden md:inline">Actualizar</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setEditingAccount(currentAccount || null);
+                setIsConfigOpen(true);
+              }}
+              className="p-2 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer inline-flex items-center gap-1.5"
+              title="Configurar cuentas SMTP/IMAP"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Ajustes</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setReplyMessage(null);
+                setIsComposerOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs hover:shadow-md transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Redactar</span>
+            </button>
           </div>
         </div>
 
-        {/* Acciones del Header */}
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-          {/* Botón sincronizar bajo demanda */}
-          <button
-            type="button"
-            onClick={() => loadMessages(true)}
-            disabled={refreshing || loading}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer disabled:opacity-50"
-            title="Sincronizar bandeja IMAP ahora"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-blue-500' : ''}`} />
-            <span className="hidden sm:inline">Actualizar</span>
-          </button>
-
-          {/* Selector de Cuentas */}
-          {accounts.length > 1 && (
+        {/* Fila 2: Selector de Cuentas (si hay más de 1) */}
+        {accounts.length > 1 && (
+          <div className="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+            <span className="text-[11px] font-semibold text-slate-400 shrink-0">Buzón:</span>
             <select
               value={selectedAccountId}
               onChange={(e) => setSelectedAccountId(e.target.value)}
-              className="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-hidden cursor-pointer"
+              className="w-full text-xs font-semibold bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-hidden cursor-pointer truncate"
             >
               {accounts.map((acc) => (
                 <option key={acc.id} value={acc.id}>
-                  {acc.name} ({acc.email})
+                  {acc.name} — {acc.email}
                 </option>
               ))}
             </select>
-          )}
+          </div>
+        )}
 
-          {/* Configuración de SMTP/IMAP */}
-          <button
-            type="button"
-            onClick={() => {
-              setEditingAccount(currentAccount || null);
-              setIsConfigOpen(true);
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
-            title="Configurar servidor y dominio"
-          >
-            <Settings className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Configurar SMTP</span>
-          </button>
-
-          {/* Botón Redactar (Desktop) */}
-          <button
-            type="button"
-            onClick={() => {
-              setReplyMessage(null);
-              setIsComposerOpen(true);
-            }}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs hover:shadow-md transition-all cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Redactar</span>
-          </button>
+        {/* Fila 3: Pestañas / Pills de Carpetas (Acceso Rápido Móvil y Tablet) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-1">
+          {foldersList.map((f) => {
+            const isActive = currentFolder === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => {
+                  setCurrentFolder(f.id);
+                  setSelectedMessageId(null);
+                  setSelectedMessage(null);
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all cursor-pointer ${
+                  isActive
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <span>{f.icon}</span>
+                <span>{f.label}</span>
+                {f.id === 'inbox' && unreadCount > 0 && (
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                      isActive ? 'bg-white text-blue-600' : 'bg-blue-500 text-white'
+                    }`}
+                  >
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Alerta si no hay cuentas configuradas */}
       {accounts.length === 0 && !loading && (
-        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-              <AlertCircle className="w-5 h-5" />
-            </div>
+        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div>
-              <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200">
-                Aún no has configurado una cuenta de correo
+              <h3 className="text-xs sm:text-sm font-bold text-amber-900 dark:text-amber-200">
+                Aún no has configurado tu servidor de correo
               </h3>
-              <p className="text-xs text-amber-700 dark:text-amber-300/90 mt-0.5">
-                Ingresa los datos de tu servidor SMTP y correo con tu dominio para enviar y recibir mensajes directamente.
+              <p className="text-[11px] sm:text-xs text-amber-700 dark:text-amber-300/90 mt-0.5">
+                Ingresa los datos SMTP/IMAP de tu dominio para comenzar a enviar y recibir mensajes.
               </p>
             </div>
           </div>
@@ -330,37 +365,30 @@ export const EmailsSubmoduleView: React.FC<EmailsSubmoduleViewProps> = ({ onBack
               setEditingAccount(null);
               setIsConfigOpen(true);
             }}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition-colors cursor-pointer shrink-0"
+            className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition-colors cursor-pointer shrink-0 text-center"
           >
             Configurar Ahora
           </button>
         </div>
       )}
 
-      {/* Contenedor Principal: Layout Responsivo */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl sm:rounded-3xl shadow-xs overflow-hidden flex flex-col lg:flex-row min-h-[620px] max-h-[calc(100vh-210px)]">
-        {/* Barra Lateral Izquierda (Carpetas) - Ocultable en móvil */}
-        <div
-          className={`lg:w-64 border-r border-slate-100 dark:border-slate-800 p-4 flex flex-col justify-between shrink-0 bg-slate-50/50 dark:bg-slate-900/50 ${
-            mobileDrawerOpen ? 'block' : 'hidden lg:flex'
-          }`}
-        >
+      {/* Contenedor Principal: Bandeja Dividida Responsiva */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl sm:rounded-3xl shadow-xs overflow-hidden flex flex-col lg:flex-row min-h-[460px] lg:min-h-[600px]">
+        {/* Barra Lateral Izquierda (Desktop) */}
+        <div className="hidden lg:flex lg:w-60 border-r border-slate-100 dark:border-slate-800 p-4 flex-col justify-between shrink-0 bg-slate-50/50 dark:bg-slate-900/50">
           <div className="space-y-4">
-            {/* Botón Redactar en Sidebar */}
             <button
               type="button"
               onClick={() => {
                 setReplyMessage(null);
                 setIsComposerOpen(true);
-                setMobileDrawerOpen(false);
               }}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs hover:shadow-md transition-all cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs hover:shadow-md transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Redactar Correo</span>
             </button>
 
-            {/* Lista de Carpetas */}
             <nav className="space-y-1">
               {foldersList.map((folder) => {
                 const isActive = currentFolder === folder.id;
@@ -372,9 +400,8 @@ export const EmailsSubmoduleView: React.FC<EmailsSubmoduleViewProps> = ({ onBack
                       setCurrentFolder(folder.id);
                       setSelectedMessageId(null);
                       setSelectedMessage(null);
-                      setMobileDrawerOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
                       isActive
                         ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 font-bold'
                         : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
@@ -397,12 +424,11 @@ export const EmailsSubmoduleView: React.FC<EmailsSubmoduleViewProps> = ({ onBack
             </nav>
           </div>
 
-          {/* Pie del Sidebar: Info de cuenta activa */}
           {currentAccount && (
             <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 space-y-1">
               <div className="flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-300">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                <span>SMTP: {currentAccount.smtpHost}:{currentAccount.smtpPort}</span>
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <span className="truncate">SMTP: {currentAccount.smtpHost}</span>
               </div>
               <div className="truncate text-slate-400 font-mono text-[10px]">
                 {currentAccount.email}
@@ -418,16 +444,7 @@ export const EmailsSubmoduleView: React.FC<EmailsSubmoduleViewProps> = ({ onBack
           }`}
         >
           {/* Barra de Filtros y Búsqueda */}
-          <div className="p-3 sm:p-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 bg-white dark:bg-slate-900 shrink-0">
-            {/* Toggle mobile drawer */}
-            <button
-              type="button"
-              onClick={() => setMobileDrawerOpen(!mobileDrawerOpen)}
-              className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer"
-            >
-              {mobileDrawerOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-            </button>
-
+          <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 bg-white dark:bg-slate-900 shrink-0">
             <div className="relative flex-1">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -441,7 +458,7 @@ export const EmailsSubmoduleView: React.FC<EmailsSubmoduleViewProps> = ({ onBack
             </div>
           </div>
 
-          {/* Lista de Mensajes con Scroll */}
+          {/* Lista de Mensajes */}
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
             {loading ? (
               <div className="p-8 text-center text-slate-400 text-xs flex flex-col items-center justify-center gap-2">
@@ -468,7 +485,6 @@ export const EmailsSubmoduleView: React.FC<EmailsSubmoduleViewProps> = ({ onBack
                         : 'hover:bg-slate-50 dark:hover:bg-slate-800/30'
                     }`}
                   >
-                    {/* Botón Favorito */}
                     <button
                       type="button"
                       onClick={(e) => handleToggleStar(msg, e)}
@@ -481,7 +497,6 @@ export const EmailsSubmoduleView: React.FC<EmailsSubmoduleViewProps> = ({ onBack
                       />
                     </button>
 
-                    {/* Contenido Resumen */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1 mb-1">
                         <span
@@ -512,7 +527,7 @@ export const EmailsSubmoduleView: React.FC<EmailsSubmoduleViewProps> = ({ onBack
                       </h4>
 
                       <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
-                        {msg.snippet || 'Sin vista previa de texto'}
+                        {msg.snippet || 'Sin vista previa'}
                       </p>
 
                       <div className="flex items-center gap-2 mt-2">
@@ -543,8 +558,8 @@ export const EmailsSubmoduleView: React.FC<EmailsSubmoduleViewProps> = ({ onBack
           {selectedMessage ? (
             <div className="flex-1 flex flex-col h-full overflow-hidden animate-fadeIn">
               {/* Header del Mensaje */}
-              <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between gap-4 shrink-0 bg-slate-50/40 dark:bg-slate-900/40">
-                <div className="flex items-start gap-3 min-w-0">
+              <div className="p-3.5 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between gap-3 shrink-0 bg-slate-50/40 dark:bg-slate-900/40">
+                <div className="flex items-start gap-2.5 sm:gap-3 min-w-0">
                   {/* Botón Volver para Mobile */}
                   <button
                     type="button"
@@ -552,42 +567,39 @@ export const EmailsSubmoduleView: React.FC<EmailsSubmoduleViewProps> = ({ onBack
                       setSelectedMessageId(null);
                       setSelectedMessage(null);
                     }}
-                    className="md:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer"
+                    className="md:hidden p-1.5 -ml-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer shrink-0"
+                    title="Volver a la bandeja"
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
 
-                  <div className="w-10 h-10 rounded-xl bg-blue-500 text-white flex items-center justify-center font-bold text-sm shrink-0 uppercase">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-500 text-white flex items-center justify-center font-bold text-sm shrink-0 uppercase">
                     {(selectedMessage.fromName || selectedMessage.from || 'U')[0]}
                   </div>
 
                   <div className="min-w-0">
-                    <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight">
+                    <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-tight">
                       {selectedMessage.subject || '(Sin Asunto)'}
                     </h2>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex flex-wrap items-center gap-1.5">
+                    <div className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-1 flex flex-wrap items-center gap-1.5">
                       <span className="font-semibold text-slate-700 dark:text-slate-300">
                         {selectedMessage.fromName || selectedMessage.from}
                       </span>
-                      <span>&lt;{selectedMessage.from}&gt;</span>
+                      <span className="truncate">&lt;{selectedMessage.from}&gt;</span>
                       <span>•</span>
-                      <span className="font-mono text-[11px]">
+                      <span className="font-mono text-[10px] sm:text-[11px]">
                         {new Date(selectedMessage.date).toLocaleString()}
                       </span>
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">
-                      Para: {selectedMessage.to?.join(', ') || 'Mí'}
                     </div>
                   </div>
                 </div>
 
-                {/* Acciones Rápidas */}
-                <div className="flex items-center gap-1.5 shrink-0">
+                {/* Acciones */}
+                <div className="flex items-center gap-1 shrink-0">
                   <button
                     type="button"
                     onClick={() => handleReply(selectedMessage)}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 dark:text-blue-300 transition-colors cursor-pointer"
-                    title="Responder a este correo"
                   >
                     <Reply className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Responder</span>
@@ -605,8 +617,8 @@ export const EmailsSubmoduleView: React.FC<EmailsSubmoduleViewProps> = ({ onBack
 
               {/* Adjuntos del Mensaje */}
               {selectedMessage.attachments && selectedMessage.attachments.length > 0 && (
-                <div className="p-3 sm:px-6 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1 mr-2">
+                <div className="p-3 sm:px-5 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1 mr-1">
                     <Paperclip className="w-3.5 h-3.5" /> Adjuntos:
                   </span>
                   {selectedMessage.attachments.map((att, idx) => (
@@ -615,10 +627,10 @@ export const EmailsSubmoduleView: React.FC<EmailsSubmoduleViewProps> = ({ onBack
                       href={att.url || '#'}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-500 transition-colors shadow-2xs"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-500 transition-colors shadow-2xs"
                     >
                       <Download className="w-3 h-3 text-slate-400" />
-                      <span className="max-w-[140px] truncate">{att.filename}</span>
+                      <span className="max-w-[130px] truncate">{att.filename}</span>
                       {att.size ? (
                         <span className="text-[10px] text-slate-400 font-mono">
                           ({(att.size / 1024).toFixed(0)} KB)
@@ -629,7 +641,7 @@ export const EmailsSubmoduleView: React.FC<EmailsSubmoduleViewProps> = ({ onBack
                 </div>
               )}
 
-              {/* Cuerpo del Correo (HTML o Texto) */}
+              {/* Cuerpo del Correo */}
               <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
                 {selectedMessage.bodyHtml ? (
                   <div
@@ -652,17 +664,17 @@ export const EmailsSubmoduleView: React.FC<EmailsSubmoduleViewProps> = ({ onBack
         </div>
       </div>
 
-      {/* Botón Flotante para Redactar en Móvil (FAB) */}
+      {/* Botón Flotante para Redactar en Móvil (FAB) - Cómodamente sobre la barra inferior */}
       <button
         type="button"
         onClick={() => {
           setReplyMessage(null);
           setIsComposerOpen(true);
         }}
-        className="lg:hidden fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xl hover:shadow-2xl flex items-center justify-center transition-all cursor-pointer active:scale-95"
+        className="lg:hidden fixed bottom-24 right-4 z-40 w-13 h-13 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xl hover:shadow-2xl flex items-center justify-center transition-all cursor-pointer active:scale-95"
         title="Redactar nuevo correo"
       >
-        <Plus className="w-7 h-7" />
+        <Plus className="w-6 h-6" />
       </button>
 
       {/* Modal de Configuración SMTP / IMAP */}

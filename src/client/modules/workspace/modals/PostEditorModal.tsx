@@ -154,11 +154,10 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/workspace/posts/${editingPost.id}`);
-        if (!res.ok) return;
-        const json = await res.json();
+        const json = await apiFetch<{ post: any }>(`/api/workspace/posts/${editingPost.id}`).catch(() => null);
+        if (!json || !json.post) return;
         const freshPost = json.post;
-        if (!freshPost || !Array.isArray(freshPost.comments)) return;
+        if (!Array.isArray(freshPost.comments)) return;
 
         let hasNewComments = false;
         let latestComment: any = null;

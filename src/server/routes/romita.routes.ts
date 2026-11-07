@@ -518,7 +518,8 @@ router.post('/generate-copy', requireAuth, async (req: AuthenticatedRequest, res
     const platformNames = Array.isArray(platforms) && platforms.length > 0 ? platforms.join(', ') : 'Instagram';
 
     if (gemini) {
-      const instructions = `Eres Romita, la Directora Creativa y Copywriter Senior de la agencia.
+      try {
+        const instructions = `Eres Romita, la Directora Creativa y Copywriter Senior de la agencia.
 Escribe un texto excepcionalmente persuasivo, magnético y profesional para redes sociales (${platformNames}).
 Marca / Cliente: "${brandName || 'Nuestra marca'}"
 Concepto / Título del post: "${title || 'Publicación'}"
@@ -547,23 +548,29 @@ ${
     : 'Redacta el COPY COMPLETO: Gancho magnético + Cuerpo de alto valor adaptado al pilar + Llamada a la acción clara + Hashtags específicos.'
 }`;
 
-      const { response, modelUsed } = await generateContentWithResilience(
-        gemini,
-        modelPreference || 'gemini-3.8-flash',
-        {
-          contents: `Redacta el contenido creativo solicitado para esta publicación.`,
-          config: {
-            systemInstruction: instructions,
-          },
-        }
-      );
+        const { response, modelUsed } = await generateContentWithResilience(
+          gemini,
+          modelPreference || 'gemini-3.8-flash',
+          {
+            contents: `Redacta el contenido creativo solicitado para esta publicación.`,
+            config: {
+              systemInstruction: instructions,
+            },
+          }
+        );
 
-      const generated = response.text || '';
-      return res.json({
-        success: true,
-        text: generated.trim(),
-        modelUsed,
-      });
+        const generated = response.text || '';
+        if (generated.trim()) {
+          return res.json({
+            success: true,
+            text: generated.trim(),
+            modelUsed,
+          });
+        }
+      } catch (geminiErr: any) {
+        console.warn('[Romita AI] Falló llamada a Gemini en generate-copy, usando motor inteligente local:', geminiErr?.message || geminiErr);
+        // Continuamos hacia el generador local para que la UI nunca se quede esperando
+      }
     }
 
     // Fallback inteligente local si no hay API key de Gemini

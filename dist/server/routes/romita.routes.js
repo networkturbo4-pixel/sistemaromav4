@@ -471,7 +471,8 @@ router.post('/generate-copy', auth_1.requireAuth, async (req, res) => {
         const gemini = await getGeminiClient(tenantId);
         const platformNames = Array.isArray(platforms) && platforms.length > 0 ? platforms.join(', ') : 'Instagram';
         if (gemini) {
-            const instructions = `Eres Romita, la Directora Creativa y Copywriter Senior de la agencia.
+            try {
+                const instructions = `Eres Romita, la Directora Creativa y Copywriter Senior de la agencia.
 Escribe un texto excepcionalmente persuasivo, magnético y profesional para redes sociales (${platformNames}).
 Marca / Cliente: "${brandName || 'Nuestra marca'}"
 Concepto / Título del post: "${title || 'Publicación'}"
@@ -487,28 +488,35 @@ REGLAS DE FORMATO:
 
 Modo de generación solicitado:
 ${mode === 'hook'
-                ? 'Genera 3 opciones de ganchos (hooks) magnéticos y diferentes para este post, numerados.'
-                : mode === 'cta'
-                    ? 'Genera 3 opciones de llamados a la acción (CTAs) de alta conversión (interacción, ventas, mensajes directos).'
-                    : mode === 'aida'
-                        ? 'Aplica la fórmula AIDA (Atención, Interés, Deseo, Acción) de manera fluida y vendedora.'
-                        : mode === 'brief'
-                            ? 'Redacta un brief visual y creativo directo para el diseñador gráfico: composición, colores recomendados, elementos clave que deben verse, tipografía y estilo.'
-                            : mode === 'improve'
-                                ? 'Reescribe y pule el texto actual aumentando la persuasión, el ritmo de lectura y la corrección estilística.'
-                                : 'Redacta el COPY COMPLETO: Gancho magnético + Cuerpo de alto valor adaptado al pilar + Llamada a la acción clara + Hashtags específicos.'}`;
-            const { response, modelUsed } = await generateContentWithResilience(gemini, modelPreference || 'gemini-3.8-flash', {
-                contents: `Redacta el contenido creativo solicitado para esta publicación.`,
-                config: {
-                    systemInstruction: instructions,
-                },
-            });
-            const generated = response.text || '';
-            return res.json({
-                success: true,
-                text: generated.trim(),
-                modelUsed,
-            });
+                    ? 'Genera 3 opciones de ganchos (hooks) magnéticos y diferentes para este post, numerados.'
+                    : mode === 'cta'
+                        ? 'Genera 3 opciones de llamados a la acción (CTAs) de alta conversión (interacción, ventas, mensajes directos).'
+                        : mode === 'aida'
+                            ? 'Aplica la fórmula AIDA (Atención, Interés, Deseo, Acción) de manera fluida y vendedora.'
+                            : mode === 'brief'
+                                ? 'Redacta un brief visual y creativo directo para el diseñador gráfico: composición, colores recomendados, elementos clave que deben verse, tipografía y estilo.'
+                                : mode === 'improve'
+                                    ? 'Reescribe y pule el texto actual aumentando la persuasión, el ritmo de lectura y la corrección estilística.'
+                                    : 'Redacta el COPY COMPLETO: Gancho magnético + Cuerpo de alto valor adaptado al pilar + Llamada a la acción clara + Hashtags específicos.'}`;
+                const { response, modelUsed } = await generateContentWithResilience(gemini, modelPreference || 'gemini-3.8-flash', {
+                    contents: `Redacta el contenido creativo solicitado para esta publicación.`,
+                    config: {
+                        systemInstruction: instructions,
+                    },
+                });
+                const generated = response.text || '';
+                if (generated.trim()) {
+                    return res.json({
+                        success: true,
+                        text: generated.trim(),
+                        modelUsed,
+                    });
+                }
+            }
+            catch (geminiErr) {
+                console.warn('[Romita AI] Falló llamada a Gemini en generate-copy, usando motor inteligente local:', geminiErr?.message || geminiErr);
+                // Continuamos hacia el generador local para que la UI nunca se quede esperando
+            }
         }
         // Fallback inteligente local si no hay API key de Gemini
         let fallbackText = '';
