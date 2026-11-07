@@ -9,19 +9,41 @@ import {
   ShieldCheck,
   Eye,
   EyeOff,
-  Zap,
   RefreshCw,
   Save,
   Bot,
-  HelpCircle,
   Cpu,
-  Layers,
+  Trash2,
+  Check,
+  Info,
 } from 'lucide-react';
 
-export const ConnectionsSettingsTab: React.FC = () => {
-  const { apiFetch, showToast, tenant } = useApp();
+interface AiConfigResponse {
+  hasCustomKey: boolean;
+  maskedKey: string;
+  keyPrefix: string;
+  keySuffix: string;
+  preferredModel: string;
+  isActive: boolean;
+  updatedAt?: string | null;
+}
 
-  const [geminiApiKey, setGeminiApiKey] = useState('');
+export const ConnectionsSettingsTab: React.FC = () => {
+  const { apiFetch, showToast } = useApp();
+
+  // Configuración guardada en el servidor
+  const [savedConfig, setSavedConfig] = useState<AiConfigResponse>({
+    hasCustomKey: false,
+    maskedKey: '',
+    keyPrefix: '',
+    keySuffix: '',
+    preferredModel: 'gemini-3.8-flash',
+    isActive: true,
+    updatedAt: null,
+  });
+
+  // Campos del formulario
+  const [newApiKey, setNewApiKey] = useState('');
   const [preferredModel, setPreferredModel] = useState('gemini-3.8-flash');
   const [isActive, setIsActive] = useState(true);
   const [showKey, setShowKey] = useState(false);
@@ -38,43 +60,32 @@ export const ConnectionsSettingsTab: React.FC = () => {
   } | null>(null);
 
   // Cargar configuración de conexiones
-  useEffect(() => {
-    let isMounted = true;
-    const loadConfig = async () => {
-      try {
-        const data = await apiFetch<{
-          config: {
-            hasCustomKey: boolean;
-            maskedKey: string;
-            preferredModel: string;
-            isActive: boolean;
-          };
-          status: 'connected' | 'unconfigured';
-          usingEnvFallback: boolean;
-        }>('/api/romita/config');
+  const loadConfig = async () => {
+    try {
+      const data = await apiFetch<{
+        config: AiConfigResponse;
+        status: 'connected' | 'unconfigured';
+        usingEnvFallback: boolean;
+      }>('/api/romita/config');
 
-        if (isMounted) {
-          if (data.config.maskedKey) {
-            setGeminiApiKey(data.config.maskedKey);
-          }
-          if (data.config.preferredModel) {
-            setPreferredModel(data.config.preferredModel);
-          }
-          setIsActive(data.config.isActive);
-          setStatus(data.status);
+      if (data?.config) {
+        setSavedConfig(data.config);
+        if (data.config.preferredModel) {
+          setPreferredModel(data.config.preferredModel);
         }
-      } catch (err) {
-        console.error('Error cargando configuración de conexiones:', err);
-      } finally {
-        if (isMounted) setIsLoading(false);
+        setIsActive(data.config.isActive);
+        setStatus(data.status);
       }
-    };
+    } catch (err) {
+      console.error('Error cargando configuración de conexiones:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     loadConfig();
-    return () => {
-      isMounted = false;
-    };
-  }, [apiFetch]);
+  }, []);
 
   const parseFriendlyError = (err: any): string => {
     let msg = err?.message || String(err || '');
@@ -86,13 +97,16 @@ export const ConnectionsSettingsTab: React.FC = () => {
     } catch {}
 
     if (msg.includes('CONSUMER_SUSPENDED') || msg.includes('has been suspended')) {
-      return 'El proyecto de Google Cloud de esta API Key ha sido suspendido por Google (cuenta de prueba expirada o bloqueada). Por favor genera una nueva API Key en Google AI Studio (aistudio.google.com/app/apikey) con otra cuenta de Google activa.';
+      return 'El proyecto de Google Cloud asociado a esta clave ha sido suspendido por Google. Genera una nueva API Key en Google AI Studio (aistudio.google.com/app/apikey) con otra cuenta de Google.';
     }
     if (msg.includes('API_KEY_INVALID') || msg.includes('API key not valid')) {
-      return 'La API Key ingresada no es válida. Copia la clave completa desde Google AI Studio (comienza con "AIzaSy...").';
+      return 'La API Key ingresada no es válida. Copia la clave completa desde Google AI Studio (inicia con "AIzaSy...").';
     }
     if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('429')) {
-      return 'Límite de cuota de Gemini alcanzado temporalmente. Espera unos minutos antes de reintentar.';
+      return 'Límite de cuota de Gemini alcanzado temporalmente. Espera unos momentos antes de reintentar.';
+    }
+    if (msg.includes('is no longer available to new users')) {
+      return 'Ese modelo ya no está disponible para cuentas nuevas. Selecciona Gemini 3.8 Flash o 3.5 Flash Lite.';
     }
     return msg;
   };
@@ -103,6 +117,10 @@ export const ConnectionsSettingsTab: React.FC = () => {
     setTestResult(null);
 
     try {
+      // Si el usuario escribió una clave nueva en el input, probamos esa.
+      // Si no, enviamos vacío para probar la clave ya guardada en base de datos.
+      const keyToSend = newApiKey.trim();
+
       const res = await apiFetch<{
         ok: boolean;
         latencyMs?: number;
@@ -112,7 +130,7 @@ export const ConnectionsSettingsTab: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          apiKey: geminiApiKey,
+          apiKey: keyToSend || undefined,
           model: preferredModel,
         }),
       });
@@ -149,27 +167,56 @@ export const ConnectionsSettingsTab: React.FC = () => {
   };
 
   // Guardar configuración
-  const handleSaveConfig = async () => {
+  const handleSaveConfig = async (overrideKey?: string) => {
     setIsSaving(true);
     try {
-      await apiFetch('/api/romita/config', {
+      const keyToSend = overrideKey !== undefined ? overrideKey : (newApiKey.trim() || undefined);
+
+      const res = await apiFetch<{
+        success: boolean;
+        message: string;
+        config?: AiConfigResponse;
+        status?: 'connected' | 'unconfigured';
+      }>('/api/romita/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          geminiApiKey,
+          geminiApiKey: keyToSend,
           preferredModel,
           isActive,
         }),
       });
 
-      showToast('Configuración de Conexiones guardada correctamente.', 'success');
-      setStatus(geminiApiKey ? 'connected' : 'unconfigured');
+      if (res.config) {
+        setSavedConfig(res.config);
+        setStatus(res.status || (res.config.hasCustomKey ? 'connected' : 'unconfigured'));
+      } else {
+        await loadConfig();
+      }
+
+      setNewApiKey('');
+      showToast(
+        keyToSend === '__REMOVE__'
+          ? 'API Key eliminada correctamente.'
+          : 'Configuración de Conexiones guardada con éxito.',
+        'success'
+      );
     } catch (err: any) {
       showToast(err.message || 'Error al guardar configuración', 'error');
     } finally {
       setIsSaving(false);
     }
   };
+
+  const handleRemoveKey = async () => {
+    if (!window.confirm('¿Deseas desvincular la API Key de Gemini guardada?')) return;
+    await handleSaveConfig('__REMOVE__');
+  };
+
+  const isFormatAIzaSy = newApiKey.trim().startsWith('AIzaSy');
+  const isSuspiciousOAuth = newApiKey.trim().startsWith('AQ.');
+  const hasInput = newApiKey.trim().length > 0;
+  const canTest = hasInput || savedConfig.hasCustomKey;
 
   return (
     <div className="space-y-6">
@@ -227,7 +274,7 @@ export const ConnectionsSettingsTab: React.FC = () => {
                 ? 'Gemini Conectado'
                 : status === 'error'
                 ? 'Error de Token'
-                : 'Motor Local Activo'}
+                : 'Sin Configurar (Motor Local)'}
             </span>
           </div>
         </div>
@@ -318,22 +365,73 @@ export const ConnectionsSettingsTab: React.FC = () => {
             rel="noopener noreferrer"
             className="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1"
           >
-            <span>Obtener API Key Gratis</span>
+            <span>Obtener API Key en AI Studio</span>
             <ExternalLink className="w-3 h-3" />
           </a>
         </div>
 
-        {/* Input API Key */}
+        {/* ESTADO DE CLAVE GUARDADA ACTUAL */}
+        {savedConfig.hasCustomKey ? (
+          <div
+            className="p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+            style={{
+              backgroundColor: 'var(--app-bg)',
+              borderColor: 'var(--app-border)',
+            }}
+          >
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                <span className="text-xs font-bold" style={{ color: 'var(--app-text)' }}>
+                  Clave Activa Guardada en Base de Datos:
+                </span>
+                <code className="text-xs font-mono px-2 py-0.5 rounded bg-slate-500/10 text-sky-600 dark:text-sky-400 font-bold">
+                  {savedConfig.maskedKey || `${savedConfig.keyPrefix}••••${savedConfig.keySuffix}`}
+                </code>
+              </div>
+              <p className="text-[11px]" style={{ color: 'var(--app-muted)' }}>
+                {savedConfig.updatedAt
+                  ? `Guardada el ${new Date(savedConfig.updatedAt).toLocaleString('es-ES')}`
+                  : 'Sincronizada con el espacio de trabajo.'}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleRemoveKey}
+              className="text-xs text-rose-500 hover:text-rose-600 dark:hover:text-rose-400 flex items-center gap-1.5 self-start sm:self-auto font-medium px-2 py-1 rounded-lg hover:bg-rose-500/10 transition"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Desvincular clave</span>
+            </button>
+          </div>
+        ) : (
+          <div
+            className="p-4 rounded-xl border border-dashed flex items-center gap-3 text-xs"
+            style={{
+              backgroundColor: 'var(--app-bg)',
+              borderColor: 'var(--app-border)',
+              color: 'var(--app-muted)',
+            }}
+          >
+            <Info className="w-4 h-4 text-sky-500 shrink-0" />
+            <span>
+              Aún no tienes una API Key personalizada guardada. Pega a continuación tu clave obtenida en <strong>Google AI Studio</strong> para activar todas las capacidades de Romita.
+            </span>
+          </div>
+        )}
+
+        {/* Input API Key Nueva */}
         <div className="space-y-1.5">
           <label className="text-xs font-bold block" style={{ color: 'var(--app-text)' }}>
-            Gemini API Key
+            {savedConfig.hasCustomKey ? 'Reemplazar por una nueva API Key' : 'Ingresa tu Gemini API Key'}
           </label>
           <div className="relative flex items-center">
             <input
               type={showKey ? 'text' : 'password'}
-              value={geminiApiKey}
-              onChange={(e) => setGeminiApiKey(e.target.value)}
-              placeholder="AIzaSy..."
+              value={newApiKey}
+              onChange={(e) => setNewApiKey(e.target.value)}
+              placeholder={savedConfig.hasCustomKey ? 'Pega aquí una nueva clave para reemplazar la actual (ej: AIzaSy...)' : 'Pega aquí tu clave de AI Studio (ej: AIzaSy...)'}
               className="w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-mono transition focus:outline-none focus:ring-2 focus:ring-sky-500/30"
               style={{
                 backgroundColor: 'var(--app-bg)',
@@ -341,18 +439,44 @@ export const ConnectionsSettingsTab: React.FC = () => {
                 color: 'var(--app-text)',
               }}
             />
-            <button
-              type="button"
-              onClick={() => setShowKey(!showKey)}
-              className="absolute right-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition p-1"
-              title={showKey ? 'Ocultar clave' : 'Mostrar clave'}
-            >
-              {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
+            {newApiKey && (
+              <button
+                type="button"
+                onClick={() => setShowKey(!showKey)}
+                className="absolute right-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition p-1"
+                title={showKey ? 'Ocultar clave' : 'Mostrar clave'}
+              >
+                {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            )}
           </div>
-          <p className="text-[11px]" style={{ color: 'var(--app-muted)' }}>
-            Tu clave se almacena de forma segura en la base de datos de tu espacio tenant y se enmascara para proteger tu privacidad.
-          </p>
+
+          {/* Retroalimentación en vivo sobre la clave ingresada */}
+          {hasInput && (
+            <div className="pt-1">
+              {isFormatAIzaSy ? (
+                <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Formato reconocido de Google AI Studio (comienza con AIzaSy).</span>
+                </div>
+              ) : isSuspiciousOAuth ? (
+                <div className="flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>Esta clave parece un token OAuth (inicia con AQ...). Las API Keys de AI Studio inician con &quot;AIzaSy...&quot;.</span>
+                </div>
+              ) : (
+                <div className="text-[11px] text-slate-400">
+                  Longitud: {newApiKey.trim().length} caracteres.
+                </div>
+              )}
+            </div>
+          )}
+
+          {!hasInput && savedConfig.hasCustomKey && (
+            <p className="text-[11px]" style={{ color: 'var(--app-muted)' }}>
+              Deja este campo en blanco para conservar la clave activa guardada actualmente.
+            </p>
+          )}
         </div>
 
         {/* Selector de Modelo */}
@@ -425,7 +549,7 @@ export const ConnectionsSettingsTab: React.FC = () => {
         <div className="flex flex-wrap items-center justify-end gap-2.5 pt-4 border-t border-[var(--app-border)]">
           <button
             type="button"
-            disabled={isTesting || !geminiApiKey}
+            disabled={isTesting || !canTest}
             onClick={handleTestConnection}
             className="px-4 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer flex items-center gap-2 hover:bg-slate-500/10 disabled:opacity-50"
             style={{
@@ -434,13 +558,13 @@ export const ConnectionsSettingsTab: React.FC = () => {
             }}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isTesting ? 'animate-spin' : ''}`} />
-            <span>{isTesting ? 'Probando conexión...' : 'Probar Conexión con Gemini'}</span>
+            <span>{isTesting ? 'Probando conexión...' : hasInput ? 'Probar Clave Escrita' : 'Probar Conexión Guardada'}</span>
           </button>
 
           <button
             type="button"
             disabled={isSaving}
-            onClick={handleSaveConfig}
+            onClick={() => handleSaveConfig()}
             className="px-5 py-2.5 rounded-xl text-xs font-bold text-white transition cursor-pointer flex items-center gap-2 shadow-sm disabled:opacity-50"
             style={{
               backgroundColor: 'var(--app-primary)',

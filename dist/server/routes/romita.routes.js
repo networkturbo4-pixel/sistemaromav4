@@ -539,14 +539,19 @@ router.get('/config', auth_1.requireAuth, async (req, res) => {
         const tenantId = req.auth?.tenant?.id || 'default-tenant';
         const tenant = await db_1.db.getTenantById(tenantId);
         const aiConfig = tenant?.aiConfig || {};
-        const rawKey = aiConfig.geminiApiKey || process.env.GEMINI_API_KEY || '';
-        const maskedKey = rawKey ? `${rawKey.slice(0, 7)}...${rawKey.slice(-4)}` : '';
+        const rawKey = (aiConfig.geminiApiKey || process.env.GEMINI_API_KEY || '').trim();
+        const keyPrefix = rawKey.length >= 6 ? rawKey.slice(0, 6) : rawKey.slice(0, 3);
+        const keySuffix = rawKey.length >= 8 ? rawKey.slice(-4) : '';
+        const maskedKey = rawKey ? `${keyPrefix}••••••••${keySuffix}` : '';
         return res.json({
             config: {
-                hasCustomKey: Boolean(aiConfig.geminiApiKey),
+                hasCustomKey: Boolean(aiConfig.geminiApiKey && aiConfig.geminiApiKey.trim()),
                 maskedKey,
+                keyPrefix,
+                keySuffix,
                 preferredModel: aiConfig.preferredModel || 'gemini-3.8-flash',
                 isActive: aiConfig.isActive !== false,
+                updatedAt: aiConfig.updatedAt || null,
             },
             status: rawKey ? 'connected' : 'unconfigured',
             usingEnvFallback: !aiConfig.geminiApiKey && Boolean(process.env.GEMINI_API_KEY),
@@ -570,16 +575,39 @@ router.put('/config', auth_1.requireAuth, async (req, res) => {
             preferredModel: preferredModel || 'gemini-3.8-flash',
             isActive: isActive !== false,
         };
-        // Solo actualizar la API Key si el usuario envió un valor nuevo real (no solo la máscara)
-        if (geminiApiKey && !geminiApiKey.includes('...')) {
-            updatePayload.geminiApiKey = geminiApiKey.trim();
-            process.env.GEMINI_API_KEY = geminiApiKey.trim();
+        // Actualizar la API Key si el usuario envió un valor nuevo real o solicitó eliminarla
+        if (typeof geminiApiKey === 'string') {
+            const trimmed = geminiApiKey.trim();
+            if (trimmed === '__REMOVE__' || trimmed === '') {
+                // Eliminar clave personalizada
+                updatePayload.geminiApiKey = '';
+                if (process.env.GEMINI_API_KEY === trimmed) {
+                    process.env.GEMINI_API_KEY = '';
+                }
+            }
+            else if (trimmed && !trimmed.includes('••••') && !trimmed.includes('...')) {
+                updatePayload.geminiApiKey = trimmed;
+                process.env.GEMINI_API_KEY = trimmed;
+            }
         }
         const updated = await db_1.db.updateTenantAiConfig(tenantId, updatePayload);
+        const rawKey = (updated?.aiConfig?.geminiApiKey || process.env.GEMINI_API_KEY || '').trim();
+        const keyPrefix = rawKey.length >= 6 ? rawKey.slice(0, 6) : rawKey.slice(0, 3);
+        const keySuffix = rawKey.length >= 8 ? rawKey.slice(-4) : '';
+        const maskedKey = rawKey ? `${keyPrefix}••••••••${keySuffix}` : '';
         return res.json({
             success: true,
             message: 'Configuración de Conexiones e IA guardada exitosamente.',
-            aiConfig: updated?.aiConfig,
+            config: {
+                hasCustomKey: Boolean(updated?.aiConfig?.geminiApiKey && updated.aiConfig.geminiApiKey.trim()),
+                maskedKey,
+                keyPrefix,
+                keySuffix,
+                preferredModel: updated?.aiConfig?.preferredModel || 'gemini-3.8-flash',
+                isActive: updated?.aiConfig?.isActive !== false,
+                updatedAt: updated?.aiConfig?.updatedAt || null,
+            },
+            status: rawKey ? 'connected' : 'unconfigured',
         });
     }
     catch (err) {
@@ -605,7 +633,7 @@ function formatGeminiError(err) {
         msg.includes('Spikes in demand') ||
         msg.includes('503') ||
         msg.includes('UNAVAILABLE')) {
-        return 'Google Gemini experimenta alta demanda en este instante. Selecciona Gemini 2.5 Flash o Gemini 1.5 Flash en el menú para una conexión inmediata con alta disponibilidad.';
+        return 'Google Gemini experimenta alta demanda temporal en sus servidores. Por favor reintenta en unos instantes.';
     }
     if (msg.includes('API_KEY_INVALID') || msg.includes('API key not valid')) {
         return 'La API Key ingresada no es válida. Copia la clave completa desde Google AI Studio (suele iniciar con "AIzaSy...").';
@@ -616,6 +644,9 @@ function formatGeminiError(err) {
     if (msg.includes('PERMISSION_DENIED')) {
         return 'Permiso denegado por Google Cloud para esta API Key. Verifica que el servicio Generative Language API esté activo en tu proyecto.';
     }
+    if (msg.includes('is no longer available to new users')) {
+        return 'Google ha retirado este modelo para nuevas cuentas. Utiliza Gemini 3.8 Flash o Gemini 3.5 Flash Lite.';
+    }
     return msg;
 }
 /**
@@ -625,15 +656,16 @@ router.post('/test-connection', auth_1.requireAuth, async (req, res) => {
     try {
         const { apiKey, model = 'gemini-3.8-flash' } = req.body;
         const tenantId = req.auth?.tenant?.id;
-        let keyToTest = apiKey;
-        if (!keyToTest || keyToTest.includes('...')) {
+        let keyToTest = typeof apiKey === 'string' ? apiKey.trim() : '';
+        // Si no se proporcionó apiKey o es una máscara con '••••' o '...', usamos la que ya está guardada
+        if (!keyToTest || keyToTest.includes('••••') || keyToTest.includes('...')) {
             const tenant = tenantId ? await db_1.db.getTenantById(tenantId) : null;
-            keyToTest = tenant?.aiConfig?.geminiApiKey || process.env.GEMINI_API_KEY;
+            keyToTest = tenant?.aiConfig?.geminiApiKey || process.env.GEMINI_API_KEY || '';
         }
         if (!keyToTest) {
             return res.json({
                 ok: false,
-                error: 'No se ha proporcionado una API Key de Gemini para probar.',
+                error: 'No se ha proporcionado una API Key de Gemini para probar. Pega tu API Key de Google AI Studio.',
             });
         }
         const client = new genai_1.GoogleGenAI({ apiKey: keyToTest });
@@ -643,13 +675,13 @@ router.post('/test-connection', auth_1.requireAuth, async (req, res) => {
         });
         const latencyMs = Date.now() - startTime;
         const replyText = response.text || '';
-        const note = modelUsed !== model ? ` (resuelto con ${modelUsed} por alta disponibilidad)` : '';
+        const note = modelUsed !== model ? ` (resuelto con ${modelUsed} por resiliencia)` : '';
         return res.json({
             ok: true,
             latencyMs,
             reply: replyText.trim(),
             model: modelUsed,
-            message: `¡Conexión exitosa con Google Gemini (${modelUsed})!${note} Tiempo de respuesta: ${latencyMs}ms.`,
+            message: `¡Conexión exitosa con Google Gemini (${modelUsed})!${note} Latencia: ${latencyMs}ms.`,
         });
     }
     catch (err) {
