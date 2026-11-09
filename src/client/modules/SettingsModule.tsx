@@ -800,7 +800,15 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 
   const openCreateUserModal = () => {
     setEditingUser(null);
-    const defaultRoleId = rolesList[0]?.id || '';
+    const designerRole = rolesList.find(
+      (r) =>
+        r.name.toLowerCase().includes('diseñador') ||
+        r.name.toLowerCase().includes('creativo')
+    );
+    const nonAdminRole = rolesList.find(
+      (r) => !r.isSystem && !r.name.toLowerCase().includes('admin')
+    );
+    const defaultRoleId = designerRole?.id || nonAdminRole?.id || rolesList[0]?.id || '';
     let pin = '';
     for (let i = 0; i < 8; i++) pin += Math.floor(Math.random() * 10);
     setUserForm({
@@ -818,13 +826,13 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const openEditUserModal = (u: User) => {
     setEditingUser(u);
     setUserForm({
-      name: u.name,
-      jobTitle: u.jobTitle,
-      email: u.email,
-      whatsapp: u.whatsapp,
-      pin: u.pin,
-      roleId: u.roleId,
-      isActive: u.isActive,
+      name: u.name || '',
+      jobTitle: u.jobTitle || '',
+      email: u.email || '',
+      whatsapp: u.whatsapp || '',
+      pin: u.pin || '',
+      roleId: u.roleId || '',
+      isActive: u.isActive !== undefined ? u.isActive : true,
     });
     userDialogRef.current?.showModal();
   };
@@ -5081,7 +5089,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                     >
                       {rolesList.map((r) => (
                         <option key={r.id} value={r.id} className="dark:bg-slate-900">
-                          {r.name}
+                          {r.name} {r.isSystem || r.name.toLowerCase().includes('admin') ? '⭐ (Super Admin)' : ''}
                         </option>
                       ))}
                     </select>

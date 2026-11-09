@@ -1280,8 +1280,8 @@ export const ClientsModule: React.FC = () => {
     setEditingBrand(brand);
     setBrandLogoInputMode(brand.logoUrl?.startsWith('data:') ? 'upload' : 'url');
     setBrandForm({
-      name: brand.name,
-      industry: brand.industry,
+      name: brand.name || '',
+      industry: brand.industry || 'Publicidad & Redes',
       brandColor: brand.brandColor || BRAND_COLORS[0],
       logoUrl: brand.logoUrl || '',
       socialHandle: brand.socialHandle || '',

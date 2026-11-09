@@ -225,12 +225,7 @@ export const AdministrationModule: React.FC = () => {
 
   const handleSyncPaymentNotes = async () => {
     try {
-      let res: any;
-      try {
-        res = await apiFetch('/api/administration/finances/sync-payment-notes', { method: 'POST' });
-      } catch {
-        res = await apiFetch('/api/administration/sync-payment-notes', { method: 'POST' });
-      }
+      const res = await apiFetch<any>('/api/administration/sync-payment-notes', { method: 'POST' });
       if (res?.transactions) {
         setTransactions(res.transactions);
       } else {

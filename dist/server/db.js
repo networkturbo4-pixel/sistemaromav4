@@ -156,6 +156,57 @@ class DatabaseManager {
                 if (dirtyPostsCleaned > 0) {
                     console.log(`[DB] Se limpiaron y formatearon automáticamente ${dirtyPostsCleaned} copys/briefs con código residual.`);
                 }
+                // Auto-migración segura: Garantizar la existencia del rol Diseñador / Creativo en cada tenant
+                const designerPerms = [
+                    'dashboard.view', 'dashboard.metrics',
+                    'clients.view', 'brands.view',
+                    'services.view',
+                    'service_orders.view', 'service_orders.edit',
+                    'workspace.view', 'workspace.social.manage', 'workspace.tasks.manage',
+                    'workspace.meetings.view', 'workspace.whiteboards.view', 'workspace.whiteboards.manage',
+                    'drive.view', 'drive.upload',
+                    'administration.attendance.record'
+                ];
+                let stateNeedsSave = false;
+                for (const t of parsed.tenants) {
+                    let hasDesignerRole = parsed.roles.find((r) => r.tenantId === t.id && (r.name.toLowerCase().includes('diseñador') || r.id.includes('disenador')));
+                    if (!hasDesignerRole) {
+                        hasDesignerRole = {
+                            id: `role-${t.id}-disenador`,
+                            tenantId: t.id,
+                            name: 'Diseñador / Creativo',
+                            description: 'Acceso operativo a Workspace, Órdenes de Servicio, Catálogo y Clientes para diseño y entregables.',
+                            badgeColor: '#06b6d4',
+                            isSystem: false,
+                            permissions: designerPerms,
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString(),
+                        };
+                        parsed.roles.push(hasDesignerRole);
+                        stateNeedsSave = true;
+                    }
+                }
+                // Si algún usuario tiene cargo de diseñador y tiene rol de Super Administrador, reasignar al rol de diseñador
+                for (const u of parsed.users) {
+                    const isDesignerJob = u.jobTitle && /diseñador|creativo/i.test(u.jobTitle);
+                    if (isDesignerJob) {
+                        const currentRole = parsed.roles.find((r) => r.id === u.roleId);
+                        if (currentRole && (currentRole.isSystem || currentRole.name === 'Super Administrador')) {
+                            const designerRole = parsed.roles.find((r) => r.tenantId === u.tenantId && (r.name.toLowerCase().includes('diseñador') || r.id.includes('disenador')));
+                            if (designerRole) {
+                                u.roleId = designerRole.id;
+                                stateNeedsSave = true;
+                            }
+                        }
+                    }
+                }
+                if (stateNeedsSave) {
+                    try {
+                        fs_1.default.writeFileSync(LOCAL_DB_FILE, JSON.stringify(parsed, null, 2), 'utf-8');
+                        console.log('[DB] Se aseguraron y auto-migraron los roles de Diseñador en los tenants.');
+                    }
+                    catch { }
+                }
                 return parsed;
             }
         }
@@ -257,6 +308,27 @@ class DatabaseManager {
             customization: t.customization || types_1.DEFAULT_CUSTOMIZATION,
         }));
     }
+    async getTenantsForUser(pin, email) {
+        const cleanPin = pin ? pin.trim() : '';
+        const cleanEmail = email ? email.trim().toLowerCase() : '';
+        const matchedTenantIds = new Set();
+        for (const u of this.localState.users) {
+            if (u.isActive === false)
+                continue;
+            const matchPin = cleanPin && u.pin === cleanPin;
+            const matchEmail = cleanEmail && u.email && u.email.trim().toLowerCase() === cleanEmail;
+            if (matchPin || matchEmail) {
+                matchedTenantIds.add(u.tenantId);
+            }
+        }
+        return this.localState.tenants
+            .filter((t) => matchedTenantIds.has(t.id) && t.status === 'active')
+            .map((t) => ({
+            ...t,
+            companyInfo: t.companyInfo || { ...types_1.DEFAULT_COMPANY_INFO, commercialName: t.name, legalName: t.name },
+            customization: t.customization || types_1.DEFAULT_CUSTOMIZATION,
+        }));
+    }
     async getTenantById(id) {
         const t = this.localState.tenants.find((item) => item.id === id);
         if (!t)
@@ -323,19 +395,86 @@ class DatabaseManager {
             updatedAt: now,
         };
         this.localState.tenants.push(newTenant);
-        // Crear rol Super Admin para el tenant
+        // Crear roles predeterminados para el tenant
         const superAdminRole = {
             id: `role-${Date.now()}-admin`,
             tenantId,
             name: 'Super Administrador',
             description: 'Acceso total y configuración del espacio',
             badgeColor: '#4f46e5',
-            isSystem: true,
+            isSystem: false,
             permissions: [...permissions_1.ALL_PERMISSION_KEYS],
             createdAt: now,
             updatedAt: now,
         };
         this.localState.roles.push(superAdminRole);
+        const directorRole = {
+            id: `role-${Date.now()}-director`,
+            tenantId,
+            name: 'Director Creativo & Branding',
+            description: 'Supervisión creativa, marcas, catálogo y entregables',
+            badgeColor: '#8b5cf6',
+            isSystem: false,
+            permissions: [
+                'dashboard.view', 'dashboard.metrics',
+                'clients.view', 'clients.create', 'clients.edit',
+                'brands.view', 'brands.create', 'brands.edit', 'brands.delete',
+                'services.view', 'services.create', 'services.edit',
+                'service_orders.view', 'service_orders.create', 'service_orders.edit',
+                'workspace.view', 'workspace.social.manage', 'workspace.tasks.manage',
+                'workspace.meetings.view', 'workspace.meetings.manage',
+                'workspace.whiteboards.view', 'workspace.whiteboards.manage',
+                'drive.view', 'drive.upload', 'drive.manage_folders',
+                'administration.attendance.record'
+            ],
+            createdAt: now,
+            updatedAt: now,
+        };
+        this.localState.roles.push(directorRole);
+        const ejecutivoRole = {
+            id: `role-${Date.now()}-ejecutivo`,
+            tenantId,
+            name: 'Ejecutivo de Cuentas',
+            description: 'Gestión comercial, cotizaciones, cobranzas y clientes',
+            badgeColor: '#10b981',
+            isSystem: false,
+            permissions: [
+                'dashboard.view', 'dashboard.metrics',
+                'clients.view', 'clients.create', 'clients.edit',
+                'brands.view', 'brands.create', 'brands.edit',
+                'quotes.view', 'quotes.create', 'quotes.edit', 'quotes.send',
+                'services.view',
+                'payments.view', 'payments.create', 'payments.edit', 'payments.send',
+                'service_orders.view', 'service_orders.create', 'service_orders.edit',
+                'workspace.view', 'workspace.tasks.manage',
+                'drive.view', 'drive.upload',
+                'administration.attendance.record'
+            ],
+            createdAt: now,
+            updatedAt: now,
+        };
+        this.localState.roles.push(ejecutivoRole);
+        const designerRole = {
+            id: `role-${Date.now()}-disenador`,
+            tenantId,
+            name: 'Diseñador / Creativo',
+            description: 'Acceso operativo a Workspace, Órdenes de Servicio, Catálogo y Clientes para diseño y entregables.',
+            badgeColor: '#06b6d4',
+            isSystem: false,
+            permissions: [
+                'dashboard.view', 'dashboard.metrics',
+                'clients.view', 'brands.view',
+                'services.view',
+                'service_orders.view', 'service_orders.edit',
+                'workspace.view', 'workspace.social.manage', 'workspace.tasks.manage',
+                'workspace.meetings.view', 'workspace.whiteboards.view', 'workspace.whiteboards.manage',
+                'drive.view', 'drive.upload',
+                'administration.attendance.record'
+            ],
+            createdAt: now,
+            updatedAt: now,
+        };
+        this.localState.roles.push(designerRole);
         // Crear usuario admin inicial
         const adminUser = {
             id: `user-${Date.now()}-admin`,
@@ -582,15 +721,23 @@ class DatabaseManager {
         const tenant = this.localState.tenants.find((t) => t.id === user.tenantId);
         if (!tenant)
             return null;
-        const role = this.localState.roles.find((r) => r.id === user.roleId) || {
-            id: user.roleId,
-            tenantId: tenant.id,
-            name: 'Super Administrador',
-            isSystem: true,
-            permissions: ['*'],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-        };
+        let role = this.localState.roles.find((r) => r.id === user.roleId && r.tenantId === tenant.id);
+        if (!role) {
+            role = this.localState.roles.find((r) => r.id === user.roleId);
+        }
+        if (!role) {
+            role = this.localState.roles.find((r) => r.tenantId === tenant.id && !r.isSystem && !r.name.toLowerCase().includes('admin')) || {
+                id: `role-collab-${tenant.id}`,
+                tenantId: tenant.id,
+                name: 'Colaborador',
+                description: 'Acceso básico al espacio',
+                badgeColor: '#64748b',
+                isSystem: false,
+                permissions: ['dashboard.view', 'workspace.view'],
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            };
+        }
         return { user, tenant, role };
     }
     async findUserInTenantByPinOrEmail(tenantId, query, emailQuery) {
@@ -606,7 +753,23 @@ class DatabaseManager {
         const tenant = await this.getTenantById(tenantId);
         if (!user || !tenant)
             return null;
-        const role = this.localState.roles.find((r) => r.id === user.roleId && r.tenantId === tenantId);
+        let role = this.localState.roles.find((r) => r.id === user.roleId && r.tenantId === tenantId);
+        if (!role) {
+            role = this.localState.roles.find((r) => r.id === user.roleId);
+        }
+        if (!role) {
+            role = this.localState.roles.find((r) => r.tenantId === tenantId && !r.isSystem && !r.name.toLowerCase().includes('admin')) || {
+                id: `role-collab-${tenantId}`,
+                tenantId: tenant.id,
+                name: 'Colaborador',
+                description: 'Acceso básico al espacio',
+                badgeColor: '#64748b',
+                isSystem: false,
+                permissions: ['dashboard.view', 'workspace.view'],
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            };
+        }
         return { user, tenant, role };
     }
     async createUser(tenantId, data) {
@@ -1026,6 +1189,7 @@ class DatabaseManager {
             updatedAt: now,
         };
         this.localState.paymentNotes.unshift(newNote);
+        await this.syncPaymentNoteToFinances(tenantId, newNote);
         this.saveLocalState();
         return newNote;
     }
@@ -1038,16 +1202,178 @@ class DatabaseManager {
             ...data,
             updatedAt: new Date().toISOString(),
         };
+        const updated = this.localState.paymentNotes[idx];
+        await this.syncPaymentNoteToFinances(tenantId, updated);
         this.saveLocalState();
-        return this.localState.paymentNotes[idx];
+        return updated;
     }
     async deletePaymentNote(id, tenantId) {
         const before = this.localState.paymentNotes.length;
         this.localState.paymentNotes = this.localState.paymentNotes.filter((p) => !(p.id === id && p.tenantId === tenantId));
         const deleted = this.localState.paymentNotes.length < before;
-        if (deleted)
+        if (deleted) {
+            await this.removePaymentNoteFinances(tenantId, id);
             this.saveLocalState();
+        }
         return deleted;
+    }
+    async syncPaymentNoteToFinances(tenantId, note) {
+        if (!this.localState.financeTransactions)
+            this.localState.financeTransactions = [];
+        // Si la nota está cancelada, removemos transacciones previas asociadas
+        if (note.status === 'cancelled') {
+            await this.removePaymentNoteFinances(tenantId, note.id);
+            return;
+        }
+        const expectedIncomes = [];
+        const clientLabel = note.companyName || note.clientName || 'Cliente';
+        // 1. Caso Membresía por cuotas/meses
+        if (note.isMembership && Array.isArray(note.membershipInstallments) && note.membershipInstallments.length > 0) {
+            for (const inst of note.membershipInstallments) {
+                if (inst.isSplit && Array.isArray(inst.subInstallments) && inst.subInstallments.length > 0) {
+                    for (const sub of inst.subInstallments) {
+                        if (sub.status === 'paid' && Number(sub.amount) > 0) {
+                            expectedIncomes.push({
+                                sourceEntityId: `${note.id}_inst_${inst.id || inst.monthNumber}_sub_${sub.id}`,
+                                category: 'Membresías Mensuales',
+                                amount: Number(sub.amount),
+                                currency: note.currency || 'PEN',
+                                date: sub.paidDate || inst.paidDate || note.issueDate,
+                                description: `Abono Cuota Mes ${inst.monthNumber} (${inst.periodName || inst.planName || 'Plan'}) - Nota #${note.code} (${clientLabel})`,
+                                paymentMethod: note.paymentMethod || 'Transferencia Bancaria',
+                                reference: sub.operationNumber || inst.operationNumber || note.code,
+                                receiptUrl: sub.voucherUrl || inst.voucherUrl,
+                            });
+                        }
+                    }
+                }
+                else if (inst.status === 'paid' && Number(inst.amount) > 0) {
+                    expectedIncomes.push({
+                        sourceEntityId: `${note.id}_inst_${inst.id || inst.monthNumber}`,
+                        category: 'Membresías Mensuales',
+                        amount: Number(inst.amount),
+                        currency: note.currency || 'PEN',
+                        date: inst.paidDate || note.issueDate,
+                        description: `Cuota Mes ${inst.monthNumber} (${inst.periodName || inst.planName || 'Plan'}) - Nota #${note.code} (${clientLabel})`,
+                        paymentMethod: note.paymentMethod || 'Transferencia Bancaria',
+                        reference: inst.operationNumber || note.code,
+                        receiptUrl: inst.voucherUrl,
+                    });
+                }
+            }
+            // Extras asociados a la membresía
+            if (Array.isArray(note.extraItems)) {
+                for (const extra of note.extraItems) {
+                    if (extra.status === 'paid') {
+                        const extraAmt = Number(extra.total || (extra.unitPrice * extra.quantity)) || 0;
+                        if (extraAmt > 0) {
+                            expectedIncomes.push({
+                                sourceEntityId: `${note.id}_extra_${extra.id}`,
+                                category: 'Ventas de Servicios',
+                                amount: extraAmt,
+                                currency: note.currency || 'PEN',
+                                date: extra.paidDate || note.issueDate,
+                                description: `Servicio Extra: ${extra.title} - Nota #${note.code} (${clientLabel})`,
+                                paymentMethod: note.paymentMethod || 'Transferencia Bancaria',
+                                reference: extra.operationNumber || note.code,
+                                receiptUrl: extra.voucherUrl,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            // 2. Nota de venta estándar / Pago total o parcial
+            const isPaid = note.status === 'paid';
+            const paidAmt = Number(note.paidAmount) || 0;
+            const totalAmt = Number(note.total) || 0;
+            if (isPaid || paidAmt > 0) {
+                const finalAmt = isPaid && paidAmt === 0 ? totalAmt : paidAmt;
+                if (finalAmt > 0) {
+                    expectedIncomes.push({
+                        sourceEntityId: `${note.id}_payment`,
+                        category: 'Ventas de Servicios',
+                        amount: finalAmt,
+                        currency: note.currency || 'PEN',
+                        date: note.paymentDate || note.issueDate,
+                        description: `Cobro Nota de Pago #${note.code} - ${clientLabel}`,
+                        paymentMethod: note.paymentMethod || 'Transferencia Bancaria',
+                        reference: note.operationNumber || note.code,
+                        receiptUrl: note.items?.[0]?.voucherUrl,
+                    });
+                }
+            }
+        }
+        const expectedKeys = new Set(expectedIncomes.map((e) => e.sourceEntityId));
+        const now = new Date().toISOString();
+        for (const exp of expectedIncomes) {
+            const existingIdx = this.localState.financeTransactions.findIndex((t) => t.tenantId === tenantId && t.sourceModule === 'payment_notes' && t.sourceEntityId === exp.sourceEntityId);
+            if (existingIdx !== -1) {
+                this.localState.financeTransactions[existingIdx] = {
+                    ...this.localState.financeTransactions[existingIdx],
+                    amount: exp.amount,
+                    currency: exp.currency,
+                    date: exp.date,
+                    description: exp.description,
+                    paymentMethod: exp.paymentMethod,
+                    reference: exp.reference,
+                    receiptUrl: exp.receiptUrl || this.localState.financeTransactions[existingIdx].receiptUrl,
+                    category: exp.category,
+                    updatedAt: now,
+                };
+            }
+            else {
+                const newTx = {
+                    id: crypto_1.default.randomUUID(),
+                    tenantId,
+                    type: 'income',
+                    category: exp.category,
+                    amount: exp.amount,
+                    currency: exp.currency,
+                    date: exp.date || now.split('T')[0],
+                    description: exp.description,
+                    paymentMethod: exp.paymentMethod,
+                    reference: exp.reference,
+                    status: 'completed',
+                    receiptUrl: exp.receiptUrl,
+                    sourceModule: 'payment_notes',
+                    sourceEntityId: exp.sourceEntityId,
+                    createdAt: now,
+                    updatedAt: now,
+                };
+                this.localState.financeTransactions.unshift(newTx);
+            }
+        }
+        // Remover transacciones que correspondían a esta nota pero fueron desmarcadas
+        const prefix = `${note.id}_`;
+        this.localState.financeTransactions = this.localState.financeTransactions.filter((t) => {
+            if (t.tenantId === tenantId && t.sourceModule === 'payment_notes' && t.sourceEntityId?.startsWith(prefix)) {
+                return expectedKeys.has(t.sourceEntityId);
+            }
+            return true;
+        });
+    }
+    async removePaymentNoteFinances(tenantId, noteId) {
+        if (!this.localState.financeTransactions)
+            return;
+        const prefix = `${noteId}_`;
+        this.localState.financeTransactions = this.localState.financeTransactions.filter((t) => {
+            if (t.tenantId === tenantId && t.sourceModule === 'payment_notes') {
+                return !(t.sourceEntityId === noteId || t.sourceEntityId?.startsWith(prefix));
+            }
+            return true;
+        });
+    }
+    async syncAllPaymentNotesToFinances(tenantId) {
+        const notes = await this.getPaymentNotesByTenant(tenantId);
+        let count = 0;
+        for (const note of notes) {
+            await this.syncPaymentNoteToFinances(tenantId, note);
+            count++;
+        }
+        this.saveLocalState();
+        return { syncedCount: count, totalNotes: notes.length };
     }
     // ===========================================================================
     // SERVICIOS Y CATEGORIAS
@@ -3003,6 +3329,8 @@ class DatabaseManager {
             reference: data.reference || '',
             status: data.status || 'completed',
             receiptUrl: data.receiptUrl,
+            sourceModule: data.sourceModule,
+            sourceEntityId: data.sourceEntityId,
             createdAt: now,
             updatedAt: now,
         };

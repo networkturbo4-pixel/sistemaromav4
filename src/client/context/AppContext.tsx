@@ -824,40 +824,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [tenantsList, setTenantsList] = useState<TenantSummary[]>([]);
 
   const loadTenantsList = useCallback(async (): Promise<TenantSummary[]> => {
-    const hasTenantPerm =
-      role?.isSystem ||
-      role?.permissions?.includes('*') ||
-      role?.permissions?.includes('settings.tenants.view') ||
-      role?.permissions?.includes('settings.tenants.manage');
-
-    if (token && user && hasTenantPerm) {
+    if (token && user) {
       try {
-        const data = await apiFetch('/api/tenants');
+        const data = await apiFetch<{ tenants: TenantSummary[] }>('/api/auth/my-tenants');
         if (Array.isArray(data.tenants)) {
           setTenantsList(data.tenants);
           return data.tenants;
         }
       } catch {}
     }
-
-    try {
-      const pub = await fetch('/api/public/tenants').then((r) => r.json());
-      if (Array.isArray(pub.tenants)) {
-        const normalized = pub.tenants.map((t: any) => ({
-          ...t,
-          customization: t.customization || {
-            currencyCode: t.currencyCode || 'PEN',
-            currencySymbol: t.currencySymbol || 'S/',
-            logoLightUrl: t.logoLightUrl || '',
-            logoDarkUrl: t.logoDarkUrl || '',
-          },
-        }));
-        setTenantsList(normalized);
-        return normalized;
-      }
-    } catch {}
     return [];
-  }, [apiFetch, token, user, role]);
+  }, [apiFetch, token, user]);
 
   useEffect(() => {
     if (token && user) {

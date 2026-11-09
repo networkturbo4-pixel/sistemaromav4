@@ -479,18 +479,20 @@ export const AppShell: React.FC<AppShellProps> = ({
           </button>
         )}
 
-        <button
-          type="button"
-          onClick={() => {
-            onClose();
-            onSelectModule('settings');
-            onSelectSettingsTab?.('tenants');
-          }}
-          className="w-full px-3 py-1.5 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center justify-center gap-1.5 cursor-pointer"
-        >
-          <Settings className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-          <span>Gestionar Workspaces</span>
-        </button>
+        {(can('settings.tenants.view') || can('settings.tenants.manage')) && (
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onSelectModule('settings');
+              onSelectSettingsTab?.('tenants');
+            }}
+            className="w-full px-3 py-1.5 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Settings className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span>Gestionar Workspaces</span>
+          </button>
+        )}
       </div>
     </div>
   );
@@ -508,9 +510,17 @@ export const AppShell: React.FC<AppShellProps> = ({
         <div className="relative" ref={sidebarWorkspaceRef}>
           <button
             type="button"
-            onClick={() => setSidebarWorkspaceOpen((prev) => !prev)}
-            className="w-full p-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-slate-50/70 dark:bg-slate-900/60 hover:bg-white dark:hover:bg-slate-800/80 hover:border-indigo-500/40 transition-all duration-200 text-left cursor-pointer group flex items-center justify-between gap-2.5 shadow-2xs hover:shadow-xs"
-            title="Cambiar de Agencia / Tenant"
+            onClick={() => {
+              if (tenantsList.length > 1 || can('settings.tenants.view') || can('settings.tenants.manage')) {
+                setSidebarWorkspaceOpen((prev) => !prev);
+              }
+            }}
+            className={`w-full p-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 bg-slate-50/70 dark:bg-slate-900/60 hover:bg-white dark:hover:bg-slate-800/80 hover:border-indigo-500/40 transition-all duration-200 text-left group flex items-center justify-between gap-2.5 shadow-2xs hover:shadow-xs ${
+              tenantsList.length > 1 || can('settings.tenants.view') || can('settings.tenants.manage')
+                ? 'cursor-pointer'
+                : 'cursor-default'
+            }`}
+            title={tenantsList.length > 1 ? "Cambiar de Agencia / Tenant" : "Agencia Actual"}
           >
             <div className="flex items-center gap-2.5 min-w-0">
               {tenant.customization?.faviconUrl ? (
@@ -540,9 +550,11 @@ export const AppShell: React.FC<AppShellProps> = ({
               </div>
             </div>
 
-            <div className="p-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition shrink-0">
-              <ChevronsUpDown className="w-3.5 h-3.5" />
-            </div>
+            {(tenantsList.length > 1 || can('settings.tenants.view') || can('settings.tenants.manage')) && (
+              <div className="p-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition shrink-0">
+                <ChevronsUpDown className="w-3.5 h-3.5" />
+              </div>
+            )}
           </button>
 
           {/* Menú Flotante de Espacios de Trabajo */}

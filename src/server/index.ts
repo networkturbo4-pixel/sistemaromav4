@@ -274,6 +274,26 @@ app.get('/api/auth/me', requireAuth, async (req: AuthenticatedRequest, res: Resp
   });
 });
 
+app.get('/api/auth/my-tenants', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const currentUser = req.auth!.user;
+    const isGlobalRoot =
+      currentUser.id === 'user-roma-01' ||
+      currentUser.email === 'cesar@romaagencia.pe';
+
+    if (isGlobalRoot) {
+      const allTenants = await db.getAllTenants();
+      res.json({ tenants: allTenants });
+      return;
+    }
+
+    const userTenants = await db.getTenantsForUser(currentUser.pin, currentUser.email);
+    res.json({ tenants: userTenants });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 app.post('/api/auth/switch-tenant', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { targetTenantId } = req.body;
@@ -299,18 +319,14 @@ app.post('/api/auth/switch-tenant', requireAuth, async (req: AuthenticatedReques
       req.auth!.user.email
     );
 
-    // 2. Si no tiene cuenta directa, pero es Administrador o tiene permisos de gestión en su tenant actual,
-    // enlazarlo con el usuario administrador activo del tenant destino
+    // 2. Solo el Administrador Global Root de la plataforma (user-roma-01 o cesar@romaagencia.pe)
+    // puede enlazar con un usuario del tenant destino si no tiene cuenta directa creada.
     if (!targetUser) {
-      const hasPermissionToSwitch =
-        req.auth?.role?.isSystem ||
-        (req.auth?.role &&
-          hasAnyPermission(req.auth.role.permissions, [
-            'settings.tenants.manage',
-            'settings.tenants.view',
-          ]));
+      const isGlobalRoot =
+        req.auth!.user.id === 'user-roma-01' ||
+        req.auth!.user.email === 'cesar@romaagencia.pe';
 
-      if (hasPermissionToSwitch) {
+      if (isGlobalRoot) {
         const users = await db.getUsersByTenant(targetTenantId);
         targetUser = users.find((u) => u.isActive) || null;
       }

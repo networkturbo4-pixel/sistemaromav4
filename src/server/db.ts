@@ -233,6 +233,64 @@ export class DatabaseManager {
           console.log(`[DB] Se limpiaron y formatearon automáticamente ${dirtyPostsCleaned} copys/briefs con código residual.`);
         }
 
+        // Auto-migración segura: Garantizar la existencia del rol Diseñador / Creativo en cada tenant
+        const designerPerms = [
+          'dashboard.view', 'dashboard.metrics',
+          'clients.view', 'brands.view',
+          'services.view',
+          'service_orders.view', 'service_orders.edit',
+          'workspace.view', 'workspace.social.manage', 'workspace.tasks.manage',
+          'workspace.meetings.view', 'workspace.whiteboards.view', 'workspace.whiteboards.manage',
+          'drive.view', 'drive.upload',
+          'administration.attendance.record'
+        ];
+
+        let stateNeedsSave = false;
+        for (const t of parsed.tenants) {
+          let hasDesignerRole = parsed.roles.find(
+            (r: any) => r.tenantId === t.id && (r.name.toLowerCase().includes('diseñador') || r.id.includes('disenador'))
+          );
+          if (!hasDesignerRole) {
+            hasDesignerRole = {
+              id: `role-${t.id}-disenador`,
+              tenantId: t.id,
+              name: 'Diseñador / Creativo',
+              description: 'Acceso operativo a Workspace, Órdenes de Servicio, Catálogo y Clientes para diseño y entregables.',
+              badgeColor: '#06b6d4',
+              isSystem: false,
+              permissions: designerPerms,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+            parsed.roles.push(hasDesignerRole);
+            stateNeedsSave = true;
+          }
+        }
+
+        // Si algún usuario tiene cargo de diseñador y tiene rol de Super Administrador, reasignar al rol de diseñador
+        for (const u of parsed.users) {
+          const isDesignerJob = u.jobTitle && /diseñador|creativo/i.test(u.jobTitle);
+          if (isDesignerJob) {
+            const currentRole = parsed.roles.find((r: any) => r.id === u.roleId);
+            if (currentRole && (currentRole.isSystem || currentRole.name === 'Super Administrador')) {
+              const designerRole = parsed.roles.find(
+                (r: any) => r.tenantId === u.tenantId && (r.name.toLowerCase().includes('diseñador') || r.id.includes('disenador'))
+              );
+              if (designerRole) {
+                u.roleId = designerRole.id;
+                stateNeedsSave = true;
+              }
+            }
+          }
+        }
+
+        if (stateNeedsSave) {
+          try {
+            fs.writeFileSync(LOCAL_DB_FILE, JSON.stringify(parsed, null, 2), 'utf-8');
+            console.log('[DB] Se aseguraron y auto-migraron los roles de Diseñador en los tenants.');
+          } catch {}
+        }
+
         return parsed as DatabaseState;
       }
     } catch (e) {
@@ -339,6 +397,29 @@ export class DatabaseManager {
     }));
   }
 
+  public async getTenantsForUser(pin?: string, email?: string): Promise<Tenant[]> {
+    const cleanPin = pin ? pin.trim() : '';
+    const cleanEmail = email ? email.trim().toLowerCase() : '';
+
+    const matchedTenantIds = new Set<string>();
+    for (const u of this.localState.users) {
+      if (u.isActive === false) continue;
+      const matchPin = cleanPin && u.pin === cleanPin;
+      const matchEmail = cleanEmail && u.email && u.email.trim().toLowerCase() === cleanEmail;
+      if (matchPin || matchEmail) {
+        matchedTenantIds.add(u.tenantId);
+      }
+    }
+
+    return this.localState.tenants
+      .filter((t) => matchedTenantIds.has(t.id) && t.status === 'active')
+      .map((t) => ({
+        ...t,
+        companyInfo: t.companyInfo || { ...DEFAULT_COMPANY_INFO, commercialName: t.name, legalName: t.name },
+        customization: t.customization || DEFAULT_CUSTOMIZATION,
+      }));
+  }
+
   public async getTenantById(id: string): Promise<Tenant | null> {
     const t = this.localState.tenants.find((item) => item.id === id);
     if (!t) return null;
@@ -406,19 +487,89 @@ export class DatabaseManager {
     };
     this.localState.tenants.push(newTenant);
 
-    // Crear rol Super Admin para el tenant
+    // Crear roles predeterminados para el tenant
     const superAdminRole: Role = {
       id: `role-${Date.now()}-admin`,
       tenantId,
       name: 'Super Administrador',
       description: 'Acceso total y configuración del espacio',
       badgeColor: '#4f46e5',
-      isSystem: true,
+      isSystem: false,
       permissions: [...ALL_PERMISSION_KEYS],
       createdAt: now,
       updatedAt: now,
     };
     this.localState.roles.push(superAdminRole);
+
+    const directorRole: Role = {
+      id: `role-${Date.now()}-director`,
+      tenantId,
+      name: 'Director Creativo & Branding',
+      description: 'Supervisión creativa, marcas, catálogo y entregables',
+      badgeColor: '#8b5cf6',
+      isSystem: false,
+      permissions: [
+        'dashboard.view', 'dashboard.metrics',
+        'clients.view', 'clients.create', 'clients.edit',
+        'brands.view', 'brands.create', 'brands.edit', 'brands.delete',
+        'services.view', 'services.create', 'services.edit',
+        'service_orders.view', 'service_orders.create', 'service_orders.edit',
+        'workspace.view', 'workspace.social.manage', 'workspace.tasks.manage',
+        'workspace.meetings.view', 'workspace.meetings.manage',
+        'workspace.whiteboards.view', 'workspace.whiteboards.manage',
+        'drive.view', 'drive.upload', 'drive.manage_folders',
+        'administration.attendance.record'
+      ],
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.localState.roles.push(directorRole);
+
+    const ejecutivoRole: Role = {
+      id: `role-${Date.now()}-ejecutivo`,
+      tenantId,
+      name: 'Ejecutivo de Cuentas',
+      description: 'Gestión comercial, cotizaciones, cobranzas y clientes',
+      badgeColor: '#10b981',
+      isSystem: false,
+      permissions: [
+        'dashboard.view', 'dashboard.metrics',
+        'clients.view', 'clients.create', 'clients.edit',
+        'brands.view', 'brands.create', 'brands.edit',
+        'quotes.view', 'quotes.create', 'quotes.edit', 'quotes.send',
+        'services.view',
+        'payments.view', 'payments.create', 'payments.edit', 'payments.send',
+        'service_orders.view', 'service_orders.create', 'service_orders.edit',
+        'workspace.view', 'workspace.tasks.manage',
+        'drive.view', 'drive.upload',
+        'administration.attendance.record'
+      ],
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.localState.roles.push(ejecutivoRole);
+
+    const designerRole: Role = {
+      id: `role-${Date.now()}-disenador`,
+      tenantId,
+      name: 'Diseñador / Creativo',
+      description: 'Acceso operativo a Workspace, Órdenes de Servicio, Catálogo y Clientes para diseño y entregables.',
+      badgeColor: '#06b6d4',
+      isSystem: false,
+      permissions: [
+        'dashboard.view', 'dashboard.metrics',
+        'clients.view', 'brands.view',
+        'services.view',
+        'service_orders.view', 'service_orders.edit',
+        'workspace.view', 'workspace.social.manage', 'workspace.tasks.manage',
+        'workspace.meetings.view', 'workspace.whiteboards.view', 'workspace.whiteboards.manage',
+        'drive.view', 'drive.upload',
+        'administration.attendance.record'
+      ],
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.localState.roles.push(designerRole);
 
     // Crear usuario admin inicial
     const adminUser: User = {
@@ -680,15 +831,23 @@ export class DatabaseManager {
     if (!user) return null;
     const tenant = this.localState.tenants.find((t) => t.id === user.tenantId);
     if (!tenant) return null;
-    const role = this.localState.roles.find((r) => r.id === user.roleId) || {
-      id: user.roleId,
-      tenantId: tenant.id,
-      name: 'Super Administrador',
-      isSystem: true,
-      permissions: ['*'],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    } as any;
+    let role = this.localState.roles.find((r) => r.id === user.roleId && r.tenantId === tenant.id);
+    if (!role) {
+      role = this.localState.roles.find((r) => r.id === user.roleId);
+    }
+    if (!role) {
+      role = this.localState.roles.find((r) => r.tenantId === tenant.id && !r.isSystem && !r.name.toLowerCase().includes('admin')) || {
+        id: `role-collab-${tenant.id}`,
+        tenantId: tenant.id,
+        name: 'Colaborador',
+        description: 'Acceso básico al espacio',
+        badgeColor: '#64748b',
+        isSystem: false,
+        permissions: ['dashboard.view', 'workspace.view'],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    }
     return { user, tenant, role };
   }
 
@@ -714,7 +873,23 @@ export class DatabaseManager {
     const user = this.localState.users.find((u) => u.id === userId && u.tenantId === tenantId);
     const tenant = await this.getTenantById(tenantId);
     if (!user || !tenant) return null;
-    const role = this.localState.roles.find((r) => r.id === user.roleId && r.tenantId === tenantId);
+    let role = this.localState.roles.find((r) => r.id === user.roleId && r.tenantId === tenantId);
+    if (!role) {
+      role = this.localState.roles.find((r) => r.id === user.roleId);
+    }
+    if (!role) {
+      role = this.localState.roles.find((r) => r.tenantId === tenantId && !r.isSystem && !r.name.toLowerCase().includes('admin')) || {
+        id: `role-collab-${tenantId}`,
+        tenantId: tenant.id,
+        name: 'Colaborador',
+        description: 'Acceso básico al espacio',
+        badgeColor: '#64748b',
+        isSystem: false,
+        permissions: ['dashboard.view', 'workspace.view'],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    }
     return { user, tenant, role };
   }
 

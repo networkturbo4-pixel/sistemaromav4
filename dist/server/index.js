@@ -246,6 +246,23 @@ app.get('/api/auth/me', auth_1.requireAuth, async (req, res) => {
         },
     });
 });
+app.get('/api/auth/my-tenants', auth_1.requireAuth, async (req, res) => {
+    try {
+        const currentUser = req.auth.user;
+        const isGlobalRoot = currentUser.id === 'user-roma-01' ||
+            currentUser.email === 'cesar@romaagencia.pe';
+        if (isGlobalRoot) {
+            const allTenants = await db_1.db.getAllTenants();
+            res.json({ tenants: allTenants });
+            return;
+        }
+        const userTenants = await db_1.db.getTenantsForUser(currentUser.pin, currentUser.email);
+        res.json({ tenants: userTenants });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 app.post('/api/auth/switch-tenant', auth_1.requireAuth, async (req, res) => {
     try {
         const { targetTenantId } = req.body;
@@ -264,16 +281,12 @@ app.post('/api/auth/switch-tenant', auth_1.requireAuth, async (req, res) => {
         }
         // 1. Buscar si el usuario actual tiene una cuenta en el tenant destino (por PIN o Email)
         let targetUser = await db_1.db.findUserInTenantByPinOrEmail(targetTenantId, req.auth.user.pin, req.auth.user.email);
-        // 2. Si no tiene cuenta directa, pero es Administrador o tiene permisos de gestión en su tenant actual,
-        // enlazarlo con el usuario administrador activo del tenant destino
+        // 2. Solo el Administrador Global Root de la plataforma (user-roma-01 o cesar@romaagencia.pe)
+        // puede enlazar con un usuario del tenant destino si no tiene cuenta directa creada.
         if (!targetUser) {
-            const hasPermissionToSwitch = req.auth?.role?.isSystem ||
-                (req.auth?.role &&
-                    (0, permissions_1.hasAnyPermission)(req.auth.role.permissions, [
-                        'settings.tenants.manage',
-                        'settings.tenants.view',
-                    ]));
-            if (hasPermissionToSwitch) {
+            const isGlobalRoot = req.auth.user.id === 'user-roma-01' ||
+                req.auth.user.email === 'cesar@romaagencia.pe';
+            if (isGlobalRoot) {
                 const users = await db_1.db.getUsersByTenant(targetTenantId);
                 targetUser = users.find((u) => u.isActive) || null;
             }
@@ -2107,6 +2120,26 @@ app.post('/api/administration/finances', auth_1.requireAuth, (0, auth_1.requireP
     try {
         const transaction = await db_1.db.createFinanceTransaction(req.auth.tenant.id, req.body);
         res.status(201).json({ transaction });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+app.post('/api/administration/sync-payment-notes', auth_1.requireAuth, (0, auth_1.requirePermission)('administration.finances.manage'), async (req, res) => {
+    try {
+        const result = await db_1.db.syncAllPaymentNotesToFinances(req.auth.tenant.id);
+        const transactions = await db_1.db.getFinanceTransactions(req.auth.tenant.id);
+        res.json({ ok: true, ...result, transactions });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+app.post('/api/administration/finances/sync-payment-notes', auth_1.requireAuth, (0, auth_1.requirePermission)('administration.finances.manage'), async (req, res) => {
+    try {
+        const result = await db_1.db.syncAllPaymentNotesToFinances(req.auth.tenant.id);
+        const transactions = await db_1.db.getFinanceTransactions(req.auth.tenant.id);
+        res.json({ ok: true, ...result, transactions });
     }
     catch (err) {
         res.status(500).json({ error: err.message });
