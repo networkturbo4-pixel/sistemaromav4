@@ -218,8 +218,23 @@ function parseUserAgent(uaString: string): {
   return { deviceName, deviceType, browser, os };
 }
 
+const loginPinRateMap = new Map<string, { fails: number; resetAt: number }>();
+const MAX_PIN_ATTEMPTS_PER_MINUTE = 10;
+
 app.post('/api/auth/login-pin', async (req: Request, res: Response) => {
   try {
+    const rawClientIp = (req.headers['x-forwarded-for'] as string) || req.ip || (req.socket?.remoteAddress as string) || 'local';
+    const clientIp = typeof rawClientIp === 'string' ? rawClientIp.split(',')[0].trim() : 'local';
+    const nowMs = Date.now();
+    const rateEntry = loginPinRateMap.get(clientIp);
+    if (rateEntry && nowMs < rateEntry.resetAt && rateEntry.fails >= MAX_PIN_ATTEMPTS_PER_MINUTE) {
+      const retrySec = Math.ceil((rateEntry.resetAt - nowMs) / 1000);
+      res.status(429).json({
+        error: `Demasiados intentos fallidos de PIN. Por seguridad, espera ${retrySec}s antes de volver a intentar.`,
+      });
+      return;
+    }
+
     const { pin, tenantSlug, mode = 'personal' } = req.body;
     if (!pin || typeof pin !== 'string' || !/^\d{8}$/.test(pin.trim())) {
       res.status(400).json({ error: 'Debes ingresar un PIN válido de exactamente 8 dígitos.' });
@@ -228,6 +243,12 @@ app.post('/api/auth/login-pin', async (req: Request, res: Response) => {
 
     const match = await db.findUserByPin(pin.trim(), tenantSlug, mode as 'personal' | 'cliente');
     if (!match) {
+      const prev = loginPinRateMap.get(clientIp);
+      if (!prev || nowMs >= prev.resetAt) {
+        loginPinRateMap.set(clientIp, { fails: 1, resetAt: nowMs + 60 * 1000 });
+      } else {
+        prev.fails += 1;
+      }
       res.status(401).json({
         error:
           mode === 'cliente'
@@ -236,6 +257,8 @@ app.post('/api/auth/login-pin', async (req: Request, res: Response) => {
       });
       return;
     }
+
+    loginPinRateMap.delete(clientIp);
 
     // Registro seguro de dispositivo / sesión con límite concurrente
     const userAgentHeader = (req.headers['user-agent'] as string) || '';
@@ -539,11 +562,29 @@ app.post('/api/auth/switch-tenant', requireAuth, async (req: AuthenticatedReques
       return;
     }
 
+    const userAgentHeader = (req.headers['user-agent'] as string) || '';
+    const rawIp = (req.headers['x-forwarded-for'] as string) || req.ip || (req.socket?.remoteAddress as string) || '';
+    const ipAddress = typeof rawIp === 'string' ? rawIp.split(',')[0].trim() : '';
+    const parsedUa = parseUserAgent(userAgentHeader);
+
+    const userSession = await db.createUserSession({
+      userId: session.user.id,
+      tenantId: session.tenant.id,
+      token: '',
+      deviceName: parsedUa.deviceName,
+      deviceType: parsedUa.deviceType,
+      browser: parsedUa.browser,
+      os: parsedUa.os,
+      ipAddress,
+    });
+
     const token = signSessionToken({
       userId: session.user.id,
       tenantId: session.tenant.id,
       roleId: session.role?.id || '',
+      sessionId: userSession.id,
     });
+    userSession.token = token;
 
     res.json({
       token,
@@ -3822,7 +3863,7 @@ app.get(
           id: u.id,
           name: u.name,
           email: u.email,
-          pin: u.pin,
+          pin: '••••••••',
           jobTitle: u.jobTitle,
           avatarUrl: u.avatarUrl,
           tenantIds: [u.tenantId],
@@ -4182,7 +4223,10 @@ app.post(
     };
 
     try {
-      const { runGitPull = true, runDbMigration = true, runBuild = true, branch = 'main' } = req.body || {};
+      const { runGitPull = true, runDbMigration = true, runBuild = true, branch: rawBranch = 'main' } = req.body || {};
+      const branch = typeof rawBranch === 'string' && /^[a-zA-Z0-9._/-]+$/.test(rawBranch.trim()) && !rawBranch.trim().startsWith('-')
+        ? rawBranch.trim()
+        : 'main';
 
       // 1. PASO 1: DESCARGA DE CAMBIOS DESDE EL REPOSITORIO GIT
       if (runGitPull) {
@@ -4935,32 +4979,37 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 // Endpoint de diagnóstico para verificar rutas de subidas en cPanel
-app.get('/api/system/uploads-diagnostic', (req: Request, res: Response) => {
-  const cwd = process.cwd();
-  const dirs = getDynamicUploadDirs();
-  const details = dirs.map((d) => {
-    let subdirs: string[] = [];
-    let referencesCount = 0;
-    let brandsCount = 0;
-    try {
-      subdirs = fs.readdirSync(d);
-      if (fs.existsSync(path.join(d, 'references'))) {
-        referencesCount = fs.readdirSync(path.join(d, 'references')).length;
-      }
-      if (fs.existsSync(path.join(d, 'brands'))) {
-        brandsCount = fs.readdirSync(path.join(d, 'brands')).length;
-      }
-    } catch {}
-    return { dir: d, subdirs, referencesCount, brandsCount };
-  });
+app.get(
+  '/api/system/uploads-diagnostic',
+  requireAuth,
+  requireAnyPermission(['settings.system.update', 'settings.tenants.manage']),
+  (req: Request, res: Response) => {
+    const cwd = process.cwd();
+    const dirs = getDynamicUploadDirs();
+    const details = dirs.map((d) => {
+      let subdirs: string[] = [];
+      let referencesCount = 0;
+      let brandsCount = 0;
+      try {
+        subdirs = fs.readdirSync(d);
+        if (fs.existsSync(path.join(d, 'references'))) {
+          referencesCount = fs.readdirSync(path.join(d, 'references')).length;
+        }
+        if (fs.existsSync(path.join(d, 'brands'))) {
+          brandsCount = fs.readdirSync(path.join(d, 'brands')).length;
+        }
+      } catch {}
+      return { dir: d, subdirs, referencesCount, brandsCount };
+    });
 
-  res.json({
-    cwd,
-    env_UPLOADS_DIR: process.env.UPLOADS_DIR || null,
-    scannedDirsCount: dirs.length,
-    directories: details,
-  });
-});
+    res.json({
+      cwd,
+      env_UPLOADS_DIR: process.env.UPLOADS_DIR || null,
+      scannedDirsCount: dirs.length,
+      directories: details,
+    });
+  }
+);
 
 // Función recursiva para sincronizar archivos desde el sistema anterior al local
 function syncLegacyUploadsFolder(srcDir: string, destDir: string): { copied: number; skipped: number; bytes: number } {
@@ -5002,29 +5051,54 @@ function syncLegacyUploadsFolder(srcDir: string, destDir: string): { copied: num
 }
 
 // Endpoint para disparar la migración manual de uploads del sistema anterior
-app.post('/api/system/migrate-legacy-uploads', requireAuth, (req: AuthenticatedRequest, res: Response) => {
-  const source = req.body?.source || process.env.UPLOADS_DIR || '/home/iqxalgre/public_html/uploads';
-  if (!fs.existsSync(source)) {
-    return res.status(404).json({ error: `La carpeta de origen no existe: ${source}` });
-  }
+app.post(
+  '/api/system/migrate-legacy-uploads',
+  requireAuth,
+  requireAnyPermission(['settings.system.update', 'settings.tenants.manage']),
+  (req: AuthenticatedRequest, res: Response) => {
+    const source = req.body?.source || process.env.UPLOADS_DIR || '/home/iqxalgre/public_html/uploads';
+    if (!fs.existsSync(source)) {
+      return res.status(404).json({ error: `La carpeta de origen no existe: ${source}` });
+    }
 
-  const result = syncLegacyUploadsFolder(source, uploadsDir);
-  console.log(`[Migración Legacy] Completada desde ${source}: ${result.copied} archivos copiados, ${result.skipped} omitidos.`);
-  res.json({
-    ok: true,
-    source,
-    destination: uploadsDir,
-    ...result,
-    megabytes: Number((result.bytes / (1024 * 1024)).toFixed(2)),
-  });
-});
+    const result = syncLegacyUploadsFolder(source, uploadsDir);
+    console.log(`[Migración Legacy] Completada desde ${source}: ${result.copied} archivos copiados, ${result.skipped} omitidos.`);
+    res.json({
+      ok: true,
+      source,
+      destination: uploadsDir,
+      ...result,
+      megabytes: Number((result.bytes / (1024 * 1024)).toFixed(2)),
+    });
+  }
+);
 
 app.use('/uploads', (req: Request, res: Response, next: NextFunction) => {
-  const relativeSubpath = decodeURIComponent(req.path.replace(/^\/+/, ''));
+  let relativeSubpath = '';
+  try {
+    relativeSubpath = decodeURIComponent(req.path.replace(/^\/+/, ''));
+  } catch {
+    return res.status(400).send('Ruta inválida');
+  }
   if (!relativeSubpath) return next();
 
+  // Protección estricta contra Path Traversal (../ o bytes nulos)
+  const normalizedSubpath = path.normalize(relativeSubpath).replace(/^(\.\.(\/|\\|$))+/, '');
+  if (
+    relativeSubpath.includes('\0') ||
+    relativeSubpath.split(/[\\/]/).includes('..') ||
+    normalizedSubpath.startsWith('..') ||
+    path.isAbsolute(normalizedSubpath)
+  ) {
+    return res.status(403).send('Acceso denegado');
+  }
+
   // 1. Revisar si ya está en la carpeta uploads local del sistema actual
-  const localTarget = path.resolve(uploadsDir, relativeSubpath);
+  const resolvedUploadsRoot = path.resolve(uploadsDir);
+  const localTarget = path.resolve(resolvedUploadsRoot, normalizedSubpath);
+  if (!localTarget.startsWith(resolvedUploadsRoot + path.sep)) {
+    return res.status(403).send('Acceso denegado');
+  }
   if (fs.existsSync(localTarget) && fs.statSync(localTarget).isFile()) {
     res.setHeader('Cache-Control', 'public, max-age=86400');
     return res.sendFile(localTarget);
@@ -5035,7 +5109,9 @@ app.use('/uploads', (req: Request, res: Response, next: NextFunction) => {
   for (const dir of candidateDirs) {
     if (dir === uploadsDir) continue;
     try {
-      const fullPath = path.resolve(dir, relativeSubpath);
+      const resolvedCandidateRoot = path.resolve(dir);
+      const fullPath = path.resolve(resolvedCandidateRoot, normalizedSubpath);
+      if (!fullPath.startsWith(resolvedCandidateRoot + path.sep)) continue;
       if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
         // Auto-migración on-demand: guardar copia permanente en local
         try {
@@ -5044,7 +5120,7 @@ app.use('/uploads', (req: Request, res: Response, next: NextFunction) => {
             fs.mkdirSync(parentDir, { recursive: true });
           }
           fs.copyFileSync(fullPath, localTarget);
-          console.log(`[Auto-Migrado a Local] ${relativeSubpath}`);
+          console.log(`[Auto-Migrado a Local] ${normalizedSubpath}`);
         } catch {}
 
         res.setHeader('Cache-Control', 'public, max-age=86400');

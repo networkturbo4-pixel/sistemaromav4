@@ -182,7 +182,7 @@ export const EmployeePaymentModal: React.FC<EmployeePaymentModalProps> = ({
 
               {formData.voucherUrl ? (
                 <div className="flex items-center justify-center gap-3">
-                  {formData.voucherUrl.startsWith('data:image') && (
+                  {(formData.voucherUrl.startsWith('data:image') || formData.voucherUrl.startsWith('/uploads/')) && (
                     <img
                       src={formData.voucherUrl}
                       alt="Voucher preview"

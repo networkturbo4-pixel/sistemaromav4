@@ -201,8 +201,21 @@ function parseUserAgent(uaString) {
     const deviceName = `${browser} en ${os}`;
     return { deviceName, deviceType, browser, os };
 }
+const loginPinRateMap = new Map();
+const MAX_PIN_ATTEMPTS_PER_MINUTE = 10;
 app.post('/api/auth/login-pin', async (req, res) => {
     try {
+        const rawClientIp = req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress || 'local';
+        const clientIp = typeof rawClientIp === 'string' ? rawClientIp.split(',')[0].trim() : 'local';
+        const nowMs = Date.now();
+        const rateEntry = loginPinRateMap.get(clientIp);
+        if (rateEntry && nowMs < rateEntry.resetAt && rateEntry.fails >= MAX_PIN_ATTEMPTS_PER_MINUTE) {
+            const retrySec = Math.ceil((rateEntry.resetAt - nowMs) / 1000);
+            res.status(429).json({
+                error: `Demasiados intentos fallidos de PIN. Por seguridad, espera ${retrySec}s antes de volver a intentar.`,
+            });
+            return;
+        }
         const { pin, tenantSlug, mode = 'personal' } = req.body;
         if (!pin || typeof pin !== 'string' || !/^\d{8}$/.test(pin.trim())) {
             res.status(400).json({ error: 'Debes ingresar un PIN válido de exactamente 8 dígitos.' });
@@ -210,6 +223,13 @@ app.post('/api/auth/login-pin', async (req, res) => {
         }
         const match = await db_1.db.findUserByPin(pin.trim(), tenantSlug, mode);
         if (!match) {
+            const prev = loginPinRateMap.get(clientIp);
+            if (!prev || nowMs >= prev.resetAt) {
+                loginPinRateMap.set(clientIp, { fails: 1, resetAt: nowMs + 60 * 1000 });
+            }
+            else {
+                prev.fails += 1;
+            }
             res.status(401).json({
                 error: mode === 'cliente'
                     ? 'Código de acceso o PIN de cliente no encontrado. Verifica tu código de 8 dígitos o consulta con la agencia.'
@@ -217,6 +237,7 @@ app.post('/api/auth/login-pin', async (req, res) => {
             });
             return;
         }
+        loginPinRateMap.delete(clientIp);
         // Registro seguro de dispositivo / sesión con límite concurrente
         const userAgentHeader = req.headers['user-agent'] || '';
         const rawIp = req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress || '';
@@ -488,11 +509,27 @@ app.post('/api/auth/switch-tenant', auth_1.requireAuth, async (req, res) => {
             res.status(404).json({ error: 'No se pudo resolver la sesión del tenant destino.' });
             return;
         }
+        const userAgentHeader = req.headers['user-agent'] || '';
+        const rawIp = req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress || '';
+        const ipAddress = typeof rawIp === 'string' ? rawIp.split(',')[0].trim() : '';
+        const parsedUa = parseUserAgent(userAgentHeader);
+        const userSession = await db_1.db.createUserSession({
+            userId: session.user.id,
+            tenantId: session.tenant.id,
+            token: '',
+            deviceName: parsedUa.deviceName,
+            deviceType: parsedUa.deviceType,
+            browser: parsedUa.browser,
+            os: parsedUa.os,
+            ipAddress,
+        });
         const token = (0, auth_1.signSessionToken)({
             userId: session.user.id,
             tenantId: session.tenant.id,
             roleId: session.role?.id || '',
+            sessionId: userSession.id,
         });
+        userSession.token = token;
         res.json({
             token,
             user: session.user,
@@ -2888,7 +2925,7 @@ app.get('/api/tenants-available-users', auth_1.requireAuth, async (req, res) => 
                 id: u.id,
                 name: u.name,
                 email: u.email,
-                pin: u.pin,
+                pin: '••••••••',
                 jobTitle: u.jobTitle,
                 avatarUrl: u.avatarUrl,
                 tenantIds: [u.tenantId],
@@ -3186,7 +3223,10 @@ app.post('/api/system/update', auth_1.requireAuth, (0, auth_1.requireAnyPermissi
         });
     };
     try {
-        const { runGitPull = true, runDbMigration = true, runBuild = true, branch = 'main' } = req.body || {};
+        const { runGitPull = true, runDbMigration = true, runBuild = true, branch: rawBranch = 'main' } = req.body || {};
+        const branch = typeof rawBranch === 'string' && /^[a-zA-Z0-9._/-]+$/.test(rawBranch.trim()) && !rawBranch.trim().startsWith('-')
+            ? rawBranch.trim()
+            : 'main';
         // 1. PASO 1: DESCARGA DE CAMBIOS DESDE EL REPOSITORIO GIT
         if (runGitPull) {
             const gitCmd = getGitExecutable();
@@ -3917,7 +3957,7 @@ if (!fs_1.default.existsSync(uploadsDir)) {
     fs_1.default.mkdirSync(uploadsDir, { recursive: true });
 }
 // Endpoint de diagnóstico para verificar rutas de subidas en cPanel
-app.get('/api/system/uploads-diagnostic', (req, res) => {
+app.get('/api/system/uploads-diagnostic', auth_1.requireAuth, (0, auth_1.requireAnyPermission)(['settings.system.update', 'settings.tenants.manage']), (req, res) => {
     const cwd = process.cwd();
     const dirs = getDynamicUploadDirs();
     const details = dirs.map((d) => {
@@ -3982,7 +4022,7 @@ function syncLegacyUploadsFolder(srcDir, destDir) {
     return { copied, skipped, bytes };
 }
 // Endpoint para disparar la migración manual de uploads del sistema anterior
-app.post('/api/system/migrate-legacy-uploads', auth_1.requireAuth, (req, res) => {
+app.post('/api/system/migrate-legacy-uploads', auth_1.requireAuth, (0, auth_1.requireAnyPermission)(['settings.system.update', 'settings.tenants.manage']), (req, res) => {
     const source = req.body?.source || process.env.UPLOADS_DIR || '/home/iqxalgre/public_html/uploads';
     if (!fs_1.default.existsSync(source)) {
         return res.status(404).json({ error: `La carpeta de origen no existe: ${source}` });
@@ -3998,11 +4038,29 @@ app.post('/api/system/migrate-legacy-uploads', auth_1.requireAuth, (req, res) =>
     });
 });
 app.use('/uploads', (req, res, next) => {
-    const relativeSubpath = decodeURIComponent(req.path.replace(/^\/+/, ''));
+    let relativeSubpath = '';
+    try {
+        relativeSubpath = decodeURIComponent(req.path.replace(/^\/+/, ''));
+    }
+    catch {
+        return res.status(400).send('Ruta inválida');
+    }
     if (!relativeSubpath)
         return next();
+    // Protección estricta contra Path Traversal (../ o bytes nulos)
+    const normalizedSubpath = path_1.default.normalize(relativeSubpath).replace(/^(\.\.(\/|\\|$))+/, '');
+    if (relativeSubpath.includes('\0') ||
+        relativeSubpath.split(/[\\/]/).includes('..') ||
+        normalizedSubpath.startsWith('..') ||
+        path_1.default.isAbsolute(normalizedSubpath)) {
+        return res.status(403).send('Acceso denegado');
+    }
     // 1. Revisar si ya está en la carpeta uploads local del sistema actual
-    const localTarget = path_1.default.resolve(uploadsDir, relativeSubpath);
+    const resolvedUploadsRoot = path_1.default.resolve(uploadsDir);
+    const localTarget = path_1.default.resolve(resolvedUploadsRoot, normalizedSubpath);
+    if (!localTarget.startsWith(resolvedUploadsRoot + path_1.default.sep)) {
+        return res.status(403).send('Acceso denegado');
+    }
     if (fs_1.default.existsSync(localTarget) && fs_1.default.statSync(localTarget).isFile()) {
         res.setHeader('Cache-Control', 'public, max-age=86400');
         return res.sendFile(localTarget);
@@ -4013,7 +4071,10 @@ app.use('/uploads', (req, res, next) => {
         if (dir === uploadsDir)
             continue;
         try {
-            const fullPath = path_1.default.resolve(dir, relativeSubpath);
+            const resolvedCandidateRoot = path_1.default.resolve(dir);
+            const fullPath = path_1.default.resolve(resolvedCandidateRoot, normalizedSubpath);
+            if (!fullPath.startsWith(resolvedCandidateRoot + path_1.default.sep))
+                continue;
             if (fs_1.default.existsSync(fullPath) && fs_1.default.statSync(fullPath).isFile()) {
                 // Auto-migración on-demand: guardar copia permanente en local
                 try {
@@ -4022,7 +4083,7 @@ app.use('/uploads', (req, res, next) => {
                         fs_1.default.mkdirSync(parentDir, { recursive: true });
                     }
                     fs_1.default.copyFileSync(fullPath, localTarget);
-                    console.log(`[Auto-Migrado a Local] ${relativeSubpath}`);
+                    console.log(`[Auto-Migrado a Local] ${normalizedSubpath}`);
                 }
                 catch { }
                 res.setHeader('Cache-Control', 'public, max-age=86400');

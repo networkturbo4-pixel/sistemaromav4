@@ -124,9 +124,148 @@ export interface DatabaseState {
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const LOCAL_DB_FILE = path.join(DATA_DIR, 'roma-saas-db.json');
 const SCHEMA_SQL_FILE = path.resolve(process.cwd(), 'database', 'schema.sql');
+const AUTO_MEDIA_DIR = path.resolve(process.cwd(), 'uploads', 'auto-media');
 
 function generateToken(length = 32): string {
   return crypto.randomBytes(length).toString('hex');
+}
+
+function externalizeBase64Url(rawVal: any, prefix = 'media'): { url: any; converted: boolean } {
+  if (typeof rawVal !== 'string' || rawVal.length < 4096 || !rawVal.startsWith('data:image/')) {
+    return { url: rawVal, converted: false };
+  }
+  const match = rawVal.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,([\s\S]+)$/);
+  if (!match) {
+    return { url: rawVal, converted: false };
+  }
+  try {
+    const rawMime = match[1].toLowerCase();
+    const base64Data = match[2].trim();
+    let ext = 'png';
+    if (rawMime.includes('jpeg') || rawMime.includes('jpg')) ext = 'jpg';
+    else if (rawMime.includes('webp')) ext = 'webp';
+    else if (rawMime.includes('gif')) ext = 'gif';
+    else if (rawMime.includes('svg')) ext = 'svg';
+
+    const hash = crypto.createHash('sha1').update(base64Data).digest('hex').slice(0, 16);
+    const fileName = `${prefix}-${hash}.${ext}`;
+    if (!fs.existsSync(AUTO_MEDIA_DIR)) {
+      fs.mkdirSync(AUTO_MEDIA_DIR, { recursive: true });
+    }
+    const destPath = path.join(AUTO_MEDIA_DIR, fileName);
+    if (!fs.existsSync(destPath)) {
+      fs.writeFileSync(destPath, Buffer.from(base64Data, 'base64'));
+    }
+    return { url: `/uploads/auto-media/${fileName}`, converted: true };
+  } catch {
+    return { url: rawVal, converted: false };
+  }
+}
+
+function externalizeEmbeddedMediaInState(state: any): number {
+  let count = 0;
+  if (!state || typeof state !== 'object') return 0;
+
+  if (Array.isArray(state.workspacePosts)) {
+    for (const post of state.workspacePosts) {
+      if (!post) continue;
+      if (typeof post.paintData === 'string' && post.paintData.length > 4096) {
+        const r = externalizeBase64Url(post.paintData, 'post-paint');
+        if (r.converted) {
+          post.paintData = r.url;
+          count++;
+        } else if (post.paintData.includes('data:image/')) {
+          post.paintData = post.paintData.replace(
+            /data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=]{4096,}/g,
+            (match: string) => {
+              const sub = externalizeBase64Url(match, 'post-paint-layer');
+              if (sub.converted) count++;
+              return sub.url;
+            }
+          );
+        }
+      }
+      if (post.referenceMediaUrl) {
+        const r = externalizeBase64Url(post.referenceMediaUrl, 'post-ref');
+        if (r.converted) { post.referenceMediaUrl = r.url; count++; }
+      }
+    }
+  }
+
+  if (Array.isArray(state.paymentNotes)) {
+    for (const note of state.paymentNotes) {
+      if (!note) continue;
+      if (Array.isArray(note.items)) {
+        for (const item of note.items) {
+          if (item?.voucherUrl) {
+            const r = externalizeBase64Url(item.voucherUrl, 'pn-item');
+            if (r.converted) { item.voucherUrl = r.url; count++; }
+          }
+        }
+      }
+      if (Array.isArray(note.extraItems)) {
+        for (const item of note.extraItems) {
+          if (item?.voucherUrl) {
+            const r = externalizeBase64Url(item.voucherUrl, 'pn-extra');
+            if (r.converted) { item.voucherUrl = r.url; count++; }
+          }
+        }
+      }
+      if (Array.isArray(note.membershipInstallments)) {
+        for (const inst of note.membershipInstallments) {
+          if (!inst) continue;
+          if (inst.voucherUrl) {
+            const r = externalizeBase64Url(inst.voucherUrl, 'pn-inst');
+            if (r.converted) { inst.voucherUrl = r.url; count++; }
+          }
+          if (Array.isArray(inst.subPayments)) {
+            for (const sub of inst.subPayments) {
+              if (sub?.voucherUrl) {
+                const r = externalizeBase64Url(sub.voucherUrl, 'pn-sub');
+                if (r.converted) { sub.voucherUrl = r.url; count++; }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (Array.isArray(state.financeTransactions)) {
+    for (const tx of state.financeTransactions) {
+      if (tx?.receiptUrl) {
+        const r = externalizeBase64Url(tx.receiptUrl, 'fin-receipt');
+        if (r.converted) { tx.receiptUrl = r.url; count++; }
+      }
+    }
+  }
+
+  if (Array.isArray(state.attendanceRecords)) {
+    for (const rec of state.attendanceRecords) {
+      if (!rec) continue;
+      for (const stampKey of ['checkIn', 'breakStart', 'breakEnd', 'checkOut']) {
+        if (rec[stampKey]?.photoUrl) {
+          const r = externalizeBase64Url(rec[stampKey].photoUrl, `att-${stampKey}`);
+          if (r.converted) { rec[stampKey].photoUrl = r.url; count++; }
+        }
+      }
+    }
+  }
+
+  if (Array.isArray(state.employeeProfiles)) {
+    for (const emp of state.employeeProfiles) {
+      if (Array.isArray(emp?.payments)) {
+        for (const p of emp.payments) {
+          if (p?.voucherUrl) {
+            const r = externalizeBase64Url(p.voucherUrl, 'emp-pay');
+            if (r.converted) { p.voucherUrl = r.url; count++; }
+          }
+        }
+      }
+    }
+  }
+
+  return count;
 }
 
 export function cleanHtmlForServer(raw?: string): string {
@@ -172,9 +311,14 @@ export class DatabaseManager {
   private pool: Pool | null = null;
   private isPostgresConnected = false;
   private localState: DatabaseState;
+  private saveTimer: NodeJS.Timeout | null = null;
+  private isWritingDisk = false;
+  private pendingDiskWrite = false;
+  private exitHookRegistered = false;
 
   constructor() {
     this.localState = this.loadOrInitLocalState();
+    this.registerExitFlush();
   }
 
   private loadOrInitLocalState(): DatabaseState {
@@ -314,10 +458,16 @@ export class DatabaseManager {
           }
         }
 
+        const externalizedCount = externalizeEmbeddedMediaInState(parsed);
+        if (externalizedCount > 0) {
+          console.log(`[DB] Se externalizaron automáticamente ${externalizedCount} imágenes Base64 pesadas hacia /uploads/auto-media/.`);
+          stateNeedsSave = true;
+        }
+
         if (stateNeedsSave) {
           try {
             fs.writeFileSync(LOCAL_DB_FILE, JSON.stringify(parsed, null, 2), 'utf-8');
-            console.log('[DB] Se aseguraron y auto-migraron los roles de Diseñador en los tenants.');
+            console.log('[DB] Estado local optimizado y guardado correctamente.');
           } catch {}
         }
 
@@ -369,15 +519,83 @@ export class DatabaseManager {
     return defaultState;
   }
 
-  private saveLocalState(): void {
+  private registerExitFlush(): void {
+    if (this.exitHookRegistered) return;
+    this.exitHookRegistered = true;
+    const flushOnExit = () => {
+      if (this.saveTimer || this.pendingDiskWrite) {
+        if (this.saveTimer) {
+          clearTimeout(this.saveTimer);
+          this.saveTimer = null;
+        }
+        this.flushLocalStateSync();
+      }
+    };
+    process.once('exit', flushOnExit);
+    process.once('SIGINT', () => {
+      flushOnExit();
+      process.exit(0);
+    });
+    process.once('SIGTERM', () => {
+      flushOnExit();
+      process.exit(0);
+    });
+  }
+
+  private flushLocalStateSync(): void {
     try {
       if (!fs.existsSync(DATA_DIR)) {
         fs.mkdirSync(DATA_DIR, { recursive: true });
       }
+      externalizeEmbeddedMediaInState(this.localState);
       fs.writeFileSync(LOCAL_DB_FILE, JSON.stringify(this.localState, null, 2), 'utf-8');
+      this.pendingDiskWrite = false;
     } catch (e) {
-      console.error('[DB] Error guardando base local JSON:', e);
+      console.error('[DB] Error guardando base local JSON (sync):', e);
     }
+  }
+
+  private async flushLocalStateAsync(): Promise<void> {
+    if (this.isWritingDisk) {
+      this.pendingDiskWrite = true;
+      return;
+    }
+    this.isWritingDisk = true;
+    this.pendingDiskWrite = false;
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        await fs.promises.mkdir(DATA_DIR, { recursive: true });
+      }
+      externalizeEmbeddedMediaInState(this.localState);
+      const payload = JSON.stringify(this.localState, null, 2);
+      const tmpFile = `${LOCAL_DB_FILE}.tmp`;
+      await fs.promises.writeFile(tmpFile, payload, 'utf-8');
+      try {
+        await fs.promises.rename(tmpFile, LOCAL_DB_FILE);
+      } catch {
+        await fs.promises.writeFile(LOCAL_DB_FILE, payload, 'utf-8');
+      }
+    } catch (e) {
+      console.error('[DB] Error guardando base local JSON (async):', e);
+    } finally {
+      this.isWritingDisk = false;
+      if (this.pendingDiskWrite) {
+        this.scheduleDiskWrite();
+      }
+    }
+  }
+
+  private scheduleDiskWrite(): void {
+    if (this.saveTimer) return;
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      void this.flushLocalStateAsync();
+    }, 40);
+  }
+
+  private saveLocalState(): void {
+    this.pendingDiskWrite = true;
+    this.scheduleDiskWrite();
   }
 
   public async initialize(): Promise<void> {
@@ -900,7 +1118,7 @@ export class DatabaseManager {
         name: 'Cliente',
         description: 'Acceso portal cliente a marcas, cotizaciones, órdenes y entregables',
         badgeColor: '#ec4899',
-        isSystem: true,
+        isSystem: false,
         permissions: [
           'dashboard.view',
           'clients.view',
@@ -997,9 +1215,33 @@ export class DatabaseManager {
   }
 
   public async getSessionContext(userId: string, tenantId: string) {
-    const user = this.localState.users.find((u) => u.id === userId && u.tenantId === tenantId);
+    let user = this.localState.users.find((u) => u.id === userId && u.tenantId === tenantId);
     const tenant = await this.getTenantById(tenantId);
-    if (!user || !tenant) return null;
+    if (!tenant) return null;
+    if (!user && userId.startsWith('client-user-') && this.localState.clients?.length) {
+      const clientId = userId.replace(/^client-user-/, '');
+      const clientMatch = this.localState.clients.find(
+        (c) => c.id === clientId && c.tenantId === tenantId && c.status === 'active'
+      );
+      if (clientMatch) {
+        user = {
+          id: `client-user-${clientMatch.id}`,
+          tenantId: tenant.id,
+          roleId: `role-cliente-${tenant.id}`,
+          name: clientMatch.name,
+          jobTitle: 'Cliente / Cuenta Asociada',
+          email: clientMatch.email || `${clientMatch.documentNumber}@cliente.roma`,
+          whatsapp: clientMatch.whatsapp || '',
+          pin: clientMatch.documentNumber || '',
+          avatarUrl: clientMatch.brands?.[0]?.logoUrl || '',
+          isActive: true,
+          lastLoginAt: new Date().toISOString(),
+          createdAt: clientMatch.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      }
+    }
+    if (!user || user.isActive === false) return null;
     let role = this.localState.roles.find((r) => r.id === user.roleId && r.tenantId === tenantId);
     if (!role) {
       role = this.localState.roles.find((r) => r.id === user.roleId);
@@ -1011,7 +1253,7 @@ export class DatabaseManager {
         name: 'Cliente',
         description: 'Acceso portal cliente a marcas, cotizaciones, órdenes y entregables',
         badgeColor: '#ec4899',
-        isSystem: true,
+        isSystem: false,
         permissions: [
           'dashboard.view',
           'clients.view',
@@ -1153,7 +1395,7 @@ export class DatabaseManager {
       (s) => (sessionId ? s.id === sessionId : s.token === token)
     );
     if (!session) {
-      return true;
+      return false;
     }
     if (!session.isActive) return false;
 
