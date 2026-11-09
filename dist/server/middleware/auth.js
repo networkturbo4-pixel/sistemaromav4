@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.signSessionToken = signSessionToken;
 exports.requireAuth = requireAuth;
+exports.isRoleAdmin = isRoleAdmin;
 exports.requirePermission = requirePermission;
 exports.requireAnyPermission = requireAnyPermission;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
@@ -38,6 +39,15 @@ async function requireAuth(req, res, next) {
         res.status(401).json({ error: 'Token de sesión inválido o expirado.' });
     }
 }
+function isRoleAdmin(role) {
+    if (!role)
+        return false;
+    const nameLower = (role.name || '').toLowerCase();
+    return (!!role.isSystem ||
+        nameLower.includes('super') ||
+        nameLower.includes('admin') ||
+        (Array.isArray(role.permissions) && role.permissions.includes('*')));
+}
 /**
  * REGLA GLOBAL DE PERMISOS GRANULARES:
  * Middleware obligatorio para proteger cada acción del backend según el catálogo global.
@@ -49,7 +59,7 @@ function requirePermission(permission) {
             return;
         }
         const role = req.auth.role;
-        if (role.isSystem || role.name === 'Super Administrador') {
+        if (isRoleAdmin(role)) {
             next();
             return;
         }
@@ -71,7 +81,7 @@ function requireAnyPermission(permissions) {
             return;
         }
         const role = req.auth.role;
-        if (role.isSystem || role.name === 'Super Administrador') {
+        if (isRoleAdmin(role)) {
             next();
             return;
         }

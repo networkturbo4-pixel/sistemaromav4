@@ -54,6 +54,17 @@ export async function requireAuth(
   }
 }
 
+export function isRoleAdmin(role?: Role | null): boolean {
+  if (!role) return false;
+  const nameLower = (role.name || '').toLowerCase();
+  return (
+    !!role.isSystem ||
+    nameLower.includes('super') ||
+    nameLower.includes('admin') ||
+    (Array.isArray(role.permissions) && (role.permissions as string[]).includes('*'))
+  );
+}
+
 /**
  * REGLA GLOBAL DE PERMISOS GRANULARES:
  * Middleware obligatorio para proteger cada acción del backend según el catálogo global.
@@ -65,7 +76,7 @@ export function requirePermission(permission: PermissionKey) {
       return;
     }
     const role = req.auth.role;
-    if (role.isSystem || role.name === 'Super Administrador') {
+    if (isRoleAdmin(role)) {
       next();
       return;
     }
@@ -88,7 +99,7 @@ export function requireAnyPermission(permissions: PermissionKey[]) {
       return;
     }
     const role = req.auth.role;
-    if (role.isSystem || role.name === 'Super Administrador') {
+    if (isRoleAdmin(role)) {
       next();
       return;
     }

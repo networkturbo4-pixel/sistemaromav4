@@ -267,10 +267,37 @@ export class DatabaseManager {
           }
         }
 
-        // Si algún usuario tiene cargo de diseñador y tiene rol de Super Administrador, reasignar al rol de diseñador
+        // 1. Proteger y asegurar que directores, CEOs, fundadores y administradores tengan rol de Super Administrador
         for (const u of parsed.users) {
-          const isDesignerJob = u.jobTitle && /diseñador|creativo/i.test(u.jobTitle);
-          if (isDesignerJob) {
+          const isAdminLeader =
+            u.id === 'user-roma-01' ||
+            u.id === 'user-admin-mv8hkjro' ||
+            u.email === 'cesar@romaagencia.pe' ||
+            u.email === 'admin@cesar.com' ||
+            (u.jobTitle && /director|directora|ceo|fundador|gerente|super admin|admin/i.test(u.jobTitle));
+
+          if (isAdminLeader) {
+            const currentRole = parsed.roles.find((r: any) => r.id === u.roleId);
+            if (!currentRole || !currentRole.name.toLowerCase().includes('admin')) {
+              const adminRole = parsed.roles.find(
+                (r: any) => r.tenantId === u.tenantId && (r.isSystem || r.name.toLowerCase().includes('admin'))
+              );
+              if (adminRole) {
+                u.roleId = adminRole.id;
+                stateNeedsSave = true;
+              }
+            }
+          }
+        }
+
+        // 2. Solo reasignar a rol diseñador si el usuario es expresamente diseñador operativo (NO directores ni CEOs ni fundadores)
+        for (const u of parsed.users) {
+          const isOperationalDesigner =
+            u.jobTitle &&
+            /diseñador|diseñadora|graphic designer/i.test(u.jobTitle) &&
+            !/director|directora|ceo|fundador|gerente|admin/i.test(u.jobTitle);
+
+          if (isOperationalDesigner) {
             const currentRole = parsed.roles.find((r: any) => r.id === u.roleId);
             if (currentRole && (currentRole.isSystem || currentRole.name === 'Super Administrador')) {
               const designerRole = parsed.roles.find(
@@ -836,17 +863,62 @@ export class DatabaseManager {
       role = this.localState.roles.find((r) => r.id === user.roleId);
     }
     if (!role) {
-      role = this.localState.roles.find((r) => r.tenantId === tenant.id && !r.isSystem && !r.name.toLowerCase().includes('admin')) || {
-        id: `role-collab-${tenant.id}`,
-        tenantId: tenant.id,
-        name: 'Colaborador',
-        description: 'Acceso básico al espacio',
-        badgeColor: '#64748b',
-        isSystem: false,
-        permissions: ['dashboard.view', 'workspace.view'],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+      const isLeader =
+        user.id === 'user-roma-01' ||
+        user.id === 'user-admin-mv8hkjro' ||
+        user.email === 'cesar@romaagencia.pe' ||
+        user.email === 'admin@cesar.com' ||
+        (user.jobTitle && /director|directora|ceo|fundador|gerente|admin/i.test(user.jobTitle));
+
+      if (isLeader) {
+        role = this.localState.roles.find((r) => r.tenantId === tenant.id && (r.isSystem || r.name.toLowerCase().includes('admin'))) || {
+          id: `role-admin-${tenant.id}`,
+          tenantId: tenant.id,
+          name: 'Super Administrador',
+          description: 'Acceso total y configuración del espacio',
+          badgeColor: '#4f46e5',
+          isSystem: true,
+          permissions: [...ALL_PERMISSION_KEYS],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      } else {
+        const isDesigner = user.jobTitle && /diseñador|creativo/i.test(user.jobTitle);
+        if (isDesigner) {
+          role = this.localState.roles.find((r) => r.tenantId === tenant.id && (r.name.toLowerCase().includes('diseñador') || r.id.includes('disenador'))) || {
+            id: `role-disenador-${tenant.id}`,
+            tenantId: tenant.id,
+            name: 'Diseñador / Creativo',
+            description: 'Acceso operativo de diseño',
+            badgeColor: '#06b6d4',
+            isSystem: false,
+            permissions: [
+              'dashboard.view', 'dashboard.metrics',
+              'clients.view', 'brands.view',
+              'services.view',
+              'service_orders.view', 'service_orders.edit',
+              'workspace.view', 'workspace.social.manage', 'workspace.tasks.manage',
+              'workspace.meetings.view', 'workspace.whiteboards.view', 'workspace.whiteboards.manage',
+              'drive.view', 'drive.upload',
+              'administration.attendance.record'
+            ],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+        } else {
+          role = this.localState.roles.find((r) => r.tenantId === tenant.id && !r.isSystem && !r.name.toLowerCase().includes('admin')) || {
+            id: `role-collab-${tenant.id}`,
+            tenantId: tenant.id,
+            name: 'Colaborador',
+            description: 'Acceso básico al espacio',
+            badgeColor: '#64748b',
+            isSystem: false,
+            permissions: ['dashboard.view', 'workspace.view', 'clients.view'],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+        }
+      }
     }
     return { user, tenant, role };
   }
@@ -878,17 +950,62 @@ export class DatabaseManager {
       role = this.localState.roles.find((r) => r.id === user.roleId);
     }
     if (!role) {
-      role = this.localState.roles.find((r) => r.tenantId === tenantId && !r.isSystem && !r.name.toLowerCase().includes('admin')) || {
-        id: `role-collab-${tenantId}`,
-        tenantId: tenant.id,
-        name: 'Colaborador',
-        description: 'Acceso básico al espacio',
-        badgeColor: '#64748b',
-        isSystem: false,
-        permissions: ['dashboard.view', 'workspace.view'],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+      const isLeader =
+        user.id === 'user-roma-01' ||
+        user.id === 'user-admin-mv8hkjro' ||
+        user.email === 'cesar@romaagencia.pe' ||
+        user.email === 'admin@cesar.com' ||
+        (user.jobTitle && /director|directora|ceo|fundador|gerente|admin/i.test(user.jobTitle));
+
+      if (isLeader) {
+        role = this.localState.roles.find((r) => r.tenantId === tenantId && (r.isSystem || r.name.toLowerCase().includes('admin'))) || {
+          id: `role-admin-${tenantId}`,
+          tenantId: tenant.id,
+          name: 'Super Administrador',
+          description: 'Acceso total y configuración del espacio',
+          badgeColor: '#4f46e5',
+          isSystem: true,
+          permissions: [...ALL_PERMISSION_KEYS],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      } else {
+        const isDesigner = user.jobTitle && /diseñador|creativo/i.test(user.jobTitle);
+        if (isDesigner) {
+          role = this.localState.roles.find((r) => r.tenantId === tenantId && (r.name.toLowerCase().includes('diseñador') || r.id.includes('disenador'))) || {
+            id: `role-disenador-${tenantId}`,
+            tenantId: tenant.id,
+            name: 'Diseñador / Creativo',
+            description: 'Acceso operativo de diseño',
+            badgeColor: '#06b6d4',
+            isSystem: false,
+            permissions: [
+              'dashboard.view', 'dashboard.metrics',
+              'clients.view', 'brands.view',
+              'services.view',
+              'service_orders.view', 'service_orders.edit',
+              'workspace.view', 'workspace.social.manage', 'workspace.tasks.manage',
+              'workspace.meetings.view', 'workspace.whiteboards.view', 'workspace.whiteboards.manage',
+              'drive.view', 'drive.upload',
+              'administration.attendance.record'
+            ],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+        } else {
+          role = this.localState.roles.find((r) => r.tenantId === tenantId && !r.isSystem && !r.name.toLowerCase().includes('admin')) || {
+            id: `role-collab-${tenantId}`,
+            tenantId: tenant.id,
+            name: 'Colaborador',
+            description: 'Acceso básico al espacio',
+            badgeColor: '#64748b',
+            isSystem: false,
+            permissions: ['dashboard.view', 'workspace.view', 'clients.view'],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+        }
+      }
     }
     return { user, tenant, role };
   }
