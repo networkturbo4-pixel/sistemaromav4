@@ -10,7 +10,17 @@ const fs_1 = __importDefault(require("fs"));
 const auth_1 = require("../middleware/auth");
 const db_1 = require("../db");
 const emailService_1 = require("../services/emailService");
+const permissions_1 = require("../../shared/permissions");
 const router = (0, express_1.Router)();
+router.use(auth_1.requireAuth);
+router.use((req, res, next) => {
+    const rolePerms = req.auth?.role?.permissions;
+    const isAdm = req.auth?.role?.isSystem || (req.auth?.role?.name && req.auth.role.name.toLowerCase().includes('admin'));
+    if (isAdm || (0, permissions_1.hasPermission)(rolePerms, 'workspace.emails.view') || (0, permissions_1.hasPermission)(rolePerms, 'workspace.emails.manage')) {
+        return next();
+    }
+    return res.status(403).json({ error: 'No tienes permisos para acceder a la bandeja de correos corporativos.' });
+});
 // Multer storage for email attachments
 const emailUploadStorage = multer_1.default.diskStorage({
     destination: (_req, _file, cb) => {

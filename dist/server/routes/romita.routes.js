@@ -6,6 +6,15 @@ const permissions_1 = require("../../shared/permissions");
 const db_1 = require("../db");
 const genai_1 = require("@google/genai");
 const router = (0, express_1.Router)();
+router.use(auth_1.requireAuth);
+router.use((req, res, next) => {
+    const rolePerms = req.auth?.role?.permissions;
+    const isAdm = req.auth?.role?.isSystem || (req.auth?.role?.name && req.auth.role.name.toLowerCase().includes('admin'));
+    if (isAdm || (0, permissions_1.hasPermission)(rolePerms, 'workspace.romita.view') || (0, permissions_1.hasPermission)(rolePerms, 'workspace.romita.manage')) {
+        return next();
+    }
+    return res.status(403).json({ error: 'No tienes permisos para interactuar con Romita AI.' });
+});
 // Inicialización de cliente Gemini si la clave está configurada
 const getGeminiClient = async (tenantId) => {
     let apiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '').trim();

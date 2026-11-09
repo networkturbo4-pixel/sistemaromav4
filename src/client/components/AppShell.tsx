@@ -40,6 +40,7 @@ import {
   RefreshCw,
   Bell,
   Video,
+  User as UserIcon,
 } from 'lucide-react';
 import { SettingsTab } from '../modules/SettingsModule';
 import { CommandPalette } from './CommandPalette';
@@ -47,6 +48,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { QuickOnboardingCreatorModal } from './QuickOnboardingCreatorModal';
 import { NotificationCenterModal } from './NotificationCenterModal';
 import { RomitaAgentModal } from './RomitaAgentModal';
+import { UserProfileModal } from './UserProfileModal';
 
 export type ActiveModule =
   | 'dashboard'
@@ -72,6 +74,7 @@ const SETTINGS_TAB_NAMES: Record<SettingsTab, string> = {
   appearance: 'Apariencia & Colores',
   dialogs: 'Toasts & Modales',
   identity: 'Identidad & Logos',
+  login: 'Pantalla de Login',
   company: 'Datos de Empresa',
   users: 'Usuarios del Equipo',
   roles: 'Roles y Permisos',
@@ -108,6 +111,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   } = useApp();
 
   const [notificationModalOpen, setNotificationModalOpen] = useState(false);
+  const [userProfileModalOpen, setUserProfileModalOpen] = useState(false);
 
   // Detección automática en segundo plano de actualizaciones en GitHub
   const [updateAvailableInfo, setUpdateAvailableInfo] = useState<{
@@ -683,25 +687,38 @@ export const AppShell: React.FC<AppShellProps> = ({
         {user && role && (
           <div className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 space-y-2.5">
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                <div className="w-9 h-9 rounded-2xl bg-indigo-600 flex items-center justify-center font-extrabold text-xs text-white shadow-sm shrink-0">
-                  {user.name
-                    .split(' ')
-                    .slice(0, 2)
-                    .map((n) => n[0])
-                    .join('')
-                    .toUpperCase()}
-                </div>
+              <button
+                type="button"
+                onClick={() => setUserProfileModalOpen(true)}
+                className="flex items-center gap-2.5 min-w-0 flex-1 text-left hover:opacity-80 transition cursor-pointer"
+                title="Abrir Mi Perfil y Dispositivos"
+              >
+                {user.avatarUrl ? (
+                  <img
+                    src={user.avatarUrl}
+                    alt={user.name}
+                    className="w-9 h-9 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shadow-sm shrink-0"
+                  />
+                ) : (
+                  <div className="w-9 h-9 rounded-2xl bg-indigo-600 flex items-center justify-center font-extrabold text-xs text-white shadow-sm shrink-0">
+                    {user.name
+                      .split(' ')
+                      .slice(0, 2)
+                      .map((n) => n[0])
+                      .join('')
+                      .toUpperCase()}
+                  </div>
+                )}
 
                 <div className="min-w-0 flex-1">
-                  <p className="font-extrabold text-xs truncate leading-tight text-slate-900 dark:text-slate-100">
+                  <p className="font-extrabold text-xs truncate leading-tight text-slate-900 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-400">
                     {user.name}
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
                     {user.jobTitle}
                   </p>
                 </div>
-              </div>
+              </button>
 
               {/* Centro de Notificaciones en el Sidebar */}
               <button
@@ -963,6 +980,18 @@ export const AppShell: React.FC<AppShellProps> = ({
 
                     {/* Acciones directas */}
                     <div className="space-y-1 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHeaderUserOpen(false);
+                          setUserProfileModalOpen(true);
+                        }}
+                        className="w-full p-2 rounded-xl flex items-center gap-2.5 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer font-bold"
+                      >
+                        <UserIcon className="w-4 h-4 text-indigo-500" />
+                        <span>Mi Perfil & Dispositivos</span>
+                      </button>
+
                       {can('settings.view') && (
                         <button
                           type="button"
@@ -1680,6 +1709,12 @@ export const AppShell: React.FC<AppShellProps> = ({
         isOpen={romitaOpen}
         onClose={() => setRomitaOpen(false)}
         activeModule={activeModule}
+      />
+
+      {/* 9. APARTADO DEL PERFIL DE USUARIO & DISPOSITIVOS */}
+      <UserProfileModal
+        isOpen={userProfileModalOpen}
+        onClose={() => setUserProfileModalOpen(false)}
       />
     </div>
   );

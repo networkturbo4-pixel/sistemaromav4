@@ -38,6 +38,36 @@ exports.DEFAULT_CUSTOMIZATION = {
         mobile: 'top-center',
     },
     confirmModalStyle: 'modern-center',
+    loginSettings: {
+        title: 'Accede a tu Espacio Corporativo',
+        subtitle: 'Ingresa con tu PIN asignado de 8 dígitos para iniciar tu jornada.',
+        clientTitle: 'Portal de Clientes',
+        clientSubtitle: 'Ingresa con tu PIN o código de acceso de 8 dígitos para consultar tus marcas y proyectos.',
+        sliderIntervalSeconds: 5,
+        slides: [
+            {
+                id: 'slide-1',
+                imageUrl: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=1200&auto=format&fit=crop',
+                badgeText: 'ROMA SaaS',
+                title: 'Sistema Corporativo de Operaciones & Creatividad',
+                description: 'Gestión integral de proyectos, redes y finanzas.',
+            },
+            {
+                id: 'slide-2',
+                imageUrl: 'https://images.unsplash.com/photo-1518457607834-6e8d80c183c5?q=80&w=1200&auto=format&fit=crop',
+                badgeText: 'Creatividad',
+                title: 'Flujos de Trabajo Dinámicos y Entregables',
+                description: 'Conexión en tiempo real entre colaboradores y clientes.',
+            },
+            {
+                id: 'slide-3',
+                imageUrl: '/backgrounds/planet-vertical.png',
+                badgeText: 'Workspace PRO',
+                title: 'Innovación, Diseño e Impacto Real',
+                description: 'Plataforma corporativa de alto rendimiento.',
+            },
+        ],
+    },
 };
 exports.DEFAULT_COMPANY_INFO = {
     commercialName: 'ROMA Agencia Creativa & Diseño',

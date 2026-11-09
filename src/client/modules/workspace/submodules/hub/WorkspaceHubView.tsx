@@ -20,8 +20,8 @@ export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
   whiteboardsCount = 0,
   onSelectSubmodule,
 }) => {
-  const { can, user } = useApp();
-  const isAdm = can('settings.roles.manage') || user?.role?.name?.toLowerCase().includes('admin') || user?.role?.name?.toLowerCase().includes('super');
+  const { can, user, role } = useApp();
+  const isAdm = user?.role === 'superadmin' || user?.role === 'admin' || !!role?.isSystem || role?.name?.toLowerCase().includes('admin') || role?.name?.toLowerCase().includes('super');
 
   const canAccessSocial = isAdm || can('workspace.social.manage') || can('workspace.social.view');
   const canAccessTasks = isAdm || can('workspace.tasks.manage') || can('workspace.tasks.view');
@@ -30,9 +30,9 @@ export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
   const canAccessForms = isAdm || can('workspace.forms.manage') || can('workspace.forms.view');
   const canAccessMeetings = isAdm || can('workspace.meetings.view') || can('workspace.meetings.manage');
   const canAccessWhiteboards = isAdm || can('workspace.whiteboards.view') || can('workspace.whiteboards.manage');
-  const canAccessBrandGuidelines = isAdm || can('workspace.brand_guidelines.view') || can('workspace.brand_guidelines.manage') || can('workspace.view');
-  const canAccessRomita = isAdm || can('workspace.view');
-  const canAccessEmails = isAdm || can('workspace.view');
+  const canAccessBrandGuidelines = isAdm || can('workspace.brand_guidelines.view') || can('workspace.brand_guidelines.manage');
+  const canAccessRomita = isAdm || can('workspace.romita.view') || can('workspace.romita.manage');
+  const canAccessEmails = isAdm || can('workspace.emails.view') || can('workspace.emails.manage');
 
   const anyAccess =
     canAccessSocial ||

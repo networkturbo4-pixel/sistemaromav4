@@ -6,8 +6,19 @@ import { AuthenticatedRequest, requireAuth } from '../middleware/auth';
 import { db } from '../db';
 import { emailService } from '../services/emailService';
 import { EmailFolder } from '../../shared/types';
+import { hasPermission } from '../../shared/permissions';
 
 const router = Router();
+
+router.use(requireAuth);
+router.use((req: AuthenticatedRequest, res: Response, next) => {
+  const rolePerms = req.auth?.role?.permissions;
+  const isAdm = req.auth?.role?.isSystem || (req.auth?.role?.name && req.auth.role.name.toLowerCase().includes('admin'));
+  if (isAdm || hasPermission(rolePerms, 'workspace.emails.view') || hasPermission(rolePerms, 'workspace.emails.manage')) {
+    return next();
+  }
+  return res.status(403).json({ error: 'No tienes permisos para acceder a la bandeja de correos corporativos.' });
+});
 
 // Multer storage for email attachments
 const emailUploadStorage = multer.diskStorage({

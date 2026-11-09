@@ -1,118 +1,41 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { LoginSlide } from '../../shared/types';
 import {
-  Lock,
   Delete,
   Eye,
   EyeOff,
-  ShieldCheck,
-  KeyRound,
-  CheckCircle2,
   RefreshCw,
-  Sparkles,
-  Quote as QuoteIcon,
-  Calendar,
-  Layers,
-  Zap,
-  Building2,
-  Shuffle,
-  Keyboard,
-  CornerDownLeft,
+  ArrowRight,
   Sun,
   Moon,
+  ChevronLeft,
+  ChevronRight,
+  Users,
+  Building2,
 } from 'lucide-react';
 
-interface DailyQuote {
-  quote: string;
-  author: string;
-  role: string;
-  tag: string;
-}
-
-const DAILY_QUOTES: DailyQuote[] = [
+const FALLBACK_SLIDES: LoginSlide[] = [
   {
-    quote: 'El diseño no es solo lo que se ve y se siente. El diseño es cómo funciona.',
-    author: 'Steve Jobs',
-    role: 'Co-fundador de Apple',
-    tag: 'Innovación & Función',
+    id: 'slide-1',
+    imageUrl: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=1200&auto=format&fit=crop',
+    badgeText: 'ROMA SaaS',
+    title: 'Sistema Corporativo de Operaciones & Creatividad',
+    description: 'Gestión integral de proyectos, redes y finanzas.',
   },
   {
-    quote: 'Si no vende, no es creativo. La verdadera creatividad resuelve problemas comerciales con elegancia.',
-    author: 'David Ogilvy',
-    role: 'Padre de la Publicidad Moderna',
-    tag: 'Estrategia Publicitaria',
+    id: 'slide-2',
+    imageUrl: 'https://images.unsplash.com/photo-1518457607834-6e8d80c183c5?q=80&w=1200&auto=format&fit=crop',
+    badgeText: 'Creatividad',
+    title: 'Flujos de Trabajo Dinámicos y Entregables',
+    description: 'Conexión en tiempo real entre colaboradores y clientes.',
   },
   {
-    quote: 'El buen diseño es lo más poco diseño posible. Menos, pero con mejor ejecución.',
-    author: 'Dieter Rams',
-    role: 'Maestro del Diseño Funcionalista',
-    tag: 'Minimalismo & Pureza',
-  },
-  {
-    quote: 'El diseño es el embajador silencioso de tu marca. Habla antes de que tú digas una palabra.',
-    author: 'Paul Rand',
-    role: 'Diseñador de Identidades Legendarias (IBM, ABC, UPS)',
-    tag: 'Identidad de Marca',
-  },
-  {
-    quote: 'La creatividad es la inteligencia divirtiéndose y descubriendo nuevos horizontes.',
-    author: 'Albert Einstein',
-    role: 'Físico & Pensador',
-    tag: 'Ingenio & Pasión',
-  },
-  {
-    quote: 'La simplicidad no es la falta de pistas; es la claridad del propósito.',
-    author: 'Jony Ive',
-    role: 'Ex-Director de Diseño de Apple',
-    tag: 'Claridad & Propósito',
-  },
-  {
-    quote: 'Hazlo simple, hazlo memorable, hazlo tentador para mirar y divertido para explorar.',
-    author: 'Leo Burnett',
-    role: 'Pionero de la Publicidad',
-    tag: 'Comunicación Visual',
-  },
-  {
-    quote: 'Cometer errores es parte natural del proceso creativo. Lo esencial es iterar rápido y refinar.',
-    author: 'Paula Scher',
-    role: 'Socia de Pentagram Design',
-    tag: 'Maestría & Iteración',
-  },
-  {
-    quote: 'El estilo cambia con las modas. El buen diseño es un lenguaje universal que perdura en el tiempo.',
-    author: 'Massimo Vignelli',
-    role: 'Diseñador Gráfico & Arquitecto Visual',
-    tag: 'Arquitectura de Marca',
-  },
-  {
-    quote: 'Si crees que el buen diseño es caro, deberías considerar el costo silencioso del mal diseño.',
-    author: 'Ralf Speth',
-    role: 'Líder Ejecutivo de la Industria Automotriz',
-    tag: 'Valor de Negocio',
-  },
-  {
-    quote: 'Las mejores ideas nacen cuando el pensamiento estratégico se une con la audacia creativa.',
-    author: 'Bill Bernbach',
-    role: 'Revolución Creativa de Madison Avenue',
-    tag: 'Audacia Creativa',
-  },
-  {
-    quote: 'La consistencia construye confianza; la emoción construye lealtad duradera.',
-    author: 'Milton Glaser',
-    role: 'Creador de la Identidad Visual de NY',
-    tag: 'Lealtad de Marca',
-  },
-  {
-    quote: 'El diseño es el puente que transforma una visión intangible en una experiencia real y memorable.',
-    author: 'Alina Wheeler',
-    role: 'Especialista Global en Branding',
-    tag: 'Experiencia de Usuario',
-  },
-  {
-    quote: 'Una marca no es lo que decimos a los clientes, es la promesa que cumplimos en cada entrega.',
-    author: 'Marty Neumeier',
-    role: 'Autor de The Brand Gap',
-    tag: 'Cultura de Agencia',
+    id: 'slide-3',
+    imageUrl: '/backgrounds/planet-vertical.png',
+    badgeText: 'Workspace PRO',
+    title: 'Innovación, Diseño e Impacto Real',
+    description: 'Plataforma corporativa de alto rendimiento.',
   },
 ];
 
@@ -123,34 +46,50 @@ export const PinLoginScreen: React.FC = () => {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activePressedKey, setActivePressedKey] = useState<string | null>(null);
+  const [loginMode, setLoginMode] = useState<'personal' | 'cliente'>('personal');
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Cálculo de la frase diaria según el día del año
-  const dailyIndex = useMemo(() => {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), 0, 0);
-    const diff = now.getTime() - start.getTime();
-    const oneDay = 1000 * 60 * 60 * 24;
-    const dayOfYear = Math.floor(diff / oneDay);
-    return dayOfYear % DAILY_QUOTES.length;
-  }, []);
+  const isDark = resolvedTheme === 'dark';
+  const commercialName =
+    tenant?.companyInfo?.commercialName || tenant?.name || 'ROMA';
 
-  const [activeQuoteIndex, setActiveQuoteIndex] = useState<number>(dailyIndex);
+  // Configuración personalizada de Login desde el Tenant
+  const loginSettings = tenant?.customization?.loginSettings;
+  const loginTitle = loginSettings?.title || 'Accede a tu Espacio Corporativo';
+  const loginSubtitle =
+    loginSettings?.subtitle ||
+    'Ingresa con tu PIN asignado de 8 dígitos para iniciar tu jornada.';
+  const clientLoginTitle = loginSettings?.clientTitle || 'Portal de Clientes';
+  const clientLoginSubtitle =
+    loginSettings?.clientSubtitle ||
+    'Ingresa con tu PIN o código de acceso de 8 dígitos para consultar tus marcas y proyectos.';
 
-  const formattedToday = useMemo(() => {
-    try {
-      const dateStr = new Intl.DateTimeFormat('es-ES', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-      }).format(new Date());
-      return dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
-    } catch {
-      return 'Pensamiento Creativo';
+  const slides: LoginSlide[] = useMemo(() => {
+    if (loginSettings?.slides && loginSettings.slides.length > 0) {
+      return loginSettings.slides;
     }
-  }, []);
+    return FALLBACK_SLIDES;
+  }, [loginSettings?.slides]);
 
-  const currentQuote = DAILY_QUOTES[activeQuoteIndex] || DAILY_QUOTES[0];
+  const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
+  const sliderIntervalSeconds = loginSettings?.sliderIntervalSeconds || 5;
+
+  // Rotación automática del slider
+  useEffect(() => {
+    if (slides.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentSlideIndex((prev) => (prev + 1) % slides.length);
+    }, Math.max(3, sliderIntervalSeconds) * 1000);
+    return () => clearInterval(interval);
+  }, [slides.length, sliderIntervalSeconds]);
+
+  const goToPrevSlide = () => {
+    setCurrentSlideIndex((prev) => (prev === 0 ? slides.length - 1 : prev - 1));
+  };
+
+  const goToNextSlide = () => {
+    setCurrentSlideIndex((prev) => (prev + 1) % slides.length);
+  };
 
   const triggerHaptic = (ms: number = 15) => {
     try {
@@ -160,12 +99,7 @@ export const PinLoginScreen: React.FC = () => {
     } catch {}
   };
 
-  const handleNextQuote = () => {
-    triggerHaptic(10);
-    setActiveQuoteIndex((prev) => (prev + 1) % DAILY_QUOTES.length);
-  };
-
-  // Función de inicio de sesión
+  // Función de inicio de sesión con PIN
   const triggerLogin = useCallback(
     async (pinCode: string) => {
       if (pinCode.length !== 8 || submitting) return;
@@ -173,7 +107,7 @@ export const PinLoginScreen: React.FC = () => {
       setSubmitting(true);
       triggerHaptic(20);
       try {
-        await loginWithPin(pinCode);
+        await loginWithPin(pinCode, tenant?.slug, loginMode);
       } catch (err) {
         setErrorMsg((err as Error).message);
         setDigits(Array(8).fill(''));
@@ -182,17 +116,17 @@ export const PinLoginScreen: React.FC = () => {
         setSubmitting(false);
       }
     },
-    [loginWithPin, submitting]
+    [loginWithPin, submitting, tenant?.slug, loginMode]
   );
 
-  // Agregar dígito (compartido entre teclado táctil y teclado físico)
+  // Agregar dígito (teclado táctil y físico)
   const addDigit = useCallback(
     (digit: string) => {
       if (submitting) return;
       triggerHaptic(12);
 
       setActivePressedKey(digit);
-      setTimeout(() => setActivePressedKey(null), 140);
+      setTimeout(() => setActivePressedKey(null), 120);
 
       setDigits((prev) => {
         const emptyIdx = prev.findIndex((d) => d === '');
@@ -215,7 +149,7 @@ export const PinLoginScreen: React.FC = () => {
     if (submitting) return;
     triggerHaptic(15);
     setActivePressedKey('backspace');
-    setTimeout(() => setActivePressedKey(null), 140);
+    setTimeout(() => setActivePressedKey(null), 120);
 
     setDigits((prev) => {
       const next = [...prev];
@@ -235,12 +169,12 @@ export const PinLoginScreen: React.FC = () => {
     if (submitting) return;
     triggerHaptic(20);
     setActivePressedKey('clear');
-    setTimeout(() => setActivePressedKey(null), 140);
+    setTimeout(() => setActivePressedKey(null), 120);
     setDigits(Array(8).fill(''));
     setErrorMsg(null);
   }, [submitting]);
 
-  // SOPORTE GLOBAL DE TECLADO FÍSICO
+  // Soporte global de teclado físico (0-9, Backspace, Esc, Enter) y pegado (Ctrl+V)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeEl = document.activeElement;
@@ -302,508 +236,414 @@ export const PinLoginScreen: React.FC = () => {
   }, [addDigit, removeLastDigit, clearDigits, digits, triggerLogin]);
 
   const filledCount = digits.filter((d) => d !== '').length;
-
-  const commercialName =
-    tenant?.companyInfo?.commercialName || tenant?.name || 'ROMA Agencia';
-
-  // LOGO EXACTO SEGÚN MODO CLARO U OSCURO CONFIGURADO EN EL SISTEMA
-  const isDark = resolvedTheme === 'dark';
-  const logoUrl = isDark
-    ? tenant?.customization?.logoDarkUrl || tenant?.customization?.logoLightUrl
-    : tenant?.customization?.logoLightUrl || tenant?.customization?.logoDarkUrl;
+  const activeSlide = slides[currentSlideIndex] || slides[0];
 
   return (
     <div
       ref={containerRef}
       tabIndex={0}
-      className="relative min-h-dvh w-full overflow-x-hidden flex flex-col justify-between bg-[var(--app-bg)] text-[var(--app-text)] font-sans selection:bg-[var(--app-primary)] selection:text-white outline-none transition-colors duration-200"
+      className="relative min-h-dvh w-full overflow-hidden flex flex-col lg:flex-row bg-[#0b0b0e] text-zinc-100 font-sans outline-none selection:bg-white selection:text-black"
     >
       {/* ======================================================== */}
-      {/* HEADER SUPERIOR: LOGO DEL MODO ACTIVO & STATUS           */}
+      {/* COLUMNA IZQUIERDA: SLIDER COMPLETO A PANTALLA            */}
+      {/* Ocupa el 100% de la altura y la mitad izquierda completa */}
       {/* ======================================================== */}
-      <header className="relative z-20 w-full max-w-7xl mx-auto px-5 sm:px-8 pt-5 sm:pt-7 pb-2 flex items-center justify-between">
-        {/* Identidad del Tenant / Logo oficial configurado */}
-        <div className="flex items-center gap-3">
-          {logoUrl ? (
-            <img
-              src={logoUrl}
-              alt={commercialName}
-              className="h-8 sm:h-9 max-w-[180px] object-contain"
-            />
-          ) : (
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-[var(--app-primary)] flex items-center justify-center font-black text-white text-base shadow-sm">
-                R
+      <div className="hidden lg:relative lg:flex lg:w-1/2 xl:w-[53%] min-h-dvh h-screen overflow-hidden bg-black group select-none">
+        
+        {/* Slides con Transición Suave */}
+        {slides.map((s, idx) => {
+          const isCurrent = idx === currentSlideIndex;
+          return (
+            <div
+              key={s.id || idx}
+              className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+                isCurrent ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+              }`}
+            >
+              <img
+                src={s.imageUrl}
+                alt={s.title || 'Slide'}
+                className="w-full h-full object-cover object-center filter brightness-[0.88] contrast-[1.05]"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/backgrounds/planet-vertical.png';
+                }}
+              />
+
+              {/* Gradiente sutil inferior para legibilidad óptima de textos */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent pointer-events-none" />
+
+              {/* Insignia superior izquierda flotante */}
+              <div className="absolute top-8 left-8 xl:top-10 xl:left-10 z-20">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/15 text-white text-xs font-bold shadow-xl">
+                  <span className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+                  <span className="tracking-tight uppercase">{commercialName}</span>
+                  {s.badgeText && (
+                    <span className="px-1.5 py-0.5 rounded-md bg-white/20 text-[10px] font-mono font-black uppercase text-zinc-100">
+                      {s.badgeText}
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="flex flex-col">
-                <span className="text-base sm:text-lg font-black tracking-tight leading-none text-[var(--app-text)]">
-                  {commercialName}
-                </span>
-                <span className="text-[10px] font-bold text-[var(--app-primary)] tracking-wider uppercase mt-0.5">
-                  Workspace
-                </span>
+
+              {/* Textos y Leyendas del Slide en la parte inferior */}
+              <div className="absolute bottom-12 left-8 right-8 xl:left-12 xl:right-12 z-20 space-y-2 text-left">
+                {s.title && (
+                  <h3 className="text-2xl xl:text-3xl font-black text-white tracking-tight drop-shadow-md leading-tight max-w-xl">
+                    {s.title}
+                  </h3>
+                )}
+                {s.description && (
+                  <p className="text-xs xl:text-sm text-zinc-300 font-medium max-w-lg leading-relaxed drop-shadow-sm">
+                    {s.description}
+                  </p>
+                )}
+
+                {/* Barras Indicadoras / Paginación */}
+                {slides.length > 1 && (
+                  <div className="flex items-center gap-2 pt-3">
+                    {slides.map((_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setCurrentSlideIndex(i)}
+                        className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                          i === currentSlideIndex
+                            ? 'w-8 bg-white'
+                            : 'w-2 bg-white/30 hover:bg-white/60'
+                        }`}
+                        aria-label={`Ir al slide ${i + 1}`}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
-          )}
-        </div>
+          );
+        })}
 
-        {/* Acciones del Header: Toggle Tema Claro/Oscuro + Insignia SSL */}
-        <div className="flex items-center gap-2.5">
-          {/* Conmutador rápido de tema según configuración del sistema */}
+        {/* Flechas de navegación en hover */}
+        {slides.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={goToPrevSlide}
+              className="absolute left-6 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full bg-black/45 hover:bg-black/80 backdrop-blur-md border border-white/15 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer shadow-xl"
+              aria-label="Anterior slide"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+
+            <button
+              type="button"
+              onClick={goToNextSlide}
+              className="absolute right-6 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full bg-black/45 hover:bg-black/80 backdrop-blur-md border border-white/15 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer shadow-xl"
+              aria-label="Siguiente slide"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* ======================================================== */}
+      {/* COLUMNA DERECHA: PESTAÑAS (PERSONAL / CLIENTE) Y KEYPAD  */}
+      {/* ======================================================== */}
+      <div className="w-full lg:w-1/2 xl:w-[47%] min-h-dvh flex flex-col justify-between p-6 sm:p-10 lg:p-12 xl:p-14 overflow-y-auto">
+        
+        {/* Barra superior con Brand en móvil y Switch de Tema */}
+        <div className="w-full flex items-center justify-between">
+          <div className="flex lg:hidden items-center gap-2.5">
+            <span className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+            <span className="text-xs font-bold tracking-widest uppercase text-zinc-400">
+              {commercialName}
+            </span>
+          </div>
+          <div className="hidden lg:block" />
+
           <button
             type="button"
             onClick={toggleQuickTheme}
-            title={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-            className="p-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-muted)] hover:text-[var(--app-text)] transition-colors cursor-pointer"
+            title={isDark ? 'Modo claro' : 'Modo oscuro'}
+            className="p-2.5 rounded-xl border border-white/10 bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer ml-auto"
+            aria-label="Conmutar tema"
           >
-            {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-500" />}
+            {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-400" />}
           </button>
-
-          {/* Insignia de seguridad */}
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-[var(--app-surface)] border border-[var(--app-border)] text-[var(--app-muted)] shadow-xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="hidden sm:inline">Acceso Seguro</span>
-            <span className="opacity-40 hidden sm:inline">•</span>
-            <span className="font-mono text-emerald-500">SSL 256-bit</span>
-          </div>
-        </div>
-      </header>
-
-      {/* ======================================================== */}
-      {/* CONTENEDOR PRINCIPAL: SPLIT (FRASE + TECLADO NUMÉRICO)   */}
-      {/* ======================================================== */}
-      <main className="relative z-20 w-full max-w-7xl mx-auto px-4 sm:px-8 my-auto py-3 sm:py-8 flex flex-col justify-center">
-        
-        {/* ==================================================== */}
-        {/* ENCABEZADO RESPONSIVE MÓVIL: POCO TEXTO Y CENTRADO   */}
-        {/* ==================================================== */}
-        <div className="lg:hidden text-center mb-3 sm:mb-4 max-w-sm mx-auto px-2">
-          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--app-surface)] border border-[var(--app-border)] text-[var(--app-muted)] mb-1.5 shadow-xs">
-            <Sparkles className="w-3 h-3 text-[var(--app-primary)]" />
-            <span>{formattedToday}</span>
-          </div>
-          <p className="text-xs text-[var(--app-muted)] italic leading-tight line-clamp-2">
-            "{currentQuote.quote}"
-          </p>
-          <span className="text-[10px] font-bold text-[var(--app-primary)] block mt-0.5">
-            — {currentQuote.author}
-          </span>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+        {/* Contenedor Central del Teclado y Pestañas */}
+        <div className="max-w-[360px] sm:max-w-[380px] mx-auto w-full space-y-4 my-auto py-2">
           
-          {/* ==================================================== */}
-          {/* COLUMNA IZQUIERDA DESKTOP: FRASE COMPLETA Y VALOR    */}
-          {/* ==================================================== */}
-          <div className="hidden lg:flex lg:col-span-7 flex-col justify-center space-y-6 sm:space-y-8 pr-0 lg:pr-4">
-            
-            {/* Tag / Badge de Bienvenida */}
-            <div className="flex items-center flex-wrap gap-2.5">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[var(--app-primary)]/10 border border-[var(--app-primary)]/20 text-[var(--app-primary)]">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Plataforma Creativa SaaS</span>
-              </span>
+          {/* Pestañas Modernas: Personal vs Cliente */}
+          <div className="flex items-center p-1 bg-[#151518] rounded-2xl border border-white/10 w-full shadow-inner">
+            <button
+              type="button"
+              onClick={() => {
+                if (loginMode !== 'personal') {
+                  setLoginMode('personal');
+                  setDigits(Array(8).fill(''));
+                  setErrorMsg(null);
+                }
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                loginMode === 'personal'
+                  ? 'bg-white text-black shadow-md'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Personal</span>
+            </button>
 
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[var(--app-surface)] border border-[var(--app-border)] text-[var(--app-muted)]">
-                <Calendar className="w-3.5 h-3.5" />
-                <span>{formattedToday}</span>
-              </span>
-            </div>
-
-            {/* Titular Limpio y Sólido (Sin degradados multicolores) */}
-            <div className="space-y-2">
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-[var(--app-text)] tracking-tight leading-[1.15]">
-                Donde las grandes ideas se convierten en{' '}
-                <span className="text-[var(--app-primary)]">
-                  impacto real.
-                </span>
-              </h1>
-              <p className="text-sm sm:text-base text-[var(--app-muted)] max-w-xl leading-relaxed">
-                Gestión operativa, entregables creativos, cotizaciones y flujos de trabajo en un solo ecosistema conectado.
-              </p>
-            </div>
-
-            {/* TARJETA DE LA FRASE DIARIA */}
-            <div className="relative group bg-[var(--app-surface)] border border-[var(--app-border)] rounded-3xl p-6 sm:p-7 transition-all duration-200 shadow-sm overflow-hidden">
-              <QuoteIcon className="absolute -bottom-4 -right-4 w-28 h-28 text-[var(--app-text)]/[0.03] pointer-events-none" />
-
-              <div className="relative z-10 flex flex-col space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-xl bg-[var(--app-primary)]/10 text-[var(--app-primary)] flex items-center justify-center">
-                      <QuoteIcon className="w-3.5 h-3.5" />
-                    </div>
-                    <span className="text-xs font-bold uppercase tracking-wider text-[var(--app-primary)]">
-                      Inspiración de Hoy
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleNextQuote}
-                    title="Ver otra frase inspiradora"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[var(--app-bg)] hover:bg-[var(--app-primary)]/10 text-[var(--app-muted)] hover:text-[var(--app-primary)] text-[11px] font-semibold transition-all border border-[var(--app-border)] cursor-pointer"
-                  >
-                    <Shuffle className="w-3 h-3" />
-                    <span className="hidden xs:inline">Otra frase</span>
-                  </button>
-                </div>
-
-                <p className="text-base sm:text-lg font-medium text-[var(--app-text)] leading-relaxed italic">
-                  "{currentQuote.quote}"
-                </p>
-
-                <div className="pt-2 border-t border-[var(--app-border)] flex items-center justify-between flex-wrap gap-2">
-                  <div>
-                    <p className="text-sm font-extrabold text-[var(--app-text)]">
-                      {currentQuote.author}
-                    </p>
-                    <p className="text-xs text-[var(--app-muted)]">
-                      {currentQuote.role}
-                    </p>
-                  </div>
-
-                  <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-[var(--app-bg)] text-[var(--app-muted)] border border-[var(--app-border)]">
-                    {currentQuote.tag}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Píldoras de Valor Rápido */}
-            <div className="grid grid-cols-3 gap-3 pt-1">
-              <div className="p-3.5 rounded-2xl bg-[var(--app-surface)] border border-[var(--app-border)] flex flex-col gap-1">
-                <div className="flex items-center gap-2 text-[var(--app-primary)]">
-                  <Layers className="w-4 h-4" />
-                  <span className="text-xs font-bold text-[var(--app-text)]">Órdenes (OS)</span>
-                </div>
-                <span className="text-[11px] text-[var(--app-muted)]">Hojas de ruta & entregables</span>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-[var(--app-surface)] border border-[var(--app-border)] flex flex-col gap-1">
-                <div className="flex items-center gap-2 text-amber-500">
-                  <Zap className="w-4 h-4" />
-                  <span className="text-xs font-bold text-[var(--app-text)]">Google Drive</span>
-                </div>
-                <span className="text-[11px] text-[var(--app-muted)]">Subidas directas de 500MB+</span>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-[var(--app-surface)] border border-[var(--app-border)] flex flex-col gap-1">
-                <div className="flex items-center gap-2 text-emerald-500">
-                  <ShieldCheck className="w-4 h-4" />
-                  <span className="text-xs font-bold text-[var(--app-text)]">PIN 8 Dígitos</span>
-                </div>
-                <span className="text-[11px] text-[var(--app-muted)]">Acceso rápido y seguro</span>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (loginMode !== 'cliente') {
+                  setLoginMode('cliente');
+                  setDigits(Array(8).fill(''));
+                  setErrorMsg(null);
+                }
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                loginMode === 'cliente'
+                  ? 'bg-white text-black shadow-md'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>Cliente</span>
+            </button>
           </div>
 
-          {/* ==================================================== */}
-          {/* COLUMNA DERECHA / CENTRADA EN MÓVIL: TECLADO         */}
-          {/* ==================================================== */}
-          <div className="lg:col-span-5 flex justify-center lg:justify-end w-full">
-            <div className="w-full max-w-[390px] sm:max-w-[420px] bg-[var(--app-surface)] border border-[var(--app-border)] rounded-[28px] sm:rounded-[32px] shadow-2xl p-5 sm:p-7 transition-colors flex flex-col space-y-4 sm:space-y-5">
-              
-              {/* Encabezado del Teclado */}
-              <div className="flex items-center justify-between pb-3 border-b border-[var(--app-border)]">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[var(--app-primary)]/10 text-[var(--app-primary)] flex items-center justify-center">
-                    <KeyRound className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm sm:text-base font-extrabold tracking-tight text-[var(--app-text)] leading-tight">
-                      Acceso por PIN
-                    </h2>
-                    <p className="text-[10px] sm:text-[11px] text-[var(--app-muted)]">
-                      Tipea en tu teclado físico o usa los botones
-                    </p>
-                  </div>
-                </div>
+          {/* Título y Subtítulo Dinámicos */}
+          <div className="space-y-1.5 text-left pt-1">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-tight">
+              {loginMode === 'personal' ? loginTitle : clientLoginTitle}
+            </h1>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              {loginMode === 'personal' ? loginSubtitle : clientLoginSubtitle}
+            </p>
+          </div>
 
-                <div
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[var(--app-bg)] border border-[var(--app-border)] text-[10px] font-semibold text-[var(--app-muted)]"
-                  title="Puedes escribir directamente con los números de tu teclado físico"
-                >
-                  <Keyboard className="w-3.5 h-3.5 text-[var(--app-primary)]" />
-                  <span className="hidden xs:inline">Teclado Físico</span>
-                </div>
-              </div>
+          {/* Visor de los 8 Dígitos del PIN */}
+          <div className="space-y-2 select-none">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[11px] font-semibold text-zinc-400">
+                {loginMode === 'personal' ? 'Código PIN de Personal' : 'PIN o Acceso de Cliente'} ({filledCount} de 8)
+              </span>
 
-              {/* ==================================================== */}
-              {/* NUEVO DISEÑO LIMPIO DEL VISOR DEL PIN                */}
-              {/* (Sin la caja oscura pesada, limpio, minimalista)     */}
-              {/* ==================================================== */}
-              <div className="space-y-3 select-none">
-                
-                {/* Cabecera del visor: Contador + Botón Mostrar/Ocultar */}
-                <div className="flex items-center justify-between px-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-[var(--app-text)]">
-                      Código PIN
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[var(--app-primary)]/10 text-[var(--app-primary)]">
-                      {filledCount} de 8
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowDigits((prev) => !prev)}
-                    className="text-xs font-semibold flex items-center gap-1.5 text-[var(--app-muted)] hover:text-[var(--app-text)] transition px-2 py-0.5 rounded-lg hover:bg-[var(--app-bg)] cursor-pointer"
-                  >
-                    {showDigits ? (
-                      <>
-                        <EyeOff className="w-3.5 h-3.5 text-[var(--app-primary)]" />
-                        <span>Ocultar</span>
-                      </>
-                    ) : (
-                      <>
-                        <Eye className="w-3.5 h-3.5 text-[var(--app-primary)]" />
-                        <span>Mostrar</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Track de 8 Cápsulas Minimalistas (4 + 4) */}
-                <div className="py-2.5 px-3 bg-[var(--app-bg)] rounded-2xl border border-[var(--app-border)] flex items-center justify-between">
-                  {/* Bloque 1 (Dígitos 1 al 4) */}
-                  <div className="grid grid-cols-4 gap-2 flex-1">
-                    {digits.slice(0, 4).map((d, i) => {
-                      const isFilled = d !== '';
-                      const isCurrent = !isFilled && (i === 0 || digits[i - 1] !== '');
-
-                      return (
-                        <div
-                          key={i}
-                          className={`h-11 rounded-xl flex items-center justify-center font-mono text-lg font-black transition-all border ${
-                            errorMsg
-                              ? 'border-rose-500 bg-rose-500/10 text-rose-500'
-                              : isFilled
-                              ? 'border-[var(--app-primary)] bg-[var(--app-primary)]/15 text-[var(--app-primary)]'
-                              : isCurrent
-                              ? 'border-[var(--app-primary)] bg-[var(--app-surface)] text-[var(--app-text)] ring-2 ring-[var(--app-primary)]/20'
-                              : 'border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-muted)]'
-                          }`}
-                        >
-                          {isFilled ? (
-                            showDigits ? (
-                              d
-                            ) : (
-                              <span className="w-2.5 h-2.5 rounded-full bg-[var(--app-primary)]" />
-                            )
-                          ) : isCurrent ? (
-                            <span className="w-1.5 h-1.5 rounded-full bg-[var(--app-primary)] animate-pulse" />
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Divisor estético central */}
-                  <div className="w-3 text-center text-[var(--app-muted)] font-black text-sm select-none">
-                    -
-                  </div>
-
-                  {/* Bloque 2 (Dígitos 5 al 8) */}
-                  <div className="grid grid-cols-4 gap-2 flex-1">
-                    {digits.slice(4, 8).map((d, idx) => {
-                      const i = idx + 4;
-                      const isFilled = d !== '';
-                      const isCurrent = !isFilled && digits[i - 1] !== '';
-
-                      return (
-                        <div
-                          key={i}
-                          className={`h-11 rounded-xl flex items-center justify-center font-mono text-lg font-black transition-all border ${
-                            errorMsg
-                              ? 'border-rose-500 bg-rose-500/10 text-rose-500'
-                              : isFilled
-                              ? 'border-[var(--app-primary)] bg-[var(--app-primary)]/15 text-[var(--app-primary)]'
-                              : isCurrent
-                              ? 'border-[var(--app-primary)] bg-[var(--app-surface)] text-[var(--app-text)] ring-2 ring-[var(--app-primary)]/20'
-                              : 'border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-muted)]'
-                          }`}
-                        >
-                          {isFilled ? (
-                            showDigits ? (
-                              d
-                            ) : (
-                              <span className="w-2.5 h-2.5 rounded-full bg-[var(--app-primary)]" />
-                            )
-                          ) : isCurrent ? (
-                            <span className="w-1.5 h-1.5 rounded-full bg-[var(--app-primary)] animate-pulse" />
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Línea de progreso sutil y sólida */}
-                <div className="w-full bg-[var(--app-border)] h-1 rounded-full overflow-hidden">
-                  <div
-                    className="bg-[var(--app-primary)] h-1 rounded-full transition-all duration-200"
-                    style={{ width: `${(filledCount / 8) * 100}%` }}
-                  />
-                </div>
-
-                {/* Alerta de Error si el PIN es incorrecto */}
-                {errorMsg && (
-                  <p className="text-xs text-rose-500 font-bold text-center pt-1 animate-in fade-in">
-                    {errorMsg}
-                  </p>
-                )}
-              </div>
-
-              {/* ==================================================== */}
-              {/* BOTONES DEL TECLADO (SÓLIDOS, SIN DEGRADADOS)        */}
-              {/* ==================================================== */}
-              <div className="grid grid-cols-3 gap-2 sm:gap-2.5 select-none">
-                {[
-                  { num: '1', sub: '' },
-                  { num: '2', sub: 'ABC' },
-                  { num: '3', sub: 'DEF' },
-                  { num: '4', sub: 'GHI' },
-                  { num: '5', sub: 'JKL' },
-                  { num: '6', sub: 'MNO' },
-                  { num: '7', sub: 'PQRS' },
-                  { num: '8', sub: 'TUV' },
-                  { num: '9', sub: 'WXYZ' },
-                ].map(({ num, sub }) => {
-                  const isKeyPressed = activePressedKey === num;
-                  return (
-                    <button
-                      key={num}
-                      type="button"
-                      disabled={submitting}
-                      onClick={() => addDigit(num)}
-                      className={`h-11 sm:h-13 rounded-2xl border transition-all flex flex-col items-center justify-center cursor-pointer active:scale-95 ${
-                        isKeyPressed
-                          ? 'bg-[var(--app-primary)] text-white border-[var(--app-primary)] scale-95'
-                          : 'bg-[var(--app-bg)] hover:bg-[var(--app-primary)]/10 text-[var(--app-text)] border-[var(--app-border)] hover:border-[var(--app-primary)]/40'
-                      }`}
-                    >
-                      <span className="text-lg sm:text-xl font-black leading-none">{num}</span>
-                      {sub && (
-                        <span className="text-[8px] font-bold text-[var(--app-muted)] tracking-widest mt-0.5 leading-none uppercase">
-                          {sub}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-
-                {/* Botón Limpiar */}
-                <button
-                  type="button"
-                  disabled={submitting || filledCount === 0}
-                  onClick={clearDigits}
-                  title="Limpiar todo (Esc)"
-                  className={`h-11 sm:h-13 rounded-2xl border text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all flex flex-col items-center justify-center cursor-pointer active:scale-95 disabled:opacity-30 disabled:pointer-events-none ${
-                    activePressedKey === 'clear'
-                      ? 'bg-rose-500 text-white border-rose-500 scale-95'
-                      : 'bg-[var(--app-bg)] hover:bg-rose-500/10 border-[var(--app-border)] hover:border-rose-500/30 text-[var(--app-muted)] hover:text-rose-500'
-                  }`}
-                >
-                  <span>Limpiar</span>
-                  <span className="text-[8px] text-[var(--app-muted)] font-mono tracking-normal opacity-70">ESC</span>
-                </button>
-
-                {/* Botón Dígito Cero */}
-                <button
-                  type="button"
-                  disabled={submitting}
-                  onClick={() => addDigit('0')}
-                  className={`h-11 sm:h-13 rounded-2xl border transition-all flex flex-col items-center justify-center cursor-pointer active:scale-95 ${
-                    activePressedKey === '0'
-                      ? 'bg-[var(--app-primary)] text-white border-[var(--app-primary)] scale-95'
-                      : 'bg-[var(--app-bg)] hover:bg-[var(--app-primary)]/10 text-[var(--app-text)] border-[var(--app-border)] hover:border-[var(--app-primary)]/40'
-                  }`}
-                >
-                  <span className="text-lg sm:text-xl font-black leading-none">0</span>
-                  <span className="text-[8px] font-bold text-[var(--app-muted)] tracking-widest mt-0.5 leading-none">
-                    +
-                  </span>
-                </button>
-
-                {/* Botón Borrar (Backspace) */}
-                <button
-                  type="button"
-                  disabled={submitting || filledCount === 0}
-                  onClick={removeLastDigit}
-                  title="Borrar último dígito (Backspace)"
-                  className={`h-11 sm:h-13 rounded-2xl border transition-all flex flex-col items-center justify-center cursor-pointer active:scale-95 disabled:opacity-30 disabled:pointer-events-none ${
-                    activePressedKey === 'backspace'
-                      ? 'bg-amber-500 text-white border-amber-500 scale-95'
-                      : 'bg-[var(--app-bg)] hover:bg-amber-500/10 border-[var(--app-border)] hover:border-amber-500/30 text-[var(--app-muted)] hover:text-amber-500'
-                  }`}
-                >
-                  <Delete className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span className="text-[8px] text-[var(--app-muted)] font-mono tracking-normal opacity-70">⌫</span>
-                </button>
-              </div>
-
-              {/* ==================================================== */}
-              {/* BOTÓN DE ACCESO AL WORKSPACE (COLOR SÓLIDO)          */}
-              {/* ==================================================== */}
               <button
                 type="button"
-                disabled={filledCount < 8 || submitting}
-                onClick={() => triggerLogin(digits.join(''))}
-                className="w-full py-3.5 px-5 rounded-2xl font-bold text-sm bg-[var(--app-primary)] hover:opacity-90 text-white shadow-md disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2 transition-all active:scale-[0.99] cursor-pointer"
+                onClick={() => setShowDigits((prev) => !prev)}
+                className="text-[11px] font-medium text-zinc-400 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
               >
-                {submitting ? (
+                {showDigits ? (
                   <>
-                    <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                    <span>Verificando PIN...</span>
+                    <EyeOff className="w-3.5 h-3.5" />
+                    <span>Ocultar</span>
                   </>
                 ) : (
                   <>
-                    <span>Acceder al Workspace</span>
-                    <CornerDownLeft className="w-4 h-4 text-white" />
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>Mostrar</span>
                   </>
                 )}
               </button>
+            </div>
 
-              {/* Tip de uso con teclado físico */}
-              <div className="pt-1 text-center">
-                <p className="text-[11px] text-[var(--app-muted)] flex items-center justify-center gap-1.5">
-                  <Keyboard className="w-3.5 h-3.5 text-[var(--app-primary)]" />
-                  <span>
-                    Puedes teclear tus <strong className="text-[var(--app-text)]">8 dígitos</strong> directamente y presionar{' '}
-                    <strong className="text-[var(--app-text)]">Enter ↵</strong>
-                  </span>
-                </p>
+            {/* Cápsula oscura compacta */}
+            <div className="p-2.5 bg-[#151518] rounded-2xl border border-white/10 shadow-inner flex items-center justify-between gap-1 sm:gap-1.5">
+              
+              {/* Dígitos 1 al 4 */}
+              <div className="grid grid-cols-4 gap-1 sm:gap-1.5 flex-1">
+                {digits.slice(0, 4).map((d, i) => {
+                  const isFilled = d !== '';
+                  const isCurrent = !isFilled && (i === 0 || digits[i - 1] !== '');
+
+                  return (
+                    <div
+                      key={i}
+                      className={`h-11 sm:h-12 rounded-xl flex items-center justify-center font-mono text-lg sm:text-xl font-bold transition-all border ${
+                        errorMsg
+                          ? 'border-rose-500/60 bg-rose-500/10 text-rose-400'
+                          : isFilled
+                          ? 'border-white/30 bg-white/10 text-white shadow-xs'
+                          : isCurrent
+                          ? 'border-white/20 bg-white/[0.04] text-white ring-1 ring-white/20'
+                          : 'border-white/5 bg-transparent text-zinc-600'
+                      }`}
+                    >
+                      {isFilled ? (
+                        showDigits ? (
+                          d
+                        ) : (
+                          <span className="w-2 h-2 rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
+                        )
+                      ) : isCurrent ? (
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/60 animate-pulse" />
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <span className="text-zinc-600 font-bold text-xs select-none px-0.5">
+                -
+              </span>
+
+              {/* Dígitos 5 al 8 */}
+              <div className="grid grid-cols-4 gap-1 sm:gap-1.5 flex-1">
+                {digits.slice(4, 8).map((d, idx) => {
+                  const i = idx + 4;
+                  const isFilled = d !== '';
+                  const isCurrent = !isFilled && digits[i - 1] !== '';
+
+                  return (
+                    <div
+                      key={i}
+                      className={`h-11 sm:h-12 rounded-xl flex items-center justify-center font-mono text-lg sm:text-xl font-bold transition-all border ${
+                        errorMsg
+                          ? 'border-rose-500/60 bg-rose-500/10 text-rose-400'
+                          : isFilled
+                          ? 'border-white/30 bg-white/10 text-white shadow-xs'
+                          : isCurrent
+                          ? 'border-white/20 bg-white/[0.04] text-white ring-1 ring-white/20'
+                          : 'border-white/5 bg-transparent text-zinc-600'
+                      }`}
+                    >
+                      {isFilled ? (
+                        showDigits ? (
+                          d
+                        ) : (
+                          <span className="w-2 h-2 rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.7)]" />
+                        )
+                      ) : isCurrent ? (
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/60 animate-pulse" />
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
 
             </div>
+
+            {errorMsg && (
+              <p className="text-xs text-rose-400 font-semibold text-center pt-0.5 animate-fadeIn">
+                {errorMsg}
+              </p>
+            )}
           </div>
+
+          {/* ==================================================== */}
+          {/* BOTONES DEL TECLADO: COMPACTOS Y CÓMODOS            */}
+          {/* ==================================================== */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-2.5 select-none">
+            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((num) => {
+              const isKeyPressed = activePressedKey === num;
+              return (
+                <button
+                  key={num}
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => addDigit(num)}
+                  className={`h-12 sm:h-14 rounded-2xl border transition-all flex items-center justify-center cursor-pointer active:scale-95 text-xl sm:text-2xl font-bold ${
+                    isKeyPressed
+                      ? 'bg-white text-black border-white scale-95 shadow-md'
+                      : 'bg-[#151518] hover:bg-[#1f1f24] text-white border-white/10 hover:border-white/20'
+                  }`}
+                >
+                  <span>{num}</span>
+                </button>
+              );
+            })}
+
+            {/* Botón Limpiar */}
+            <button
+              type="button"
+              disabled={submitting || filledCount === 0}
+              onClick={clearDigits}
+              title="Limpiar todo (Esc)"
+              className={`h-12 sm:h-14 rounded-2xl border text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all flex flex-col items-center justify-center cursor-pointer active:scale-95 disabled:opacity-20 disabled:pointer-events-none ${
+                activePressedKey === 'clear'
+                  ? 'bg-rose-500 text-white border-rose-500 scale-95'
+                  : 'bg-[#151518] hover:bg-rose-500/15 border-white/10 hover:border-rose-500/30 text-zinc-400 hover:text-rose-400'
+              }`}
+            >
+              <span>Limpiar</span>
+              <span className="text-[8px] opacity-60 font-mono">ESC</span>
+            </button>
+
+            {/* Botón Dígito Cero */}
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => addDigit('0')}
+              className={`h-12 sm:h-14 rounded-2xl border transition-all flex items-center justify-center cursor-pointer active:scale-95 text-xl sm:text-2xl font-bold ${
+                activePressedKey === '0'
+                  ? 'bg-white text-black border-white scale-95 shadow-md'
+                  : 'bg-[#151518] hover:bg-[#1f1f24] text-white border-white/10 hover:border-white/20'
+              }`}
+            >
+              <span>0</span>
+            </button>
+
+            {/* Botón Borrar (Backspace) */}
+            <button
+              type="button"
+              disabled={submitting || filledCount === 0}
+              onClick={removeLastDigit}
+              title="Borrar último dígito (Backspace)"
+              className={`h-12 sm:h-14 rounded-2xl border transition-all flex flex-col items-center justify-center cursor-pointer active:scale-95 disabled:opacity-20 disabled:pointer-events-none ${
+                activePressedKey === 'backspace'
+                  ? 'bg-amber-500 text-white border-amber-500 scale-95'
+                  : 'bg-[#151518] hover:bg-amber-500/15 border-white/10 hover:border-amber-500/30 text-zinc-400 hover:text-amber-400'
+              }`}
+            >
+              <Delete className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="text-[8px] opacity-60 font-mono">⌫</span>
+            </button>
+          </div>
+
+          {/* ==================================================== */}
+          {/* BOTÓN PRINCIPAL DE ACCESO                            */}
+          {/* ==================================================== */}
+          <button
+            type="button"
+            disabled={filledCount < 8 || submitting}
+            onClick={() => triggerLogin(digits.join(''))}
+            className="w-full py-3.5 px-5 rounded-2xl font-bold text-sm bg-zinc-100 hover:bg-white text-zinc-950 shadow-xl disabled:opacity-30 disabled:pointer-events-none flex items-center justify-between transition-all active:scale-[0.99] cursor-pointer"
+          >
+            {submitting ? (
+              <div className="flex items-center gap-2 mx-auto">
+                <RefreshCw className="w-4 h-4 animate-spin text-zinc-900" />
+                <span>Verificando código...</span>
+              </div>
+            ) : (
+              <>
+                <span className="tracking-tight">
+                  {loginMode === 'personal' ? 'Iniciar Sesión' : 'Acceder al Portal'}
+                </span>
+                <span className="w-7 h-7 rounded-full bg-zinc-900/10 flex items-center justify-center">
+                  <ArrowRight className="w-3.5 h-3.5 text-zinc-950" />
+                </span>
+              </>
+            )}
+          </button>
+
+          {/* Pequeña nota de teclado físico */}
+          <p className="text-[10px] text-zinc-500 text-center leading-tight">
+            Escribe tus 8 números con tu teclado físico o usa la pantalla.
+          </p>
 
         </div>
-      </main>
 
-      {/* ======================================================== */}
-      {/* FOOTER INFERIOR                                          */}
-      {/* ======================================================== */}
-      <footer className="relative z-20 text-center text-xs text-[var(--app-muted)] py-4 px-4 border-t border-[var(--app-border)]">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-[var(--app-text)]">{commercialName}</span>
-            <span className="opacity-40">•</span>
-            <span>Sistema SaaS Multitenant para Agencia de Publicidad y Diseño</span>
-          </div>
+        {/* Footer inferior */}
+        <footer className="w-full flex items-center justify-between text-[11px] text-zinc-500 pt-4">
+          <span>{commercialName} • SaaS</span>
+          <span>Sesiones Limitadas a 3 Dispositivos</span>
+        </footer>
 
-          <div className="flex items-center gap-3 text-[11px]">
-            <span className="inline-flex items-center gap-1 text-emerald-500 font-medium">
-              <CheckCircle2 className="w-3 h-3" />
-              <span>Conexión Segura Activa</span>
-            </span>
-            <span className="opacity-40">•</span>
-            <span className="font-mono text-[var(--app-muted)]">v4.0</span>
-          </div>
-        </div>
-      </footer>
+      </div>
     </div>
   );
 };

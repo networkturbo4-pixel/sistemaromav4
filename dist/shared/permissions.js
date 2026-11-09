@@ -303,6 +303,34 @@ exports.PERMISSIONS_CATALOG = [
         module: 'workspace',
         moduleLabel: 'Workspace Operativo',
     },
+    {
+        key: 'workspace.romita.view',
+        label: 'Ver Romita AI & Historial',
+        description: 'Acceder al copilot inteligente de Romita y consultar la bitácora de ejecuciones.',
+        module: 'workspace',
+        moduleLabel: 'Workspace Operativo',
+    },
+    {
+        key: 'workspace.romita.manage',
+        label: 'Gestionar Romita AI & Acciones',
+        description: 'Interactuar con el agente Romita, ejecutar acciones operativas automáticas y bitácora.',
+        module: 'workspace',
+        moduleLabel: 'Workspace Operativo',
+    },
+    {
+        key: 'workspace.emails.view',
+        label: 'Ver Bandeja de Correos',
+        description: 'Consultar buzón y leer correos corporativos SMTP/IMAP con tu dominio.',
+        module: 'workspace',
+        moduleLabel: 'Workspace Operativo',
+    },
+    {
+        key: 'workspace.emails.manage',
+        label: 'Gestionar Correos Corporativos',
+        description: 'Redactar, enviar correos, adjuntar archivos y sincronizar cuentas corporativas.',
+        module: 'workspace',
+        moduleLabel: 'Workspace Operativo',
+    },
     // ÓRDENES DE SERVICIO (OS)
     {
         key: 'service_orders.view',
@@ -542,32 +570,31 @@ function hasPermission(grantedPermissions, requiredPermission) {
     }
     // Herencia y coherencia entre gestión (manage) y visualización (view) de submódulos
     if (requiredPermission === 'workspace.social.view' &&
-        (grantedPermissions.includes('workspace.social.manage') ||
-            grantedPermissions.includes('workspace.view')))
+        grantedPermissions.includes('workspace.social.manage'))
         return true;
     if (requiredPermission === 'workspace.tasks.view' &&
-        (grantedPermissions.includes('workspace.tasks.manage') ||
-            grantedPermissions.includes('workspace.view')))
+        grantedPermissions.includes('workspace.tasks.manage'))
         return true;
     if (requiredPermission === 'workspace.tools.view' &&
-        (grantedPermissions.includes('workspace.tools.manage') ||
-            grantedPermissions.includes('workspace.view')))
+        grantedPermissions.includes('workspace.tools.manage'))
         return true;
     if (requiredPermission === 'workspace.forms.view' &&
-        (grantedPermissions.includes('workspace.forms.manage') ||
-            grantedPermissions.includes('workspace.view')))
+        grantedPermissions.includes('workspace.forms.manage'))
         return true;
     if (requiredPermission === 'workspace.meetings.view' &&
-        (grantedPermissions.includes('workspace.meetings.manage') ||
-            grantedPermissions.includes('workspace.view')))
+        grantedPermissions.includes('workspace.meetings.manage'))
         return true;
     if (requiredPermission === 'workspace.whiteboards.view' &&
-        (grantedPermissions.includes('workspace.whiteboards.manage') ||
-            grantedPermissions.includes('workspace.view')))
+        grantedPermissions.includes('workspace.whiteboards.manage'))
         return true;
     if (requiredPermission === 'workspace.brand_guidelines.view' &&
-        (grantedPermissions.includes('workspace.brand_guidelines.manage') ||
-            grantedPermissions.includes('workspace.view')))
+        grantedPermissions.includes('workspace.brand_guidelines.manage'))
+        return true;
+    if (requiredPermission === 'workspace.romita.view' &&
+        grantedPermissions.includes('workspace.romita.manage'))
+        return true;
+    if (requiredPermission === 'workspace.emails.view' &&
+        grantedPermissions.includes('workspace.emails.manage'))
         return true;
     if (requiredPermission === 'administration.hr.view' &&
         (grantedPermissions.includes('administration.hr.manage') ||

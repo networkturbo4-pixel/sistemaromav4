@@ -11,10 +11,12 @@ export interface AuthenticatedRequest extends Request {
     user: User;
     role?: Role;
     tenant: Tenant;
+    sessionId?: string;
+    token?: string;
   };
 }
 
-export function signSessionToken(payload: { userId: string; tenantId: string; roleId: string }): string {
+export function signSessionToken(payload: { userId: string; tenantId: string; roleId: string; sessionId?: string }): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
 }
 
@@ -39,7 +41,14 @@ export async function requireAuth(
       userId: string;
       tenantId: string;
       roleId: string;
+      sessionId?: string;
     };
+
+    const isSessionActive = await db.isSessionActive(token, decoded.sessionId);
+    if (!isSessionActive) {
+      res.status(401).json({ error: 'Tu sesión ha expirado o ha sido cerrada desde otro dispositivo.' });
+      return;
+    }
 
     const context = await db.getSessionContext(decoded.userId, decoded.tenantId);
     if (!context) {
@@ -47,7 +56,11 @@ export async function requireAuth(
       return;
     }
 
-    req.auth = context;
+    req.auth = {
+      ...context,
+      sessionId: decoded.sessionId,
+      token,
+    };
     next();
   } catch (err) {
     res.status(401).json({ error: 'Token de sesión inválido o expirado.' });

@@ -153,25 +153,93 @@ app.get('/api/public/services/:slugOrId', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+function parseUserAgent(uaString) {
+    const ua = (uaString || '').toLowerCase();
+    let deviceType = 'desktop';
+    let os = 'Desconocido';
+    let browser = 'Navegador Web';
+    if (ua.includes('windows phone')) {
+        os = 'Windows Phone';
+        deviceType = 'mobile';
+    }
+    else if (ua.includes('win')) {
+        os = 'Windows';
+    }
+    else if (ua.includes('android')) {
+        os = 'Android';
+        deviceType = ua.includes('mobile') ? 'mobile' : 'tablet';
+    }
+    else if (ua.includes('ipad')) {
+        os = 'iPadOS';
+        deviceType = 'tablet';
+    }
+    else if (ua.includes('iphone')) {
+        os = 'iOS';
+        deviceType = 'mobile';
+    }
+    else if (ua.includes('macintosh') || ua.includes('mac os')) {
+        os = 'macOS';
+    }
+    else if (ua.includes('linux')) {
+        os = 'Linux';
+    }
+    if (ua.includes('edg/')) {
+        browser = 'Microsoft Edge';
+    }
+    else if (ua.includes('chrome') && !ua.includes('edg') && !ua.includes('opr')) {
+        browser = 'Google Chrome';
+    }
+    else if (ua.includes('safari') && !ua.includes('chrome')) {
+        browser = 'Apple Safari';
+    }
+    else if (ua.includes('firefox')) {
+        browser = 'Mozilla Firefox';
+    }
+    else if (ua.includes('opr') || ua.includes('opera')) {
+        browser = 'Opera';
+    }
+    const deviceName = `${browser} en ${os}`;
+    return { deviceName, deviceType, browser, os };
+}
 app.post('/api/auth/login-pin', async (req, res) => {
     try {
-        const { pin, tenantSlug } = req.body;
+        const { pin, tenantSlug, mode = 'personal' } = req.body;
         if (!pin || typeof pin !== 'string' || !/^\d{8}$/.test(pin.trim())) {
             res.status(400).json({ error: 'Debes ingresar un PIN válido de exactamente 8 dígitos.' });
             return;
         }
-        const match = await db_1.db.findUserByPin(pin.trim(), tenantSlug);
+        const match = await db_1.db.findUserByPin(pin.trim(), tenantSlug, mode);
         if (!match) {
             res.status(401).json({
-                error: 'PIN de 8 dígitos incorrecto o usuario inactivo. Verifica tu código de acceso.',
+                error: mode === 'cliente'
+                    ? 'Código de acceso o PIN de cliente no encontrado. Verifica tu código de 8 dígitos o consulta con la agencia.'
+                    : 'PIN de 8 dígitos incorrecto o usuario inactivo. Verifica tu código de acceso.',
             });
             return;
         }
+        // Registro seguro de dispositivo / sesión con límite concurrente
+        const userAgentHeader = req.headers['user-agent'] || '';
+        const rawIp = req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress || '';
+        const ipAddress = typeof rawIp === 'string' ? rawIp.split(',')[0].trim() : '';
+        const parsedUa = parseUserAgent(userAgentHeader);
+        const session = await db_1.db.createUserSession({
+            userId: match.user.id,
+            tenantId: match.tenant.id,
+            token: '',
+            deviceName: parsedUa.deviceName,
+            deviceType: parsedUa.deviceType,
+            browser: parsedUa.browser,
+            os: parsedUa.os,
+            ipAddress,
+        });
         const token = (0, auth_1.signSessionToken)({
             userId: match.user.id,
             tenantId: match.tenant.id,
             roleId: match.role.id,
+            sessionId: session.id,
         });
+        // Vincular token a la sesión guardada
+        session.token = token;
         const todayAttendance = await db_1.db.getTodayAttendance(match.tenant.id, match.user.id);
         const hrSettings = await db_1.db.getHrSettings(match.tenant.id);
         const profile = await db_1.db.getEmployeeProfileByUserId(match.tenant.id, match.user.id);
@@ -195,6 +263,14 @@ app.post('/api/auth/login-pin', async (req, res) => {
             tenant: match.tenant,
             permissionsCatalog: permissions_1.PERMISSIONS_CATALOG,
             engineInfo: db_1.db.getEngineInfo(),
+            session: {
+                id: session.id,
+                deviceName: session.deviceName,
+                deviceType: session.deviceType,
+                browser: session.browser,
+                os: session.os,
+                createdAt: session.createdAt,
+            },
             attendanceCheck: {
                 alreadyCheckedInToday,
                 requiresAttendanceCheckIn: !alreadyCheckedInToday && !isAdmin,
@@ -245,6 +321,116 @@ app.get('/api/auth/me', auth_1.requireAuth, async (req, res) => {
             todayAttendance,
         },
     });
+});
+app.get('/api/auth/sessions', auth_1.requireAuth, async (req, res) => {
+    try {
+        const sessions = await db_1.db.getUserSessions(req.auth.user.id);
+        const enriched = sessions.map((s) => ({
+            ...s,
+            isCurrent: (req.auth?.sessionId && s.id === req.auth.sessionId) || s.token === req.auth?.token,
+        }));
+        res.json({
+            sessions: enriched,
+            activeCount: enriched.length,
+            maxAllowed: 3,
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+app.delete('/api/auth/sessions/:sessionId', auth_1.requireAuth, async (req, res) => {
+    try {
+        const revoked = await db_1.db.revokeSession(req.params.sessionId, req.auth.user.id);
+        res.json({ success: revoked });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+app.post('/api/auth/sessions/revoke-others', auth_1.requireAuth, async (req, res) => {
+    try {
+        const count = await db_1.db.revokeOtherSessions(req.auth.user.id, req.auth?.sessionId, req.auth?.token);
+        res.json({ success: true, countRevoked: count });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+app.post('/api/auth/logout', auth_1.requireAuth, async (req, res) => {
+    try {
+        if (req.auth?.sessionId) {
+            await db_1.db.revokeSession(req.auth.sessionId, req.auth.user.id);
+        }
+        else if (req.auth?.token) {
+            await db_1.db.revokeSessionByToken(req.auth.token);
+        }
+        res.json({ success: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// APARTADO DEL PERFIL DE USUARIO
+app.get('/api/users/profile/me', auth_1.requireAuth, async (req, res) => {
+    try {
+        const { user, tenant, role } = req.auth;
+        const employeeProfile = await db_1.db.getEmployeeProfileByUserId(tenant.id, user.id);
+        // Proyectos asignados en Workspace
+        const allProjects = await db_1.db.getWorkspaceProjects(tenant.id);
+        const assignedProjects = allProjects.filter((p) => p.assignedUsers?.some((u) => u.id === user.id));
+        // Sesiones activas del usuario
+        const sessions = await db_1.db.getUserSessions(user.id);
+        const enrichedSessions = sessions.map((s) => ({
+            ...s,
+            isCurrent: (req.auth?.sessionId && s.id === req.auth.sessionId) || s.token === req.auth?.token,
+        }));
+        res.json({
+            user,
+            role,
+            tenant,
+            employeeProfile: employeeProfile || null,
+            assignedProjects,
+            sessions: enrichedSessions,
+            activeDevicesCount: enrichedSessions.length,
+            maxDevicesLimit: 3,
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+app.put('/api/users/profile/me', auth_1.requireAuth, async (req, res) => {
+    try {
+        const { user, tenant } = req.auth;
+        const { name, email, whatsapp, avatarUrl, currentPin, newPin } = req.body;
+        const updates = {};
+        if (name && typeof name === 'string')
+            updates.name = name.trim();
+        if (email && typeof email === 'string')
+            updates.email = email.trim();
+        if (whatsapp !== undefined)
+            updates.whatsapp = String(whatsapp).trim();
+        if (avatarUrl !== undefined)
+            updates.avatarUrl = String(avatarUrl).trim();
+        if (newPin) {
+            const pinStr = String(newPin).trim();
+            if (!/^\d{8}$/.test(pinStr)) {
+                res.status(400).json({ error: 'El nuevo PIN debe contener exactamente 8 dígitos numéricos.' });
+                return;
+            }
+            if (!currentPin || String(currentPin).trim() !== user.pin) {
+                res.status(400).json({ error: 'El PIN actual ingresado no coincide con tu PIN registrado.' });
+                return;
+            }
+            updates.pin = pinStr;
+        }
+        const updatedUser = await db_1.db.updateUser(tenant.id, user.id, updates);
+        res.json({ user: updatedUser });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 app.get('/api/auth/my-tenants', auth_1.requireAuth, async (req, res) => {
     try {

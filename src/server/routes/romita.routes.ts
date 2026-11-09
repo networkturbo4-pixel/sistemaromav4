@@ -6,6 +6,16 @@ import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai';
 
 const router = Router();
 
+router.use(requireAuth);
+router.use((req: AuthenticatedRequest, res: Response, next) => {
+  const rolePerms = req.auth?.role?.permissions;
+  const isAdm = req.auth?.role?.isSystem || (req.auth?.role?.name && req.auth.role.name.toLowerCase().includes('admin'));
+  if (isAdm || hasPermission(rolePerms, 'workspace.romita.view') || hasPermission(rolePerms, 'workspace.romita.manage')) {
+    return next();
+  }
+  return res.status(403).json({ error: 'No tienes permisos para interactuar con Romita AI.' });
+});
+
 // Inicialización de cliente Gemini si la clave está configurada
 const getGeminiClient = async (tenantId?: string) => {
   let apiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '').trim();

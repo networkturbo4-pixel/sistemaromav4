@@ -61,49 +61,49 @@ export const WorkspaceModule: React.FC = () => {
   const canAccessSocial =
     isSuperAdmin ||
     can('workspace.social.view') ||
-    can('workspace.social.manage') ||
-    can('workspace.view');
+    can('workspace.social.manage');
 
   const canAccessTasks =
     isSuperAdmin ||
     can('workspace.tasks.view') ||
-    can('workspace.tasks.manage') ||
-    can('workspace.view');
+    can('workspace.tasks.manage');
 
   const canAccessDrive = isSuperAdmin || can('drive.view');
 
   const canAccessTools =
     isSuperAdmin ||
     can('workspace.tools.view') ||
-    can('workspace.tools.manage') ||
-    can('workspace.view');
+    can('workspace.tools.manage');
 
   const canAccessForms =
     isSuperAdmin ||
     can('workspace.forms.view') ||
-    can('workspace.forms.manage') ||
-    can('workspace.view');
+    can('workspace.forms.manage');
 
   const canAccessMeetings =
     isSuperAdmin ||
     can('workspace.meetings.view') ||
-    can('workspace.meetings.manage') ||
-    can('workspace.view');
+    can('workspace.meetings.manage');
 
   const canAccessWhiteboards =
     isSuperAdmin ||
     can('workspace.whiteboards.view') ||
-    can('workspace.whiteboards.manage') ||
-    can('workspace.view');
+    can('workspace.whiteboards.manage');
 
   const canAccessBrandGuidelines =
     isSuperAdmin ||
     can('workspace.brand_guidelines.view') ||
-    can('workspace.brand_guidelines.manage') ||
-    can('workspace.view');
+    can('workspace.brand_guidelines.manage');
 
-  const canAccessRomita = isSuperAdmin || can('romita.view') || can('workspace.view');
-  const canAccessEmails = isSuperAdmin || can('emails.view') || can('workspace.view');
+  const canAccessRomita =
+    isSuperAdmin ||
+    can('workspace.romita.view') ||
+    can('workspace.romita.manage');
+
+  const canAccessEmails =
+    isSuperAdmin ||
+    can('workspace.emails.view') ||
+    can('workspace.emails.manage');
 
   const canViewClients = isSuperAdmin || can('clients.view') || can('workspace.view');
   const canViewServiceOrders = isSuperAdmin || can('service_orders.view') || can('workspace.view');

@@ -27,12 +27,21 @@ async function requireAuth(req, res, next) {
             return;
         }
         const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+        const isSessionActive = await db_1.db.isSessionActive(token, decoded.sessionId);
+        if (!isSessionActive) {
+            res.status(401).json({ error: 'Tu sesión ha expirado o ha sido cerrada desde otro dispositivo.' });
+            return;
+        }
         const context = await db_1.db.getSessionContext(decoded.userId, decoded.tenantId);
         if (!context) {
             res.status(401).json({ error: 'Sesión expirada o usuario inactivo en este tenant.' });
             return;
         }
-        req.auth = context;
+        req.auth = {
+            ...context,
+            sessionId: decoded.sessionId,
+            token,
+        };
         next();
     }
     catch (err) {

@@ -16,6 +16,8 @@ import {
   TypographyScale,
   UserThemePreference,
   AppFontFamily,
+  LoginSlide,
+  LoginCustomization,
 } from '../../shared/types';
 import {
   PERMISSIONS_CATALOG,
@@ -71,6 +73,10 @@ import {
   HardDrive,
   CreditCard,
   QrCode,
+  LogIn,
+  Image as ImageIcon,
+  MoveUp,
+  MoveDown,
   Save,
   Link as LinkIcon,
   Link,
@@ -92,6 +98,7 @@ export type SettingsTab =
   | 'identity'
   | 'appearance'
   | 'dialogs'
+  | 'login'
   | 'company'
   | 'users'
   | 'roles'
@@ -268,6 +275,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     if (tabStr === 'customization') return 'appearance';
     if (
       tabStr === 'identity' ||
+      tabStr === 'login' ||
       tabStr === 'appearance' ||
       tabStr === 'dialogs' ||
       tabStr === 'company' ||
@@ -462,6 +470,94 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     } finally {
       setSavingCust(false);
     }
+  };
+
+  const currentLoginSettings: LoginCustomization = custForm.loginSettings || {
+    title: 'Accede a tu Espacio Corporativo',
+    subtitle: 'Ingresa con tu PIN asignado de 8 dígitos para iniciar tu jornada.',
+    sliderIntervalSeconds: 5,
+    slides: [
+      {
+        id: 'slide-1',
+        imageUrl: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=1200&auto=format&fit=crop',
+        badgeText: 'ROMA SaaS',
+        title: 'Sistema Corporativo de Operaciones & Creatividad',
+        description: 'Gestión integral de proyectos, redes y finanzas.',
+      },
+      {
+        id: 'slide-2',
+        imageUrl: 'https://images.unsplash.com/photo-1518457607834-6e8d80c183c5?q=80&w=1200&auto=format&fit=crop',
+        badgeText: 'Creatividad',
+        title: 'Flujos de Trabajo Dinámicos y Entregables',
+        description: 'Conexión en tiempo real entre colaboradores y clientes.',
+      },
+      {
+        id: 'slide-3',
+        imageUrl: '/backgrounds/planet-vertical.png',
+        badgeText: 'Workspace PRO',
+        title: 'Innovación, Diseño e Impacto Real',
+        description: 'Plataforma corporativa de alto rendimiento.',
+      },
+    ],
+  };
+
+  const updateLoginCustomization = (patch: Partial<LoginCustomization>) => {
+    setCustForm((prev) => ({
+      ...prev,
+      loginSettings: {
+        ...currentLoginSettings,
+        ...patch,
+      },
+    }));
+  };
+
+  const handleAddLoginSlide = () => {
+    const newSlide: LoginSlide = {
+      id: `slide-${Date.now()}`,
+      imageUrl: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=1200&auto=format&fit=crop',
+      badgeText: 'Nuevo Slide',
+      title: 'Título del Slide',
+      description: 'Descripción breve de este slide promocional.',
+    };
+    updateLoginCustomization({
+      slides: [...(currentLoginSettings.slides || []), newSlide],
+    });
+  };
+
+  const handleUpdateLoginSlide = (id: string, patch: Partial<LoginSlide>) => {
+    const list = (currentLoginSettings.slides || []).map((s) =>
+      s.id === id ? { ...s, ...patch } : s
+    );
+    updateLoginCustomization({ slides: list });
+  };
+
+  const handleDeleteLoginSlide = (id: string) => {
+    const list = (currentLoginSettings.slides || []).filter((s) => s.id !== id);
+    updateLoginCustomization({ slides: list });
+  };
+
+  const handleMoveLoginSlide = (index: number, direction: 'up' | 'down') => {
+    const list = [...(currentLoginSettings.slides || [])];
+    const target = direction === 'up' ? index - 1 : index + 1;
+    if (target < 0 || target >= list.length) return;
+    const temp = list[index];
+    list[index] = list[target];
+    list[target] = temp;
+    updateLoginCustomization({ slides: list });
+  };
+
+  const handleLoginSlideImageUpload = (id: string, file: File | undefined) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast('La imagen no debe superar los 5MB.', 'warning');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      handleUpdateLoginSlide(id, { imageUrl: reader.result as string });
+      toast('Imagen del slide cargada. Guarda para aplicar en el Login.');
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleAutoSaveToastPositions = async (
@@ -1218,7 +1314,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     try {
       if (activeTab === 'company') {
         await handleSaveCompany();
-      } else if (activeTab === 'identity' || activeTab === 'dialogs') {
+      } else if (activeTab === 'identity' || activeTab === 'dialogs' || activeTab === 'login') {
         await handleSaveCustomization();
       } else if (activeTab === 'appearance') {
         if (colorScope === 'user') {
@@ -1417,6 +1513,14 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       icon: <Smartphone className="w-4 h-4 text-cyan-500" />,
       iconBg: 'bg-cyan-500/10 dark:bg-cyan-500/20',
       badge: 'APP',
+    },
+    {
+      id: 'login',
+      title: 'Pantalla de Login',
+      subtitle: 'Slider, imágenes, textos y estilos',
+      icon: <LogIn className="w-4 h-4 text-amber-500" />,
+      iconBg: 'bg-amber-500/10 dark:bg-amber-500/20',
+      badge: 'SLIDER',
     },
     {
       id: 'company',
@@ -3508,6 +3612,309 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                 >
                   <Save className="w-4 h-4" />
                   <span>{savingCust ? 'Guardando Logos...' : 'Guardar Identidad & Logos'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* =================================================================
+              3.5. PERSONALIZACIÓN DE LA PANTALLA DE LOGIN & SLIDER
+             ================================================================= */}
+          {activeTab === 'login' && (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-xs space-y-6">
+              <div className="flex items-start gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                  <LogIn className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
+                    Personalización de la Pantalla de Login & Slider
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Configura el slider visual izquierdo, imágenes artísticas, títulos y textos de bienvenida para el acceso de colaboradores.
+                  </p>
+                </div>
+              </div>
+
+              {/* Textos para Pestaña de Personal */}
+              <div className="space-y-3 p-4 rounded-2xl bg-slate-50/70 dark:bg-slate-800/30 border border-slate-200/80 dark:border-slate-800">
+                <h4 className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                  Pestaña Personal (Colaboradores)
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                      Título (Personal)
+                    </label>
+                    <input
+                      type="text"
+                      value={currentLoginSettings.title || ''}
+                      onChange={(e) => updateLoginCustomization({ title: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-semibold text-slate-900 dark:text-white outline-none focus:border-indigo-500 transition"
+                      placeholder="Ej. Accede a tu Espacio Corporativo"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                      Subtítulo (Personal)
+                    </label>
+                    <input
+                      type="text"
+                      value={currentLoginSettings.subtitle || ''}
+                      onChange={(e) => updateLoginCustomization({ subtitle: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-semibold text-slate-900 dark:text-white outline-none focus:border-indigo-500 transition"
+                      placeholder="Ej. Ingresa con tu PIN asignado de 8 dígitos para iniciar tu jornada."
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Textos para Pestaña de Clientes */}
+              <div className="space-y-3 p-4 rounded-2xl bg-slate-50/70 dark:bg-slate-800/30 border border-slate-200/80 dark:border-slate-800">
+                <h4 className="text-xs font-black uppercase tracking-wider text-pink-600 dark:text-pink-400">
+                  Pestaña Clientes (Portal de Clientes)
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                      Título (Clientes)
+                    </label>
+                    <input
+                      type="text"
+                      value={currentLoginSettings.clientTitle || ''}
+                      onChange={(e) => updateLoginCustomization({ clientTitle: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-semibold text-slate-900 dark:text-white outline-none focus:border-pink-500 transition"
+                      placeholder="Ej. Portal de Clientes"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                      Subtítulo (Clientes)
+                    </label>
+                    <input
+                      type="text"
+                      value={currentLoginSettings.clientSubtitle || ''}
+                      onChange={(e) => updateLoginCustomization({ clientSubtitle: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-semibold text-slate-900 dark:text-white outline-none focus:border-pink-500 transition"
+                      placeholder="Ej. Ingresa con tu PIN o código de acceso de 8 dígitos para consultar tus marcas y proyectos."
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Velocidad de rotación del slider */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
+                    Tiempo de Rotación Automática del Slider
+                  </h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Intervalo en segundos para avanzar al siguiente slide si hay más de una diapositiva.
+                  </p>
+                </div>
+
+                <select
+                  value={currentLoginSettings.sliderIntervalSeconds || 5}
+                  onChange={(e) => updateLoginCustomization({ sliderIntervalSeconds: Number(e.target.value) })}
+                  className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none cursor-pointer"
+                >
+                  <option value={3}>3 segundos (Rápido)</option>
+                  <option value={5}>5 segundos (Recomendado)</option>
+                  <option value={7}>7 segundos (Moderado)</option>
+                  <option value={10}>10 segundos (Pausado)</option>
+                </select>
+              </div>
+
+              {/* Gestor de Diapositivas (Slides) */}
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                      Diapositivas del Slider ({currentLoginSettings.slides?.length || 0})
+                    </h3>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAddLoginSlide}
+                    className="py-1.5 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Agregar Slide</span>
+                  </button>
+                </div>
+
+                {/* Presets de imágenes de alto impacto */}
+                <div className="p-3.5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-800/60 flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold text-indigo-900 dark:text-indigo-300">
+                    Sugerencias Estéticas Rápidas:
+                  </span>
+                  {[
+                    { label: 'Dunas Atardecer', url: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=1200&auto=format&fit=crop' },
+                    { label: 'Montañas & Nubes', url: 'https://images.unsplash.com/photo-1518457607834-6e8d80c183c5?q=80&w=1200&auto=format&fit=crop' },
+                    { label: 'Espacio ROMA', url: '/backgrounds/planet-vertical.png' },
+                    { label: 'Arquitectura Minimalista', url: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=1200&auto=format&fit=crop' },
+                  ].map((p, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        const newSlide: LoginSlide = {
+                          id: `slide-${Date.now()}`,
+                          imageUrl: p.url,
+                          badgeText: 'ROMA Workspace',
+                          title: p.label,
+                          description: 'Entorno de trabajo creativo de alta velocidad.',
+                        };
+                        updateLoginCustomization({
+                          slides: [...(currentLoginSettings.slides || []), newSlide],
+                        });
+                        toast(`Slide "${p.label}" agregado.`);
+                      }}
+                      className="py-1 px-2.5 rounded-lg bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 transition cursor-pointer"
+                    >
+                      + {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Lista de Slides */}
+                <div className="space-y-3">
+                  {(currentLoginSettings.slides || []).map((slide, index) => (
+                    <div
+                      key={slide.id}
+                      className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex flex-col md:flex-row items-start md:items-center gap-4 transition hover:border-slate-300 dark:hover:border-slate-700"
+                    >
+                      {/* Miniatura con Previsualización */}
+                      <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0 bg-black">
+                        <img
+                          src={slide.imageUrl}
+                          alt={slide.title || 'Slide'}
+                          className="w-full h-full object-cover object-center"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/backgrounds/planet-vertical.png';
+                          }}
+                        />
+                        <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-black/70 text-white">
+                          #{index + 1}
+                        </span>
+                      </div>
+
+                      {/* Campos Editables */}
+                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                            URL de la Imagen o Subir Archivo
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={slide.imageUrl}
+                              onChange={(e) => handleUpdateLoginSlide(slide.id, { imageUrl: e.target.value })}
+                              className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-200 outline-none"
+                              placeholder="https://... o /backgrounds/..."
+                            />
+                            <label className="py-1.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-1 shrink-0">
+                              <Upload className="w-3.5 h-3.5 text-indigo-500" />
+                              <span>Subir</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => handleLoginSlideImageUpload(slide.id, e.target.files?.[0])}
+                              />
+                            </label>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                            Insignia Superior (Badge)
+                          </label>
+                          <input
+                            type="text"
+                            value={slide.badgeText || ''}
+                            onChange={(e) => handleUpdateLoginSlide(slide.id, { badgeText: e.target.value })}
+                            className="w-full px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-200 outline-none"
+                            placeholder="Ej. ROMA SaaS"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                            Título Principal del Slide
+                          </label>
+                          <input
+                            type="text"
+                            value={slide.title || ''}
+                            onChange={(e) => handleUpdateLoginSlide(slide.id, { title: e.target.value })}
+                            className="w-full px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-200 outline-none font-semibold"
+                            placeholder="Ej. Sistema Corporativo de Operaciones"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                            Descripción / Subtexto del Slide
+                          </label>
+                          <input
+                            type="text"
+                            value={slide.description || ''}
+                            onChange={(e) => handleUpdateLoginSlide(slide.id, { description: e.target.value })}
+                            className="w-full px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-200 outline-none"
+                            placeholder="Ej. Gestión ágil de proyectos, redes y finanzas."
+                          />
+                        </div>
+                      </div>
+
+                      {/* Acciones de Reordenamiento y Eliminación */}
+                      <div className="flex md:flex-col items-center gap-1.5 shrink-0 self-end md:self-center">
+                        <button
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() => handleMoveLoginSlide(index, 'up')}
+                          title="Subir posición"
+                          className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                        >
+                          <MoveUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={index === (currentLoginSettings.slides?.length || 1) - 1}
+                          onClick={() => handleMoveLoginSlide(index, 'down')}
+                          title="Bajar posición"
+                          className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                        >
+                          <MoveDown className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={(currentLoginSettings.slides?.length || 0) <= 1}
+                          onClick={() => handleDeleteLoginSlide(slide.id)}
+                          title="Eliminar slide"
+                          className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Botón Guardar Personalización del Login */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
+                <button
+                  type="button"
+                  disabled={savingCust}
+                  onClick={handleSaveCustomization}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md transition flex items-center gap-2 cursor-pointer hover:opacity-90 active:scale-95 disabled:opacity-50"
+                  style={{ backgroundColor: 'var(--app-primary)' }}
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{savingCust ? 'Guardando Login...' : 'Guardar Pantalla de Login'}</span>
                 </button>
               </div>
             </div>

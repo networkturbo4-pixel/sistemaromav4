@@ -141,6 +141,8 @@ class DatabaseManager {
                     parsed.workspaceEmailAccounts = [];
                 if (!Array.isArray(parsed.workspaceEmailMessages))
                     parsed.workspaceEmailMessages = [];
+                if (!Array.isArray(parsed.userSessions))
+                    parsed.userSessions = [];
                 // Limpieza automática de artefactos HTML y de IA en copys y briefs existentes
                 let dirtyPostsCleaned = 0;
                 for (const post of parsed.workspacePosts) {
@@ -270,6 +272,7 @@ class DatabaseManager {
             brandGuidelines: [],
             workspaceEmailAccounts: [],
             workspaceEmailMessages: [],
+            userSessions: [],
         };
         return defaultState;
     }
@@ -727,7 +730,7 @@ class DatabaseManager {
     async getUsersByTenant(tenantId) {
         return this.localState.users.filter((u) => u.tenantId === tenantId);
     }
-    async findUserByPin(pin, tenantSlug) {
+    async findUserByPin(pin, tenantSlug, mode = 'personal') {
         let users = this.localState.users.filter((u) => u.pin === pin);
         if (tenantSlug) {
             const tenant = this.localState.tenants.find((t) => t.slug === tenantSlug);
@@ -735,7 +738,32 @@ class DatabaseManager {
                 users = users.filter((u) => u.tenantId === tenant.id);
             }
         }
-        const user = users[0];
+        let user = users[0];
+        if ((!user || mode === 'cliente') && this.localState.clients?.length) {
+            const tenant = tenantSlug
+                ? this.localState.tenants.find((t) => t.slug === tenantSlug)
+                : (user ? this.localState.tenants.find((t) => t.id === user.tenantId) : this.localState.tenants[0]);
+            if (tenant) {
+                const clientMatch = this.localState.clients.find((c) => c.tenantId === tenant.id && (c.documentNumber === pin || c.documentNumber?.replace(/\D/g, '') === pin));
+                if (clientMatch) {
+                    user = {
+                        id: `client-user-${clientMatch.id}`,
+                        tenantId: tenant.id,
+                        roleId: `role-cliente-${tenant.id}`,
+                        name: clientMatch.name,
+                        jobTitle: 'Cliente / Cuenta Asociada',
+                        email: clientMatch.email || `${clientMatch.documentNumber}@cliente.roma`,
+                        whatsapp: clientMatch.whatsapp || '',
+                        pin: pin,
+                        avatarUrl: clientMatch.brands?.[0]?.logoUrl || '',
+                        isActive: clientMatch.status === 'active',
+                        lastLoginAt: new Date().toISOString(),
+                        createdAt: clientMatch.createdAt || new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                    };
+                }
+            }
+        }
         if (!user)
             return null;
         const tenant = this.localState.tenants.find((t) => t.id === user.tenantId);
@@ -744,6 +772,30 @@ class DatabaseManager {
         let role = this.localState.roles.find((r) => r.id === user.roleId && r.tenantId === tenant.id);
         if (!role) {
             role = this.localState.roles.find((r) => r.id === user.roleId);
+        }
+        if (!role && (user.id.startsWith('client-user-') || user.roleId.includes('cliente'))) {
+            role = {
+                id: `role-cliente-${tenant.id}`,
+                tenantId: tenant.id,
+                name: 'Cliente',
+                description: 'Acceso portal cliente a marcas, cotizaciones, órdenes y entregables',
+                badgeColor: '#ec4899',
+                isSystem: true,
+                permissions: [
+                    'dashboard.view',
+                    'clients.view',
+                    'brands.view',
+                    'quotes.view',
+                    'services.view',
+                    'payments.view',
+                    'service_orders.view',
+                    'workspace.view',
+                    'workspace.social.view',
+                    'workspace.meetings.view',
+                ],
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            };
         }
         if (!role) {
             const isLeader = user.id === 'user-roma-01' ||
@@ -822,6 +874,30 @@ class DatabaseManager {
         if (!role) {
             role = this.localState.roles.find((r) => r.id === user.roleId);
         }
+        if (!role && (user.id.startsWith('client-user-') || user.roleId.includes('cliente'))) {
+            role = {
+                id: `role-cliente-${tenant.id}`,
+                tenantId: tenant.id,
+                name: 'Cliente',
+                description: 'Acceso portal cliente a marcas, cotizaciones, órdenes y entregables',
+                badgeColor: '#ec4899',
+                isSystem: true,
+                permissions: [
+                    'dashboard.view',
+                    'clients.view',
+                    'brands.view',
+                    'quotes.view',
+                    'services.view',
+                    'payments.view',
+                    'service_orders.view',
+                    'workspace.view',
+                    'workspace.social.view',
+                    'workspace.meetings.view',
+                ],
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            };
+        }
         if (!role) {
             const isLeader = user.id === 'user-roma-01' ||
                 user.id === 'user-admin-mv8hkjro' ||
@@ -881,6 +957,98 @@ class DatabaseManager {
             }
         }
         return { user, tenant, role };
+    }
+    async createUserSession(data) {
+        const now = new Date().toISOString();
+        const newSession = {
+            id: `session-${generateToken(8)}`,
+            userId: data.userId,
+            tenantId: data.tenantId,
+            token: data.token,
+            deviceName: data.deviceName || 'Dispositivo',
+            deviceType: data.deviceType || 'desktop',
+            browser: data.browser || 'Web',
+            os: data.os || 'Sistema',
+            ipAddress: data.ipAddress || '',
+            createdAt: now,
+            lastActiveAt: now,
+            isActive: true,
+        };
+        if (!Array.isArray(this.localState.userSessions)) {
+            this.localState.userSessions = [];
+        }
+        // Regla corporativa de seguridad: Límite de 3 dispositivos en simultáneo por usuario
+        const MAX_CONCURRENT_SESSIONS = 3;
+        const userActiveSessions = this.localState.userSessions.filter((s) => s.userId === data.userId && s.isActive);
+        if (userActiveSessions.length >= MAX_CONCURRENT_SESSIONS) {
+            userActiveSessions.sort((a, b) => new Date(a.lastActiveAt).getTime() - new Date(b.lastActiveAt).getTime());
+            const toDeactivate = userActiveSessions.length - MAX_CONCURRENT_SESSIONS + 1;
+            for (let i = 0; i < toDeactivate; i++) {
+                userActiveSessions[i].isActive = false;
+            }
+        }
+        this.localState.userSessions.push(newSession);
+        this.saveLocalState();
+        return newSession;
+    }
+    async getUserSessions(userId) {
+        if (!Array.isArray(this.localState.userSessions))
+            return [];
+        return this.localState.userSessions
+            .filter((s) => s.userId === userId && s.isActive)
+            .sort((a, b) => new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime());
+    }
+    async isSessionActive(token, sessionId) {
+        if (!Array.isArray(this.localState.userSessions))
+            return true;
+        const session = this.localState.userSessions.find((s) => (sessionId ? s.id === sessionId : s.token === token));
+        if (!session) {
+            return true;
+        }
+        if (!session.isActive)
+            return false;
+        const now = Date.now();
+        const last = new Date(session.lastActiveAt).getTime();
+        if (now - last > 60 * 1000) {
+            session.lastActiveAt = new Date().toISOString();
+            this.saveLocalState();
+        }
+        return true;
+    }
+    async revokeSession(sessionId, userId) {
+        if (!Array.isArray(this.localState.userSessions))
+            return false;
+        const session = this.localState.userSessions.find((s) => s.id === sessionId && s.userId === userId);
+        if (!session)
+            return false;
+        session.isActive = false;
+        this.saveLocalState();
+        return true;
+    }
+    async revokeOtherSessions(userId, currentSessionId, currentToken) {
+        if (!Array.isArray(this.localState.userSessions))
+            return 0;
+        let count = 0;
+        for (const session of this.localState.userSessions) {
+            const isCurrent = (currentSessionId && session.id === currentSessionId) || (currentToken && session.token === currentToken);
+            if (session.userId === userId && !isCurrent && session.isActive) {
+                session.isActive = false;
+                count++;
+            }
+        }
+        if (count > 0)
+            this.saveLocalState();
+        return count;
+    }
+    async revokeSessionByToken(token) {
+        if (!Array.isArray(this.localState.userSessions))
+            return false;
+        const session = this.localState.userSessions.find((s) => s.token === token);
+        if (!session)
+            return false;
+        session.isActive = false;
+        this.saveLocalState();
+        return true;
     }
     async createUser(tenantId, data) {
         const now = new Date().toISOString();

@@ -29,6 +29,23 @@ export type AppFontFamily =
   | 'Outfit'
   | 'Poppins';
 
+export interface LoginSlide {
+  id: string;
+  imageUrl: string;
+  badgeText?: string;
+  title?: string;
+  description?: string;
+}
+
+export interface LoginCustomization {
+  title?: string;
+  subtitle?: string;
+  clientTitle?: string;
+  clientSubtitle?: string;
+  slides?: LoginSlide[];
+  sliderIntervalSeconds?: number;
+}
+
 export interface TenantCustomization {
   /** Nombre global con el que se nombra al módulo de clientes (ej: "Clientes", "Cuentas", "Socios", "Marcas Aliadas") */
   clientGlobalNamePlural: string;
@@ -63,6 +80,7 @@ export interface TenantCustomization {
   };
   /** Estilo de Modal de Confirmación */
   confirmModalStyle: ConfirmModalStyleVariant;
+  loginSettings?: LoginCustomization;
 }
 
 export interface CompanySocialLinks {
@@ -176,6 +194,21 @@ export interface User {
   updatedAt: string;
 }
 
+export interface UserSession {
+  id: string;
+  userId: string;
+  tenantId: string;
+  token: string;
+  deviceName: string;
+  deviceType: 'desktop' | 'mobile' | 'tablet';
+  browser: string;
+  os: string;
+  ipAddress?: string;
+  createdAt: string;
+  lastActiveAt: string;
+  isActive: boolean;
+}
+
 export interface ClientBrand {
   id: string;
   tenantId: string;
@@ -251,6 +284,36 @@ export const DEFAULT_CUSTOMIZATION: TenantCustomization = {
     mobile: 'top-center',
   },
   confirmModalStyle: 'modern-center',
+  loginSettings: {
+    title: 'Accede a tu Espacio Corporativo',
+    subtitle: 'Ingresa con tu PIN asignado de 8 dígitos para iniciar tu jornada.',
+    clientTitle: 'Portal de Clientes',
+    clientSubtitle: 'Ingresa con tu PIN o código de acceso de 8 dígitos para consultar tus marcas y proyectos.',
+    sliderIntervalSeconds: 5,
+    slides: [
+      {
+        id: 'slide-1',
+        imageUrl: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=1200&auto=format&fit=crop',
+        badgeText: 'ROMA SaaS',
+        title: 'Sistema Corporativo de Operaciones & Creatividad',
+        description: 'Gestión integral de proyectos, redes y finanzas.',
+      },
+      {
+        id: 'slide-2',
+        imageUrl: 'https://images.unsplash.com/photo-1518457607834-6e8d80c183c5?q=80&w=1200&auto=format&fit=crop',
+        badgeText: 'Creatividad',
+        title: 'Flujos de Trabajo Dinámicos y Entregables',
+        description: 'Conexión en tiempo real entre colaboradores y clientes.',
+      },
+      {
+        id: 'slide-3',
+        imageUrl: '/backgrounds/planet-vertical.png',
+        badgeText: 'Workspace PRO',
+        title: 'Innovación, Diseño e Impacto Real',
+        description: 'Plataforma corporativa de alto rendimiento.',
+      },
+    ],
+  },
 };
 
 export const DEFAULT_COMPANY_INFO: CompanyInfo = {

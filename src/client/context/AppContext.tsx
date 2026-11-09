@@ -93,8 +93,9 @@ interface AppContextValue {
   setThemeMode: (mode: ThemeMode) => void;
   toggleQuickTheme: () => void;
   saveUserThemePreference: (pref: UserThemePreference | null) => Promise<void>;
-  loginWithPin: (pin: string, tenantSlug?: string) => Promise<void>;
-  logout: () => void;
+  loginWithPin: (pin: string, tenantSlug?: string, mode?: 'personal' | 'cliente') => Promise<void>;
+  logout: (reason?: string) => void;
+  updateCurrentUser: (updatedUser: Partial<User>) => void;
   refreshSession: (options?: { silent?: boolean }) => Promise<void>;
   switchTenant: (targetTenantId: string) => Promise<void>;
   tenantsList: TenantSummary[];
@@ -868,10 +869,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [tenant.id, apiFetch, toast, loadTenantsList]
   );
 
-  const loginWithPin = async (pin: string, tenantSlug?: string) => {
+  const loginWithPin = async (pin: string, tenantSlug?: string, mode: 'personal' | 'cliente' = 'personal') => {
     const data = await apiFetch('/api/auth/login-pin', {
       method: 'POST',
-      body: JSON.stringify({ pin, tenantSlug }),
+      body: JSON.stringify({ pin, tenantSlug, mode }),
     });
     localStorage.setItem('roma_saas_token', data.token);
     setToken(data.token);
@@ -884,15 +885,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loadTenantsList();
   };
 
-  const logout = () => {
+  const logout = useCallback((reason?: string) => {
+    try {
+      const currentToken = localStorage.getItem('roma_saas_token');
+      if (currentToken) {
+        fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${currentToken}` },
+        }).catch(() => {});
+      }
+    } catch {}
     localStorage.removeItem('roma_saas_token');
     setToken(null);
     setUser(null);
     setRole(null);
     setAttendanceCheck(null);
     setUserThemePreference(null);
-    toast('Sesión finalizada correctamente', 'info');
-  };
+    if (reason) {
+      toast(reason, 'warning');
+    } else {
+      toast('Sesión finalizada correctamente', 'info');
+    }
+  }, [toast]);
+
+  const updateCurrentUser = useCallback((updatedUser: Partial<User>) => {
+    setUser((prev) => (prev ? { ...prev, ...updatedUser } : null));
+  }, []);
+
+  // Detección de inactividad de 30 minutos con cierre automático de sesión por seguridad
+  useEffect(() => {
+    if (!user || !token) return;
+
+    const INACTIVITY_LIMIT_MS = 30 * 60 * 1000; // 30 minutos
+    let lastActivityTime = Date.now();
+
+    const recordActivity = () => {
+      lastActivityTime = Date.now();
+    };
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    events.forEach((evt) => window.addEventListener(evt, recordActivity, { passive: true }));
+
+    const checkInterval = setInterval(() => {
+      const inactiveDuration = Date.now() - lastActivityTime;
+      if (inactiveDuration >= INACTIVITY_LIMIT_MS) {
+        logout('Tu sesión se cerró automáticamente por inactividad (30 min) para proteger tu cuenta.');
+      }
+    }, 30 * 1000);
+
+    return () => {
+      events.forEach((evt) => window.removeEventListener(evt, recordActivity));
+      clearInterval(checkInterval);
+    };
+  }, [user, token, logout]);
 
   const updateTenantState = (updatedTenant: Tenant) => {
     setTenant(updatedTenant);
@@ -1350,6 +1395,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         saveUserThemePreference,
         loginWithPin,
         logout,
+        updateCurrentUser,
         refreshSession,
         switchTenant,
         tenantsList,
