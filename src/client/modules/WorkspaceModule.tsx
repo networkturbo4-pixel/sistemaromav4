@@ -54,7 +54,59 @@ import { DriveFolderUploadModal } from './workspace/modals/DriveFolderUploadModa
 import { X } from 'lucide-react';
 
 export const WorkspaceModule: React.FC = () => {
-  const { tenant, user, toast, confirmAction, apiFetch } = useApp();
+  const { tenant, user, toast, confirmAction, apiFetch, can } = useApp();
+
+  const isSuperAdmin = user?.role === 'superadmin' || user?.role === 'admin';
+
+  const canAccessSocial =
+    isSuperAdmin ||
+    can('workspace.social.view') ||
+    can('workspace.social.manage') ||
+    can('workspace.view');
+
+  const canAccessTasks =
+    isSuperAdmin ||
+    can('workspace.tasks.view') ||
+    can('workspace.tasks.manage') ||
+    can('workspace.view');
+
+  const canAccessDrive = isSuperAdmin || can('drive.view');
+
+  const canAccessTools =
+    isSuperAdmin ||
+    can('workspace.tools.view') ||
+    can('workspace.tools.manage') ||
+    can('workspace.view');
+
+  const canAccessForms =
+    isSuperAdmin ||
+    can('workspace.forms.view') ||
+    can('workspace.forms.manage') ||
+    can('workspace.view');
+
+  const canAccessMeetings =
+    isSuperAdmin ||
+    can('workspace.meetings.view') ||
+    can('workspace.meetings.manage') ||
+    can('workspace.view');
+
+  const canAccessWhiteboards =
+    isSuperAdmin ||
+    can('workspace.whiteboards.view') ||
+    can('workspace.whiteboards.manage') ||
+    can('workspace.view');
+
+  const canAccessBrandGuidelines =
+    isSuperAdmin ||
+    can('workspace.brand_guidelines.view') ||
+    can('workspace.brand_guidelines.manage') ||
+    can('workspace.view');
+
+  const canAccessRomita = isSuperAdmin || can('romita.view') || can('workspace.view');
+  const canAccessEmails = isSuperAdmin || can('emails.view') || can('workspace.view');
+
+  const canViewClients = isSuperAdmin || can('clients.view') || can('workspace.view');
+  const canViewServiceOrders = isSuperAdmin || can('service_orders.view') || can('workspace.view');
 
   // Nivel 0: Navegación de Submódulos ('hub', 'social', 'tasks', 'drive', 'tools', 'forms', 'meetings', 'whiteboards', 'brand-guidelines', 'romita')
   const [currentView, setCurrentView] = useState<'hub' | 'social' | 'tasks' | 'drive' | 'tools' | 'forms' | 'meetings' | 'whiteboards' | 'brand-guidelines' | 'romita' | 'emails'>('hub');
@@ -147,16 +199,34 @@ export const WorkspaceModule: React.FC = () => {
         meetingsRes,
         whiteboardsRes,
       ] = await Promise.all([
-        apiFetch<{ clients: Client[] }>('/api/clients').catch(() => ({ clients: [] })),
+        canViewClients
+          ? apiFetch<{ clients: Client[] }>('/api/clients').catch(() => ({ clients: [] }))
+          : Promise.resolve({ clients: [] }),
         apiFetch<{ users: UserType[] }>('/api/settings/users').catch(() => ({ users: [] })),
-        apiFetch<{ posts: WorkspacePost[] }>('/api/workspace/posts').catch(() => ({ posts: [] })),
-        apiFetch<{ tasks: WorkspaceTask[] }>('/api/workspace/tasks').catch(() => ({ tasks: [] })),
-        apiFetch<{ projects: WorkspaceProject[] }>('/api/workspace/projects').catch(() => ({ projects: [] })),
-        apiFetch<{ serviceOrders?: ServiceOrder[]; orders?: ServiceOrder[] }>('/api/service-orders').catch(() => ({ serviceOrders: [], orders: [] })),
-        apiFetch<{ months: WorkspaceMonth[] }>('/api/workspace/months').catch(() => ({ months: [] })),
-        apiFetch<{ forms: WorkspaceForm[] }>('/api/workspace/forms').catch(() => ({ forms: [] })),
-        apiFetch<{ meetings: WorkspaceMeeting[] }>('/api/workspace/meetings').catch(() => ({ meetings: [] })),
-        apiFetch<{ whiteboards: Whiteboard[] }>('/api/workspace/whiteboards').catch(() => ({ whiteboards: [] })),
+        canAccessSocial
+          ? apiFetch<{ posts: WorkspacePost[] }>('/api/workspace/posts').catch(() => ({ posts: [] }))
+          : Promise.resolve({ posts: [] }),
+        canAccessTasks
+          ? apiFetch<{ tasks: WorkspaceTask[] }>('/api/workspace/tasks').catch(() => ({ tasks: [] }))
+          : Promise.resolve({ tasks: [] }),
+        canAccessSocial
+          ? apiFetch<{ projects: WorkspaceProject[] }>('/api/workspace/projects').catch(() => ({ projects: [] }))
+          : Promise.resolve({ projects: [] }),
+        canViewServiceOrders
+          ? apiFetch<{ serviceOrders?: ServiceOrder[]; orders?: ServiceOrder[] }>('/api/service-orders').catch(() => ({ serviceOrders: [], orders: [] }))
+          : Promise.resolve({ serviceOrders: [], orders: [] }),
+        canAccessSocial
+          ? apiFetch<{ months: WorkspaceMonth[] }>('/api/workspace/months').catch(() => ({ months: [] }))
+          : Promise.resolve({ months: [] }),
+        canAccessForms
+          ? apiFetch<{ forms: WorkspaceForm[] }>('/api/workspace/forms').catch(() => ({ forms: [] }))
+          : Promise.resolve({ forms: [] }),
+        canAccessMeetings
+          ? apiFetch<{ meetings: WorkspaceMeeting[] }>('/api/workspace/meetings').catch(() => ({ meetings: [] }))
+          : Promise.resolve({ meetings: [] }),
+        canAccessWhiteboards
+          ? apiFetch<{ whiteboards: Whiteboard[] }>('/api/workspace/whiteboards').catch(() => ({ whiteboards: [] }))
+          : Promise.resolve({ whiteboards: [] }),
       ]);
       setClients(clientsRes.clients || []);
       setTeamUsers(usersRes.users || []);
@@ -178,6 +248,32 @@ export const WorkspaceModule: React.FC = () => {
   useEffect(() => {
     loadInitialData();
   }, []);
+
+  // Redirigir a 'hub' si el usuario no tiene permiso para el submódulo actual
+  useEffect(() => {
+    if (currentView === 'social' && !canAccessSocial) setCurrentView('hub');
+    else if (currentView === 'tasks' && !canAccessTasks) setCurrentView('hub');
+    else if (currentView === 'drive' && !canAccessDrive) setCurrentView('hub');
+    else if (currentView === 'tools' && !canAccessTools) setCurrentView('hub');
+    else if (currentView === 'forms' && !canAccessForms) setCurrentView('hub');
+    else if (currentView === 'meetings' && !canAccessMeetings) setCurrentView('hub');
+    else if (currentView === 'whiteboards' && !canAccessWhiteboards) setCurrentView('hub');
+    else if (currentView === 'brand-guidelines' && !canAccessBrandGuidelines) setCurrentView('hub');
+    else if (currentView === 'romita' && !canAccessRomita) setCurrentView('hub');
+    else if (currentView === 'emails' && !canAccessEmails) setCurrentView('hub');
+  }, [
+    currentView,
+    canAccessSocial,
+    canAccessTasks,
+    canAccessDrive,
+    canAccessTools,
+    canAccessForms,
+    canAccessMeetings,
+    canAccessWhiteboards,
+    canAccessBrandGuidelines,
+    canAccessRomita,
+    canAccessEmails,
+  ]);
 
   // Escuchar evento personalizado desde el sidebar o AppShell
   useEffect(() => {

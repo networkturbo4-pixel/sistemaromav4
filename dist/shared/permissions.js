@@ -206,9 +206,23 @@ exports.PERMISSIONS_CATALOG = [
         moduleLabel: 'Workspace Operativo',
     },
     {
+        key: 'workspace.social.view',
+        label: 'Ver Redes Sociales & Calendario',
+        description: 'Visualizar proyectos de redes sociales, campañas, meses y publicaciones programadas.',
+        module: 'workspace',
+        moduleLabel: 'Workspace Operativo',
+    },
+    {
         key: 'workspace.social.manage',
         label: 'Gestionar Contenidos de Redes Sociales',
         description: 'Crear, programar, editar copies, estados y responsables de publicaciones de redes.',
+        module: 'workspace',
+        moduleLabel: 'Workspace Operativo',
+    },
+    {
+        key: 'workspace.tasks.view',
+        label: 'Ver Tablero de Tareas',
+        description: 'Consultar las tareas asignadas y el tablero Kanban operativo del equipo.',
         module: 'workspace',
         moduleLabel: 'Workspace Operativo',
     },
@@ -220,9 +234,23 @@ exports.PERMISSIONS_CATALOG = [
         moduleLabel: 'Workspace Operativo',
     },
     {
+        key: 'workspace.tools.view',
+        label: 'Ver Herramientas Creativas',
+        description: 'Visualizar generadores de paletas de color, códigos QR, códigos de barras y Biolinks.',
+        module: 'workspace',
+        moduleLabel: 'Workspace Operativo',
+    },
+    {
         key: 'workspace.tools.manage',
         label: 'Gestionar Herramientas Creativas (Paletas, Códigos y Biolinks)',
         description: 'Generar y exportar paletas de color, códigos QR, códigos de barras y administrar perfiles de Biolink.',
+        module: 'workspace',
+        moduleLabel: 'Workspace Operativo',
+    },
+    {
+        key: 'workspace.forms.view',
+        label: 'Ver Formularios Interactivos',
+        description: 'Consultar formularios y respuestas recibidas de clientes.',
         module: 'workspace',
         moduleLabel: 'Workspace Operativo',
     },
@@ -258,6 +286,20 @@ exports.PERMISSIONS_CATALOG = [
         key: 'workspace.whiteboards.manage',
         label: 'Gestionar Pizarras y Lienzos',
         description: 'Crear, editar, diseñar con herramientas visuales, exportar y compartir pizarras.',
+        module: 'workspace',
+        moduleLabel: 'Workspace Operativo',
+    },
+    {
+        key: 'workspace.brand_guidelines.view',
+        label: 'Ver Manuales de Marca',
+        description: 'Consultar manuales de identidad visual, logos, tipografías y recursos de marca.',
+        module: 'workspace',
+        moduleLabel: 'Workspace Operativo',
+    },
+    {
+        key: 'workspace.brand_guidelines.manage',
+        label: 'Gestionar Manuales de Marca',
+        description: 'Crear, editar y publicar directrices y manuales de marca interactivos.',
         module: 'workspace',
         moduleLabel: 'Workspace Operativo',
     },
@@ -486,7 +528,59 @@ function hasPermission(grantedPermissions, requiredPermission) {
         return false;
     if (grantedPermissions.includes('*'))
         return true;
-    return grantedPermissions.includes(requiredPermission);
+    if (grantedPermissions.includes(requiredPermission))
+        return true;
+    // Si tiene cualquier permiso de workspace, se le permite acceso a la navegación general de workspace
+    if (requiredPermission === 'workspace.view' &&
+        grantedPermissions.some((p) => p.startsWith('workspace.'))) {
+        return true;
+    }
+    // Si tiene cualquier permiso de administración, se le permite acceso a la navegación general de administración
+    if (requiredPermission === 'administration.view' &&
+        grantedPermissions.some((p) => p.startsWith('administration.'))) {
+        return true;
+    }
+    // Herencia y coherencia entre gestión (manage) y visualización (view) de submódulos
+    if (requiredPermission === 'workspace.social.view' &&
+        (grantedPermissions.includes('workspace.social.manage') ||
+            grantedPermissions.includes('workspace.view')))
+        return true;
+    if (requiredPermission === 'workspace.tasks.view' &&
+        (grantedPermissions.includes('workspace.tasks.manage') ||
+            grantedPermissions.includes('workspace.view')))
+        return true;
+    if (requiredPermission === 'workspace.tools.view' &&
+        (grantedPermissions.includes('workspace.tools.manage') ||
+            grantedPermissions.includes('workspace.view')))
+        return true;
+    if (requiredPermission === 'workspace.forms.view' &&
+        (grantedPermissions.includes('workspace.forms.manage') ||
+            grantedPermissions.includes('workspace.view')))
+        return true;
+    if (requiredPermission === 'workspace.meetings.view' &&
+        (grantedPermissions.includes('workspace.meetings.manage') ||
+            grantedPermissions.includes('workspace.view')))
+        return true;
+    if (requiredPermission === 'workspace.whiteboards.view' &&
+        (grantedPermissions.includes('workspace.whiteboards.manage') ||
+            grantedPermissions.includes('workspace.view')))
+        return true;
+    if (requiredPermission === 'workspace.brand_guidelines.view' &&
+        (grantedPermissions.includes('workspace.brand_guidelines.manage') ||
+            grantedPermissions.includes('workspace.view')))
+        return true;
+    if (requiredPermission === 'administration.hr.view' &&
+        (grantedPermissions.includes('administration.hr.manage') ||
+            grantedPermissions.includes('administration.attendance.record') ||
+            grantedPermissions.includes('administration.attendance.manage')))
+        return true;
+    if (requiredPermission === 'administration.finances.view' &&
+        grantedPermissions.includes('administration.finances.manage'))
+        return true;
+    if (requiredPermission === 'administration.accounting.view' &&
+        grantedPermissions.includes('administration.accounting.manage'))
+        return true;
+    return false;
 }
 /**
  * Evalúa si el usuario posee al menos uno de los permisos indicados.

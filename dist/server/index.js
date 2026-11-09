@@ -533,7 +533,7 @@ app.post('/api/notifications/notify', auth_1.requireAuth, async (req, res) => {
 // =============================================================================
 // 3. PRIMER MÓDULO: CLIENTES Y MARCAS ASIGNADAS (MULTITENANT + PERMISOS)
 // =============================================================================
-app.get('/api/clients', auth_1.requireAuth, (0, auth_1.requirePermission)('clients.view'), async (req, res) => {
+app.get('/api/clients', auth_1.requireAuth, (0, auth_1.requireAnyPermission)(['clients.view', 'workspace.view', 'quotes.view', 'payments.view', 'service_orders.view']), async (req, res) => {
     try {
         const clients = await db_1.db.getClientsByTenant(req.auth.tenant.id);
         res.json({ clients });
@@ -1934,7 +1934,7 @@ app.post('/api/workspace/meetings/generate-meet-link', auth_1.requireAuth, (0, a
 // MÓDULO DE ADMINISTRACIÓN (RRHH, FINANZAS Y CONTABILIDAD)
 // =============================================================================
 // --- RECURSOS HUMANOS: CONFIGURACIÓN GLOBAL ---
-app.get('/api/administration/hr/settings', auth_1.requireAuth, (0, auth_1.requirePermission)('administration.view'), async (req, res) => {
+app.get('/api/administration/hr/settings', auth_1.requireAuth, (0, auth_1.requireAnyPermission)(['administration.hr.view', 'administration.hr.manage']), async (req, res) => {
     try {
         const settings = await db_1.db.getHrSettings(req.auth.tenant.id);
         res.json({ settings });
@@ -1953,7 +1953,7 @@ app.put('/api/administration/hr/settings', auth_1.requireAuth, (0, auth_1.requir
     }
 });
 // --- RECURSOS HUMANOS: EMPLEADOS Y PERSONAL ---
-app.get('/api/administration/hr/employees', auth_1.requireAuth, (0, auth_1.requirePermission)('administration.view'), async (req, res) => {
+app.get('/api/administration/hr/employees', auth_1.requireAuth, (0, auth_1.requireAnyPermission)(['administration.hr.view', 'administration.hr.manage']), async (req, res) => {
     try {
         const employees = await db_1.db.getEmployeeProfiles(req.auth.tenant.id);
         res.json({ employees });
@@ -2113,7 +2113,12 @@ app.post('/api/administration/hr/attendance/stamp', auth_1.requireAuth, async (r
     }
 });
 // Historial completo de asistencias para el dashboard de RRHH
-app.get('/api/administration/hr/attendance', auth_1.requireAuth, (0, auth_1.requirePermission)('administration.view'), async (req, res) => {
+app.get('/api/administration/hr/attendance', auth_1.requireAuth, (0, auth_1.requireAnyPermission)([
+    'administration.hr.view',
+    'administration.hr.manage',
+    'administration.attendance.manage',
+    'administration.attendance.record',
+]), async (req, res) => {
     try {
         const { userId, date, month, status } = req.query;
         const records = await db_1.db.getAttendanceRecords(req.auth.tenant.id, {
@@ -2138,7 +2143,7 @@ app.put('/api/administration/hr/attendance/:id', auth_1.requireAuth, (0, auth_1.
     }
 });
 // --- SUBMÓDULO: FINANZAS ---
-app.get('/api/administration/finances', auth_1.requireAuth, (0, auth_1.requirePermission)('administration.view'), async (req, res) => {
+app.get('/api/administration/finances', auth_1.requireAuth, (0, auth_1.requireAnyPermission)(['administration.finances.view', 'administration.finances.manage']), async (req, res) => {
     try {
         const { type, category, startDate, endDate } = req.query;
         const transactions = await db_1.db.getFinanceTransactions(req.auth.tenant.id, {
@@ -2192,7 +2197,7 @@ app.delete('/api/administration/finances/:id', auth_1.requireAuth, (0, auth_1.re
     }
 });
 // --- SUBMÓDULO: CONTABILIDAD ---
-app.get('/api/administration/accounting', auth_1.requireAuth, (0, auth_1.requirePermission)('administration.view'), async (req, res) => {
+app.get('/api/administration/accounting', auth_1.requireAuth, (0, auth_1.requireAnyPermission)(['administration.accounting.view', 'administration.accounting.manage']), async (req, res) => {
     try {
         const { status, startDate, endDate } = req.query;
         const entries = await db_1.db.getAccountingEntries(req.auth.tenant.id, {
@@ -2228,7 +2233,7 @@ app.delete('/api/administration/accounting/:id', auth_1.requireAuth, (0, auth_1.
 // MÓDULO DE ÓRDENES DE SERVICIO (OS)
 // =============================================================================
 // Listar órdenes de servicio
-app.get('/api/service-orders', auth_1.requireAuth, (0, auth_1.requirePermission)('service_orders.view'), async (req, res) => {
+app.get('/api/service-orders', auth_1.requireAuth, (0, auth_1.requireAnyPermission)(['service_orders.view', 'workspace.view', 'payments.view', 'quotes.view']), async (req, res) => {
     try {
         const clientId = req.query.clientId;
         const orders = await db_1.db.getServiceOrders(req.auth.tenant.id, clientId);

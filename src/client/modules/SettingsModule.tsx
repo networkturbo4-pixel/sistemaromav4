@@ -1482,6 +1482,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     service_orders: PERMISSIONS_CATALOG.filter((p) => p.module === 'service_orders'),
     workspace: PERMISSIONS_CATALOG.filter((p) => p.module === 'workspace'),
     drive: PERMISSIONS_CATALOG.filter((p) => p.module === 'drive'),
+    administration: PERMISSIONS_CATALOG.filter((p) => p.module === 'administration'),
     settings: PERMISSIONS_CATALOG.filter((p) => p.module === 'settings'),
   };
 
@@ -5417,6 +5418,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                   { id: 'service_orders', label: 'Órdenes OS' },
                   { id: 'workspace', label: 'Workspace' },
                   { id: 'drive', label: 'Google Drive' },
+                  { id: 'administration', label: 'Administración' },
                   { id: 'settings', label: 'Configuración' },
                 ].map((tab) => {
                   const isActive = roleModuleFilter === tab.id;
@@ -5504,6 +5506,14 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                       icon: HardDrive,
                       color: 'text-blue-500',
                       bg: 'bg-blue-500/10',
+                    },
+                    {
+                      key: 'administration',
+                      title: 'Administración (RRHH, Finanzas & Contabilidad)',
+                      items: groupedPermissions.administration,
+                      icon: Building2,
+                      color: 'text-purple-500',
+                      bg: 'bg-purple-500/10',
                     },
                     {
                       key: 'settings',

@@ -263,8 +263,12 @@ export const DriveModule: React.FC<DriveModuleProps> = ({ onBack }) => {
         fetch(`/api/drive/files${syncQuery}`, { headers }).then((r) => r.json()).catch(() => ({ files: [] })),
         fetch(`/api/drive/folders${syncQuery}`, { headers }).then((r) => r.json()).catch(() => ({ folders: [] })),
         fetch('/api/drive/blueprints', { headers }).then((r) => r.json()).catch(() => ({ blueprints: [] })),
-        fetch('/api/clients', { headers }).then((r) => r.json()).catch(() => ({ clients: [] })),
-        fetch('/api/service-orders', { headers }).then((r) => r.json()).catch(() => ({ orders: [] })),
+        can('clients.view') || can('workspace.view')
+          ? fetch('/api/clients', { headers }).then((r) => r.json()).catch(() => ({ clients: [] }))
+          : Promise.resolve({ clients: [] }),
+        can('service_orders.view') || can('workspace.view')
+          ? fetch('/api/service-orders', { headers }).then((r) => r.json()).catch(() => ({ orders: [] }))
+          : Promise.resolve({ orders: [] }),
       ]);
 
       if (statusRes) setConnectionStatus(statusRes);

@@ -41,7 +41,7 @@ export const QuickOnboardingCreatorModal: React.FC<QuickOnboardingCreatorModalPr
   onClose,
   onNavigate,
 }) => {
-  const { tenant, apiFetch, toast } = useApp();
+  const { tenant, apiFetch, toast, can } = useApp();
 
   // Paso actual del wizard: 1 = Cliente/Marca, 2 = Servicio/Membresía, 3 = OS & Pago, 4 = Resultado Exitoso
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -115,8 +115,12 @@ export const QuickOnboardingCreatorModal: React.FC<QuickOnboardingCreatorModalPr
     if (!isOpen) return;
     setLoadingData(true);
     Promise.all([
-      apiFetch<{ clients: Client[] }>('/api/clients').catch(() => ({ clients: [] })),
-      apiFetch<{ services: Service[] }>('/api/services').catch(() => ({ services: [] })),
+      can('clients.view') || can('workspace.view')
+        ? apiFetch<{ clients: Client[] }>('/api/clients').catch(() => ({ clients: [] }))
+        : Promise.resolve({ clients: [] }),
+      can('services.view')
+        ? apiFetch<{ services: Service[] }>('/api/services').catch(() => ({ services: [] }))
+        : Promise.resolve({ services: [] }),
     ])
       .then(([clientsRes, servicesRes]) => {
         setClients(clientsRes.clients || []);

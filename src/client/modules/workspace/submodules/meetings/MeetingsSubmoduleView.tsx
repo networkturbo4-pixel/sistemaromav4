@@ -28,7 +28,7 @@ interface MeetingsSubmoduleViewProps {
 }
 
 export const MeetingsSubmoduleView: React.FC<MeetingsSubmoduleViewProps> = ({ onBackToHub }) => {
-  const { apiFetch, toast, confirmAction } = useApp();
+  const { apiFetch, toast, confirmAction, can } = useApp();
   const [activeTab, setActiveTab] = useState<'rooms' | 'meetings'>('rooms');
   const [rooms, setRooms] = useState<WorkspaceMeetingRoom[]>([]);
   const [meetings, setMeetings] = useState<WorkspaceMeeting[]>([]);
@@ -48,7 +48,9 @@ export const MeetingsSubmoduleView: React.FC<MeetingsSubmoduleViewProps> = ({ on
       const [roomsRes, meetingsRes, clientsRes, usersRes] = await Promise.all([
         apiFetch<{ rooms: WorkspaceMeetingRoom[] }>('/api/workspace/meeting-rooms').catch(() => ({ rooms: [] })),
         apiFetch<{ meetings: WorkspaceMeeting[] }>('/api/workspace/meetings').catch(() => ({ meetings: [] })),
-        apiFetch<{ clients: Client[] }>('/api/clients').catch(() => ({ clients: [] })),
+        can('clients.view') || can('workspace.view')
+          ? apiFetch<{ clients: Client[] }>('/api/clients').catch(() => ({ clients: [] }))
+          : Promise.resolve({ clients: [] }),
         apiFetch<{ users: UserType[] }>('/api/settings/users').catch(() => ({ users: [] })),
       ]);
 

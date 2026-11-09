@@ -639,7 +639,7 @@ app.post(
 app.get(
   '/api/clients',
   requireAuth,
-  requirePermission('clients.view'),
+  requireAnyPermission(['clients.view', 'workspace.view', 'quotes.view', 'payments.view', 'service_orders.view']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const clients = await db.getClientsByTenant(req.auth!.tenant.id);
@@ -2512,7 +2512,7 @@ app.post(
 app.get(
   '/api/administration/hr/settings',
   requireAuth,
-  requirePermission('administration.view'),
+  requireAnyPermission(['administration.hr.view', 'administration.hr.manage']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const settings = await db.getHrSettings(req.auth!.tenant.id);
@@ -2541,7 +2541,7 @@ app.put(
 app.get(
   '/api/administration/hr/employees',
   requireAuth,
-  requirePermission('administration.view'),
+  requireAnyPermission(['administration.hr.view', 'administration.hr.manage']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const employees = await db.getEmployeeProfiles(req.auth!.tenant.id);
@@ -2777,7 +2777,12 @@ app.post(
 app.get(
   '/api/administration/hr/attendance',
   requireAuth,
-  requirePermission('administration.view'),
+  requireAnyPermission([
+    'administration.hr.view',
+    'administration.hr.manage',
+    'administration.attendance.manage',
+    'administration.attendance.record',
+  ]),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { userId, date, month, status } = req.query as Record<string, string | undefined>;
@@ -2812,7 +2817,7 @@ app.put(
 app.get(
   '/api/administration/finances',
   requireAuth,
-  requirePermission('administration.view'),
+  requireAnyPermission(['administration.finances.view', 'administration.finances.manage']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { type, category, startDate, endDate } = req.query as Record<string, string | undefined>;
@@ -2891,7 +2896,7 @@ app.delete(
 app.get(
   '/api/administration/accounting',
   requireAuth,
-  requirePermission('administration.view'),
+  requireAnyPermission(['administration.accounting.view', 'administration.accounting.manage']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { status, startDate, endDate } = req.query as Record<string, string | undefined>;
@@ -2943,7 +2948,7 @@ app.delete(
 app.get(
   '/api/service-orders',
   requireAuth,
-  requirePermission('service_orders.view'),
+  requireAnyPermission(['service_orders.view', 'workspace.view', 'payments.view', 'quotes.view']),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const clientId = req.query.clientId as string | undefined;

@@ -38,7 +38,26 @@ import { EmployeePaymentModal } from './administration/modals/EmployeePaymentMod
 import { EmployeePaymentRecord } from '../../shared/types';
 
 export const AdministrationModule: React.FC = () => {
-  const { tenant, toast, confirmAction, apiFetch, can } = useApp();
+  const { tenant, toast, confirmAction, apiFetch, can, user } = useApp();
+
+  const isSuperAdmin = user?.role === 'superadmin' || user?.role === 'admin';
+
+  const canAccessHr =
+    isSuperAdmin ||
+    can('administration.hr.view') ||
+    can('administration.hr.manage') ||
+    can('administration.attendance.record') ||
+    can('administration.attendance.manage');
+
+  const canAccessFinances =
+    isSuperAdmin ||
+    can('administration.finances.view') ||
+    can('administration.finances.manage');
+
+  const canAccessAccounting =
+    isSuperAdmin ||
+    can('administration.accounting.view') ||
+    can('administration.accounting.manage');
 
   // Submódulo actual
   const [currentSubmodule, setCurrentSubmodule] = useState<AdministrationSubmodule>('hub');
@@ -62,6 +81,17 @@ export const AdministrationModule: React.FC = () => {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentTargetEmployee, setPaymentTargetEmployee] = useState<EmployeeProfile | null>(null);
 
+  // Redirigir si el usuario intenta ver un submódulo al que no tiene acceso
+  useEffect(() => {
+    if (currentSubmodule === 'hr' && !canAccessHr) {
+      setCurrentSubmodule(canAccessFinances ? 'finances' : canAccessAccounting ? 'accounting' : 'hub');
+    } else if (currentSubmodule === 'finances' && !canAccessFinances) {
+      setCurrentSubmodule(canAccessHr ? 'hr' : canAccessAccounting ? 'accounting' : 'hub');
+    } else if (currentSubmodule === 'accounting' && !canAccessAccounting) {
+      setCurrentSubmodule(canAccessHr ? 'hr' : canAccessFinances ? 'finances' : 'hub');
+    }
+  }, [currentSubmodule, canAccessHr, canAccessFinances, canAccessAccounting]);
+
   // Cargar datos
   const loadData = async () => {
     setLoading(true);
@@ -74,12 +104,24 @@ export const AdministrationModule: React.FC = () => {
         financesRes,
         accountingRes,
       ] = await Promise.all([
-        apiFetch<{ users: User[] }>('/api/settings/users').catch(() => ({ users: [] })),
-        apiFetch<{ employees: EmployeeProfile[] }>('/api/administration/hr/employees').catch(() => ({ employees: [] })),
-        apiFetch<{ settings: HrGlobalSettings }>('/api/administration/hr/settings').catch(() => ({ settings: DEFAULT_HR_SETTINGS })),
-        apiFetch<{ records: AttendanceRecord[] }>('/api/administration/hr/attendance').catch(() => ({ records: [] })),
-        apiFetch<{ transactions: FinanceTransaction[] }>('/api/administration/finances').catch(() => ({ transactions: [] })),
-        apiFetch<{ entries: AccountingEntry[] }>('/api/administration/accounting').catch(() => ({ entries: [] })),
+        canAccessHr
+          ? apiFetch<{ users: User[] }>('/api/settings/users').catch(() => ({ users: [] }))
+          : Promise.resolve({ users: [] }),
+        canAccessHr
+          ? apiFetch<{ employees: EmployeeProfile[] }>('/api/administration/hr/employees').catch(() => ({ employees: [] }))
+          : Promise.resolve({ employees: [] }),
+        canAccessHr
+          ? apiFetch<{ settings: HrGlobalSettings }>('/api/administration/hr/settings').catch(() => ({ settings: DEFAULT_HR_SETTINGS }))
+          : Promise.resolve({ settings: DEFAULT_HR_SETTINGS }),
+        canAccessHr
+          ? apiFetch<{ records: AttendanceRecord[] }>('/api/administration/hr/attendance').catch(() => ({ records: [] }))
+          : Promise.resolve({ records: [] }),
+        canAccessFinances
+          ? apiFetch<{ transactions: FinanceTransaction[] }>('/api/administration/finances').catch(() => ({ transactions: [] }))
+          : Promise.resolve({ transactions: [] }),
+        canAccessAccounting
+          ? apiFetch<{ entries: AccountingEntry[] }>('/api/administration/accounting').catch(() => ({ entries: [] }))
+          : Promise.resolve({ entries: [] }),
       ]);
 
       setUsers(usersRes.users || []);
@@ -288,44 +330,50 @@ export const AdministrationModule: React.FC = () => {
 
             {/* Selector de Submódulos */}
             <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1">
-              <button
-                type="button"
-                onClick={() => setCurrentSubmodule('hr')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
-                  currentSubmodule === 'hr'
-                    ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" />
-                Recursos Humanos
-              </button>
+              {canAccessHr && (
+                <button
+                  type="button"
+                  onClick={() => setCurrentSubmodule('hr')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
+                    currentSubmodule === 'hr'
+                      ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Recursos Humanos
+                </button>
+              )}
 
-              <button
-                type="button"
-                onClick={() => setCurrentSubmodule('finances')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
-                  currentSubmodule === 'finances'
-                    ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <DollarSign className="w-3.5 h-3.5" />
-                Finanzas
-              </button>
+              {canAccessFinances && (
+                <button
+                  type="button"
+                  onClick={() => setCurrentSubmodule('finances')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
+                    currentSubmodule === 'finances'
+                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <DollarSign className="w-3.5 h-3.5" />
+                  Finanzas
+                </button>
+              )}
 
-              <button
-                type="button"
-                onClick={() => setCurrentSubmodule('accounting')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
-                  currentSubmodule === 'accounting'
-                    ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <BookOpen className="w-3.5 h-3.5" />
-                Contabilidad
-              </button>
+              {canAccessAccounting && (
+                <button
+                  type="button"
+                  onClick={() => setCurrentSubmodule('accounting')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
+                    currentSubmodule === 'accounting'
+                      ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  Contabilidad
+                </button>
+              )}
             </div>
           </div>
 
@@ -354,7 +402,7 @@ export const AdministrationModule: React.FC = () => {
       )}
 
       {/* VISTA 1: RECURSOS HUMANOS (CON TABS INTERNAS) */}
-      {currentSubmodule === 'hr' && (
+      {currentSubmodule === 'hr' && canAccessHr && (
         <div className="space-y-6">
           {/* Widget Informativo de Hora en RRHH (Marcación activa centralizada en Dashboard) */}
           <AttendanceActionWidget
@@ -451,7 +499,7 @@ export const AdministrationModule: React.FC = () => {
       )}
 
       {/* VISTA 2: FINANZAS */}
-      {currentSubmodule === 'finances' && (
+      {currentSubmodule === 'finances' && canAccessFinances && (
         <FinancesView
           transactions={transactions}
           onCreateTransaction={handleCreateTransaction}
@@ -461,7 +509,7 @@ export const AdministrationModule: React.FC = () => {
       )}
 
       {/* VISTA 3: CONTABILIDAD */}
-      {currentSubmodule === 'accounting' && (
+      {currentSubmodule === 'accounting' && canAccessAccounting && (
         <AccountingView
           entries={accountingEntries}
           onCreateEntry={handleCreateAccountingEntry}
