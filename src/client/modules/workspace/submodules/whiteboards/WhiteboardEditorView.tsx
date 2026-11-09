@@ -3,15 +3,12 @@ import {
   ArrowLeft,
   Undo2,
   Redo2,
-  Save,
   Check,
   Share2,
   Download,
   Trash2,
   ZoomIn,
   ZoomOut,
-  Maximize2,
-  Minimize2,
   Hand,
   MousePointer,
   Pencil,
@@ -22,13 +19,11 @@ import {
   Square,
   Circle,
   Triangle,
-  Star,
   MoveRight,
   Minus,
   Sparkles,
   Image as ImageIcon,
   Grid,
-  Palette,
   ChevronDown,
   FileDown,
   FileCode,
@@ -36,12 +31,33 @@ import {
   Kanban,
   Columns,
   Layers,
-  Presentation,
-  Flame,
+  SmilePlus,
+  HelpCircle,
+  Keyboard,
+  Laptop,
+  Maximize,
+  Diamond,
+  X,
 } from 'lucide-react';
 import { Whiteboard, WhiteboardFolder } from '../../../../../shared/types';
 import { useApp } from '../../../../context/AppContext';
 import { WhiteboardShareModal } from './WhiteboardShareModal';
+
+// Parche preventivo para error de CanvasTextBaseline en Fabric 5.3.1
+if (typeof window !== 'undefined' && typeof CanvasRenderingContext2D !== 'undefined') {
+  try {
+    const proto = CanvasRenderingContext2D.prototype;
+    const desc = Object.getOwnPropertyDescriptor(proto, 'textBaseline');
+    if (desc && desc.set) {
+      Object.defineProperty(proto, 'textBaseline', {
+        ...desc,
+        set(val: string) {
+          return desc.set!.call(this, val === 'alphabetical' ? 'alphabetic' : val);
+        },
+      });
+    }
+  } catch {}
+}
 
 interface WhiteboardEditorViewProps {
   whiteboardId: string;
@@ -58,10 +74,116 @@ type ActiveTool =
   | 'text'
   | 'sticky'
   | 'shape'
-  | 'frame'
-  | 'laser';
+  | 'frame';
 
 type BgType = 'dots' | 'grid' | 'lines' | 'solid';
+
+type ShapeFillMode = 'soft' | 'solid-white' | 'solid-color' | 'outline';
+
+// Paleta de colores para notas adhesivas (Post-its) con Tailwind
+export interface StickyColorOption {
+  id: string;
+  name: string;
+  bg: string;
+  border: string;
+  text: string;
+  tape: string;
+  dotColor: string;
+}
+
+export const STICKY_COLORS: StickyColorOption[] = [
+  { id: 'yellow', name: 'Canario', bg: '#fef08a', border: '#fde047', text: '#713f12', tape: '#fef9c3', dotColor: 'bg-yellow-300' },
+  { id: 'orange', name: 'Melocotón', bg: '#fed7aa', border: '#fdba74', text: '#7c2d12', tape: '#ffedd5', dotColor: 'bg-orange-300' },
+  { id: 'pink', name: 'Rosa Coral', bg: '#fbcfe8', border: '#f472b6', text: '#831843', tape: '#fdf2f8', dotColor: 'bg-pink-300' },
+  { id: 'purple', name: 'Lavanda', bg: '#e9d5ff', border: '#c084fc', text: '#581c87', tape: '#f3e8ff', dotColor: 'bg-purple-300' },
+  { id: 'blue', name: 'Azul Cielo', bg: '#bae6fd', border: '#38bdf8', text: '#0c4a6e', tape: '#e0f2fe', dotColor: 'bg-sky-300' },
+  { id: 'green', name: 'Menta', bg: '#bbf7d0', border: '#4ade80', text: '#064e3b', tape: '#dcfce7', dotColor: 'bg-emerald-300' },
+  { id: 'slate', name: 'Grafito', bg: '#1e293b', border: '#334155', text: '#f8fafc', tape: '#475569', dotColor: 'bg-slate-800' },
+];
+
+// Stickers interactivos: Emojis y Badges de trabajo
+interface StickerItem {
+  id: string;
+  label: string;
+  emoji?: string;
+  badge?: {
+    text: string;
+    bg: string;
+    textColor: string;
+    border: string;
+  };
+  category: 'reactions' | 'badges';
+}
+
+const STICKERS_CATALOG: StickerItem[] = [
+  { id: 'fire', label: 'Fuego', emoji: '🔥', category: 'reactions' },
+  { id: 'star', label: 'Estrella', emoji: '⭐', category: 'reactions' },
+  { id: 'rocket', label: 'Cohete', emoji: '🚀', category: 'reactions' },
+  { id: 'heart', label: 'Amor', emoji: '❤️', category: 'reactions' },
+  { id: 'bulb', label: 'Idea', emoji: '💡', category: 'reactions' },
+  { id: 'target', label: 'Objetivo', emoji: '🎯', category: 'reactions' },
+  { id: 'check', label: 'Listo', emoji: '✅', category: 'reactions' },
+  { id: 'party', label: 'Celebración', emoji: '🎉', category: 'reactions' },
+  { id: 'pin', label: 'Fijar', emoji: '📌', category: 'reactions' },
+  { id: 'warning', label: 'Atención', emoji: '⚠️', category: 'reactions' },
+  { id: 'clap', label: 'Aplausos', emoji: '👏', category: 'reactions' },
+  { id: 'lightning', label: 'Rápido', emoji: '⚡', category: 'reactions' },
+  { id: 'gem', label: 'Calidad', emoji: '💎', category: 'reactions' },
+  { id: 'chart', label: 'Métrica', emoji: '📈', category: 'reactions' },
+  { id: 'trophy', label: 'Premio', emoji: '🏆', category: 'reactions' },
+  { id: 'comment', label: 'Mensaje', emoji: '💬', category: 'reactions' },
+  { id: 'eyes', label: 'Revisando', emoji: '👀', category: 'reactions' },
+  { id: 'palette', label: 'Diseño', emoji: '🎨', category: 'reactions' },
+  { id: 'crown', label: 'Destacado', emoji: '👑', category: 'reactions' },
+  { id: 'clock', label: 'A tiempo', emoji: '⏰', category: 'reactions' },
+
+  {
+    id: 'b-approved',
+    label: 'Aprobado',
+    category: 'badges',
+    badge: { text: '✓ APROBADO', bg: '#ecfdf5', textColor: '#047857', border: '#10b981' },
+  },
+  {
+    id: 'b-urgent',
+    label: 'Urgente',
+    category: 'badges',
+    badge: { text: '🔥 URGENTE', bg: '#fef2f2', textColor: '#b91c1c', border: '#ef4444' },
+  },
+  {
+    id: 'b-review',
+    label: 'En Revisión',
+    category: 'badges',
+    badge: { text: '⏳ EN REVISIÓN', bg: '#fffbeb', textColor: '#b45309', border: '#f59e0b' },
+  },
+  {
+    id: 'b-draft',
+    label: 'Borrador',
+    category: 'badges',
+    badge: { text: '✏️ BORRADOR', bg: '#f8fafc', textColor: '#475569', border: '#94a3b8' },
+  },
+  {
+    id: 'b-idea',
+    label: 'Idea Top',
+    category: 'badges',
+    badge: { text: '💡 IDEA TOP', bg: '#faf5ff', textColor: '#7e22ce', border: '#a855f7' },
+  },
+  {
+    id: 'b-feedback',
+    label: 'Feedback',
+    category: 'badges',
+    badge: { text: '💬 FEEDBACK', bg: '#eff6ff', textColor: '#1d4ed8', border: '#3b82f6' },
+  },
+];
+
+interface ActiveStickyEditor {
+  group: any;
+  text: string;
+  color: StickyColorOption;
+  screenX: number;
+  screenY: number;
+  width: number;
+  height: number;
+}
 
 export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
   whiteboardId,
@@ -84,31 +206,178 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
   // Estados de herramientas
   const [activeTool, setActiveTool] = useState<ActiveTool>('select');
   const [currentColor, setCurrentColor] = useState('#2563eb');
-  const [currentStickyColor, setCurrentStickyColor] = useState('#fef08a'); // Amarillo post-it por defecto
+  const [selectedStickyColor, setSelectedStickyColor] = useState<StickyColorOption>(STICKY_COLORS[0]);
   const [brushWidth, setBrushWidth] = useState(3);
-  const [activeShape, setActiveShape] = useState<'rect' | 'circle' | 'triangle' | 'star' | 'arrow' | 'line'>('rect');
-  const [activeFrame, setActiveFrame] = useState<'16:9' | '1:1' | '9:16' | 'a4'>('16:9');
+  const [shapeFillMode, setShapeFillMode] = useState<ShapeFillMode>('soft');
   const [canvasBg, setCanvasBg] = useState<BgType>('dots');
   const [solidBgColor, setSolidBgColor] = useState('#f8fafc');
 
-  // Menús desplegables
+  // Menús desplegables y modales
   const [showBgDropdown, setShowBgDropdown] = useState(false);
   const [showShapesDropdown, setShowShapesDropdown] = useState(false);
   const [showFramesDropdown, setShowFramesDropdown] = useState(false);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [showTemplatesSidebar, setShowTemplatesSidebar] = useState(false);
+  const [showStickersModal, setShowStickersModal] = useState(false);
+  const [stickersCategory, setStickersCategory] = useState<'reactions' | 'badges'>('reactions');
+  const [showStickyPalette, setShowStickyPalette] = useState(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [showZoomDropdown, setShowZoomDropdown] = useState(false);
+  const [showMinimap, setShowMinimap] = useState(true);
   const [showShareModal, setShowShareModal] = useState(false);
+
+  // Estados para Edición de Notas Adhesivas (Post-its)
+  const [editingSticky, setEditingSticky] = useState<ActiveStickyEditor | null>(null);
+  const [tempStickyText, setTempStickyText] = useState('');
+  const [selectedStickyGroup, setSelectedStickyGroup] = useState<any | null>(null);
 
   // Zoom & Panning
   const [zoomLevel, setZoomLevel] = useState(100);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const prevToolBeforeSpace = useRef<ActiveTool>('select');
 
-  // Estado de guardado y Undo/Redo
+  // Guardado & Historial Undo/Redo
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [historyStack, setHistoryStack] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const isUndoRedoAction = useRef(false);
   const autoSaveTimerRef = useRef<any>(null);
+
+  // Determinar si un objeto es una nota adhesiva
+  const isStickyObject = useCallback((obj: any) => {
+    if (!obj) return false;
+    if (obj.isSticky) return true;
+    if (obj.type === 'group' && obj.getObjects) {
+      return (
+        obj.stickyText != null ||
+        obj.getObjects().some((o: any) => o.type === 'textbox' || o.type === 'text')
+      );
+    }
+    return false;
+  }, []);
+
+  // Abrir editor de nota adhesiva
+  const openStickyEditor = useCallback((group: any) => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas || !group) return;
+
+    let stickyText = (group as any).stickyText;
+    let bgRect = (group as any).stickyBg;
+
+    if (!stickyText || !bgRect) {
+      if (group.getObjects) {
+        const objs = group.getObjects();
+        stickyText = objs.find((o: any) => o.type === 'textbox' || o.type === 'i-text' || o.type === 'text');
+        bgRect = objs.find((o: any) => o.type === 'rect');
+        (group as any).stickyText = stickyText;
+        (group as any).stickyBg = bgRect;
+        (group as any).isSticky = true;
+      }
+    }
+
+    const currentText = stickyText?.text || '';
+    const currentBg = bgRect?.fill || selectedStickyColor.bg;
+    const matchedColor = STICKY_COLORS.find((c) => c.bg === currentBg) || selectedStickyColor;
+
+    const bound = group.getBoundingRect(true, true);
+
+    setTempStickyText(currentText === 'Escribe tu nota aquí...' ? '' : currentText);
+    setEditingSticky({
+      group,
+      text: currentText,
+      color: matchedColor,
+      screenX: bound.left,
+      screenY: bound.top,
+      width: Math.max(200, bound.width),
+      height: Math.max(180, bound.height),
+    });
+  }, [selectedStickyColor]);
+
+  // Actualizar apariencia visual de una nota
+  const updateStickyVisuals = useCallback((group: any, colorOpt: StickyColorOption) => {
+    const canvas = fabricCanvasRef.current;
+    if (!group || !canvas) return;
+
+    let bgRect = (group as any).stickyBg;
+    let stickyText = (group as any).stickyText;
+    let tape = null;
+
+    if (group.getObjects) {
+      const objs = group.getObjects();
+      if (!bgRect) bgRect = objs.find((o: any) => o.type === 'rect');
+      if (!stickyText) stickyText = objs.find((o: any) => o.type === 'textbox' || o.type === 'text');
+      tape = objs.find((o: any) => o !== bgRect && o !== stickyText);
+    }
+
+    if (bgRect) {
+      bgRect.set({
+        fill: colorOpt.bg,
+        stroke: colorOpt.border,
+      });
+    }
+
+    if (stickyText) {
+      stickyText.set({
+        fill: colorOpt.text,
+      });
+    }
+
+    if (tape && colorOpt.tape) {
+      tape.set({
+        fill: colorOpt.tape,
+      });
+    }
+
+    group.setCoords();
+    canvas.requestRenderAll();
+  }, []);
+
+  // Guardar texto y color editado de la nota adhesiva
+  const handleSaveSticky = useCallback((newText: string, colorOpt: StickyColorOption) => {
+    if (!editingSticky) return;
+    const canvas = fabricCanvasRef.current;
+    const group = editingSticky.group;
+
+    if (group && canvas) {
+      let stickyText = (group as any).stickyText;
+      let bgRect = (group as any).stickyBg;
+      let tape = null;
+
+      if (group.getObjects) {
+        const objs = group.getObjects();
+        if (!stickyText) stickyText = objs.find((o: any) => o.type === 'textbox' || o.type === 'text');
+        if (!bgRect) bgRect = objs.find((o: any) => o.type === 'rect');
+        tape = objs.find((o: any) => o !== bgRect && o !== stickyText);
+      }
+
+      if (stickyText) {
+        stickyText.set({
+          text: newText.trim() === '' ? 'Nota...' : newText,
+          fill: colorOpt.text,
+        });
+      }
+
+      if (bgRect) {
+        bgRect.set({
+          fill: colorOpt.bg,
+          stroke: colorOpt.border,
+        });
+      }
+
+      if (tape && colorOpt.tape) {
+        tape.set({
+          fill: colorOpt.tape,
+        });
+      }
+
+      group.setCoords();
+      canvas.requestRenderAll();
+      triggerAutoSave();
+      pushHistoryState();
+      updateMinimap();
+    }
+
+    setEditingSticky(null);
+  }, [editingSticky]);
 
   // Cargar Pizarra desde el Backend
   const loadWhiteboard = useCallback(async () => {
@@ -139,24 +408,43 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
     };
   }, [loadWhiteboard]);
 
-  // Inicializar Fabric Canvas
+  // Inicializar Fabric Canvas de forma segura y robusta
   const initFabricCanvas = (initialContent?: string) => {
     const fabric = (window as any).fabric;
     if (!fabric) {
-      setTimeout(() => initFabricCanvas(initialContent), 200);
+      setTimeout(() => initFabricCanvas(initialContent), 150);
       return;
     }
 
-    if (!canvasElRef.current || !containerRef.current) return;
-
-    if (fabricCanvasRef.current) {
-      fabricCanvasRef.current.dispose();
+    const container = containerRef.current;
+    if (!container) {
+      setTimeout(() => initFabricCanvas(initialContent), 100);
+      return;
     }
 
-    const width = containerRef.current.clientWidth || window.innerWidth;
-    const height = containerRef.current.clientHeight || window.innerHeight;
+    // Limpiar instancia previa de Fabric de manera segura
+    if (fabricCanvasRef.current) {
+      try {
+        fabricCanvasRef.current.dispose();
+      } catch (e) {
+        console.warn('Error al limpiar canvas previo:', e);
+      }
+      fabricCanvasRef.current = null;
+    }
 
-    const canvas = new fabric.Canvas(canvasElRef.current, {
+    // Limpiar wrappers previos dentro del contenedor
+    container.innerHTML = '';
+
+    // Crear un elemento <canvas> fresco y limpio
+    const canvasEl = document.createElement('canvas');
+    canvasEl.className = 'touch-none';
+    container.appendChild(canvasEl);
+    canvasElRef.current = canvasEl;
+
+    const width = container.clientWidth || window.innerWidth;
+    const height = container.clientHeight || window.innerHeight;
+
+    const canvas = new fabric.Canvas(canvasEl, {
       width,
       height,
       selection: true,
@@ -168,10 +456,8 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
 
     fabricCanvasRef.current = canvas;
 
-    // Configurar fondo inicial
-    applyBackground(canvas, canvasBg, solidBgColor);
+    applyBackground(canvasBg, solidBgColor);
 
-    // Cargar contenido previo si existe
     if (initialContent) {
       try {
         const json = typeof initialContent === 'string' ? JSON.parse(initialContent) : initialContent;
@@ -187,7 +473,7 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
       pushHistoryState();
     }
 
-    // Eventos de Fabric
+    // Eventos de cambios para historial y autosave
     canvas.on('object:added', () => {
       if (!isUndoRedoAction.current) {
         triggerAutoSave();
@@ -212,28 +498,77 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
       }
     });
 
-    // Panning con Rueda de Ratón o Drag
-    canvas.on('mouse:wheel', (opt: any) => {
-      const delta = opt.e.deltaY;
-      let zoom = canvas.getZoom();
-      zoom *= 0.999 ** delta;
-      if (zoom > 5) zoom = 5;
-      if (zoom < 0.1) zoom = 0.1;
-      canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
-      setZoomLevel(Math.round(zoom * 100));
-      opt.e.preventDefault();
-      opt.e.stopPropagation();
-      updateMinimap();
+    // DOBLE CLIC EN EL LIENZO: Editar nota adhesiva inmediatamente
+    canvas.on('mouse:dblclick', (opt: any) => {
+      const target = opt.target;
+      if (!target) return;
+      if (isStickyObject(target)) {
+        openStickyEditor(target);
+      }
     });
 
-    // Soporte Panning con Espacio o Herramienta 'pan'
+    // Selección de objetos
+    canvas.on('selection:created', (opt: any) => {
+      const sel = opt.selected?.[0];
+      if (sel && isStickyObject(sel)) {
+        setSelectedStickyGroup(sel);
+      } else {
+        setSelectedStickyGroup(null);
+      }
+    });
+
+    canvas.on('selection:updated', (opt: any) => {
+      const sel = opt.selected?.[0];
+      if (sel && isStickyObject(sel)) {
+        setSelectedStickyGroup(sel);
+      } else {
+        setSelectedStickyGroup(null);
+      }
+    });
+
+    canvas.on('selection:cleared', () => {
+      setSelectedStickyGroup(null);
+    });
+
+    // -------------------------------------------------------------
+    // SOPORTE DE RATÓN Y TRACKPAD DE LAPTOP (SMART WHEEL & PAN)
+    // -------------------------------------------------------------
+    canvas.on('mouse:wheel', (opt: any) => {
+      const evt = opt.e;
+      evt.preventDefault();
+      evt.stopPropagation();
+
+      // Cerrar editor si está abierto durante zoom o pan
+      if (editingSticky) {
+        handleSaveSticky(tempStickyText, editingSticky.color);
+      }
+
+      if (evt.ctrlKey || evt.metaKey) {
+        const zoomDelta = Math.pow(0.994, evt.deltaY);
+        let zoom = canvas.getZoom() * zoomDelta;
+        if (zoom > 5) zoom = 5;
+        if (zoom < 0.1) zoom = 0.1;
+        canvas.zoomToPoint({ x: evt.offsetX, y: evt.offsetY }, zoom);
+        setZoomLevel(Math.round(zoom * 100));
+        updateMinimap();
+      } else {
+        const vpt = canvas.viewportTransform;
+        vpt[4] -= evt.deltaX;
+        vpt[5] -= evt.deltaY;
+        canvas.setViewportTransform(vpt);
+        canvas.requestRenderAll();
+        updateMinimap();
+      }
+    });
+
+    // Paneo con botón medio del ratón, tecla Espacio, o herramienta 'pan'
     let isPanning = false;
     let lastPosX = 0;
     let lastPosY = 0;
 
     canvas.on('mouse:down', (opt: any) => {
       const evt = opt.e;
-      if (activeTool === 'pan' || evt.spaceKey || evt.altKey) {
+      if (activeTool === 'pan' || evt.spaceKey || evt.altKey || evt.button === 1) {
         isPanning = true;
         canvas.selection = false;
         lastPosX = evt.clientX;
@@ -246,13 +581,13 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
 
     canvas.on('mouse:move', (opt: any) => {
       if (isPanning) {
-        const e = opt.e;
+        const evt = opt.e;
         const vpt = canvas.viewportTransform;
-        vpt[4] += e.clientX - lastPosX;
-        vpt[5] += e.clientY - lastPosY;
+        vpt[4] += evt.clientX - lastPosX;
+        vpt[5] += evt.clientY - lastPosY;
         canvas.requestRenderAll();
-        lastPosX = e.clientX;
-        lastPosY = e.clientY;
+        lastPosX = evt.clientX;
+        lastPosY = evt.clientY;
         updateMinimap();
       }
     });
@@ -267,7 +602,80 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
       }
     });
 
-    // Redimensionamiento responsivo
+    // -------------------------------------------------------------
+    // SOPORTE MULTITÁCTIL PARA LAPTOPS TOUCHSCREEN Y PANTALLAS
+    // -------------------------------------------------------------
+    const containerEl = containerRef.current;
+    if (containerEl) {
+      let touchStartDist = 0;
+      let touchStartZoom = 1;
+      let touchStartCenter = { x: 0, y: 0 };
+      let touchStartVpt = [1, 0, 0, 1, 0, 0];
+
+      const getTouchDistAndCenter = (t1: Touch, t2: Touch) => {
+        const dx = t1.clientX - t2.clientX;
+        const dy = t1.clientY - t2.clientY;
+        const dist = Math.hypot(dx, dy);
+        const center = {
+          x: (t1.clientX + t2.clientX) / 2,
+          y: (t1.clientY + t2.clientY) / 2,
+        };
+        return { dist, center };
+      };
+
+      const handleTouchStart = (e: TouchEvent) => {
+        if (e.touches.length === 2) {
+          e.preventDefault();
+          const { dist, center } = getTouchDistAndCenter(e.touches[0], e.touches[1]);
+          touchStartDist = dist;
+          touchStartZoom = canvas.getZoom();
+          touchStartCenter = center;
+          touchStartVpt = [...canvas.viewportTransform];
+        }
+      };
+
+      const handleTouchMove = (e: TouchEvent) => {
+        if (e.touches.length === 2) {
+          e.preventDefault();
+          const { dist, center } = getTouchDistAndCenter(e.touches[0], e.touches[1]);
+          if (touchStartDist > 0) {
+            const scale = dist / touchStartDist;
+            let newZoom = touchStartZoom * scale;
+            if (newZoom > 5) newZoom = 5;
+            if (newZoom < 0.1) newZoom = 0.1;
+
+            const rect = containerEl.getBoundingClientRect();
+            const canvasPoint = {
+              x: center.x - rect.left,
+              y: center.y - rect.top,
+            };
+
+            const panDx = center.x - touchStartCenter.x;
+            const panDy = center.y - touchStartCenter.y;
+
+            canvas.zoomToPoint(canvasPoint, newZoom);
+            const vpt = canvas.viewportTransform;
+            vpt[4] = touchStartVpt[4] + panDx;
+            vpt[5] = touchStartVpt[5] + panDy;
+            canvas.setViewportTransform(vpt);
+            canvas.requestRenderAll();
+            setZoomLevel(Math.round(newZoom * 100));
+            updateMinimap();
+          }
+        }
+      };
+
+      const handleTouchEnd = (e: TouchEvent) => {
+        if (e.touches.length < 2) {
+          touchStartDist = 0;
+        }
+      };
+
+      containerEl.addEventListener('touchstart', handleTouchStart, { passive: false });
+      containerEl.addEventListener('touchmove', handleTouchMove, { passive: false });
+      containerEl.addEventListener('touchend', handleTouchEnd);
+    }
+
     const handleResize = () => {
       if (!containerRef.current || !canvas) return;
       canvas.setWidth(containerRef.current.clientWidth);
@@ -279,8 +687,7 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
   };
 
   // Aplicar patrones de fondo
-  const applyBackground = (canvas: any, type: BgType, solidColor = '#f8fafc') => {
-    if (!canvas) return;
+  const applyBackground = (type: BgType, solidColor = '#f8fafc') => {
     const bgContainer = containerRef.current;
     if (!bgContainer) return;
 
@@ -310,7 +717,6 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
     const fabric = (window as any).fabric;
     if (!canvas || !fabric) return;
 
-    // Resetear modos
     canvas.isDrawingMode = false;
     canvas.selection = activeTool === 'select';
     canvas.defaultCursor = 'default';
@@ -327,7 +733,6 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
     } else if (activeTool === 'highlighter') {
       canvas.isDrawingMode = true;
       canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
-      // Aplicar color con opacidad 40%
       const r = parseInt(currentColor.slice(1, 3) || 'ff', 16) || 250;
       const g = parseInt(currentColor.slice(3, 5) || 'cc', 16) || 204;
       const b = parseInt(currentColor.slice(5, 7) || '00', 16) || 21;
@@ -335,16 +740,11 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
       canvas.freeDrawingBrush.width = 24;
     } else if (activeTool === 'eraser') {
       canvas.defaultCursor = 'crosshair';
-    } else if (activeTool === 'laser') {
-      canvas.defaultCursor = 'crosshair';
     }
   }, [activeTool, currentColor, brushWidth]);
 
-  // Actualizar fondo al cambiar estado
   useEffect(() => {
-    if (fabricCanvasRef.current) {
-      applyBackground(fabricCanvasRef.current, canvasBg, solidBgColor);
-    }
+    applyBackground(canvasBg, solidBgColor);
   }, [canvasBg, solidBgColor]);
 
   // Centro de pantalla del canvas
@@ -358,6 +758,211 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
       y: (canvas.getHeight() / 2 - vpt[5]) / zoom,
     };
   };
+
+  // -------------------------------------------------------------
+  // ATAJOS DE TECLADO COMPLETOS
+  // -------------------------------------------------------------
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Si estamos editando el post-it en el textarea HTML, NO interceptar
+      if (editingSticky) {
+        return;
+      }
+
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      const canvas = fabricCanvasRef.current;
+      const activeObj = canvas?.getActiveObject();
+      if (activeObj && (activeObj as any).isEditing) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+      const isCtrlOrMeta = e.ctrlKey || e.metaKey;
+
+      // Deshacer / Rehacer
+      if (isCtrlOrMeta && key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+        return;
+      }
+      if (isCtrlOrMeta && key === 'y') {
+        e.preventDefault();
+        handleRedo();
+        return;
+      }
+
+      // Guardar: Ctrl + S
+      if (isCtrlOrMeta && key === 's') {
+        e.preventDefault();
+        saveCanvasData();
+        toast('info', 'Guardando cambios...');
+        return;
+      }
+
+      // Editar nota adhesiva con tecla Enter
+      if (key === 'enter' && activeObj && isStickyObject(activeObj)) {
+        e.preventDefault();
+        openStickyEditor(activeObj);
+        return;
+      }
+
+      // Zoom Rápido: Teclas + y -
+      if ((isCtrlOrMeta && (key === '+' || key === '=')) || key === '+') {
+        e.preventDefault();
+        applyZoom(0.2);
+        return;
+      }
+      if ((isCtrlOrMeta && (key === '-' || key === '_')) || key === '-') {
+        e.preventDefault();
+        applyZoom(-0.2);
+        return;
+      }
+      if ((isCtrlOrMeta && key === '0') || key === '0') {
+        e.preventDefault();
+        resetZoom();
+        return;
+      }
+
+      // Ajustar al contenido: F o Shift + 1
+      if (!isCtrlOrMeta && (key === 'f' || (e.shiftKey && key === '!'))) {
+        e.preventDefault();
+        fitToContent();
+        return;
+      }
+
+      // Ayuda / Atajos: ?
+      if (key === '?' || (e.shiftKey && key === '/')) {
+        e.preventDefault();
+        setShowShortcutsModal((prev) => !prev);
+        return;
+      }
+
+      // Eliminar: Delete o Backspace
+      if (key === 'delete' || key === 'backspace') {
+        if (activeObj) {
+          e.preventDefault();
+          canvas.remove(activeObj);
+          canvas.discardActiveObject();
+          canvas.renderAll();
+          setSelectedStickyGroup(null);
+          triggerAutoSave();
+          pushHistoryState();
+          updateMinimap();
+        }
+        return;
+      }
+
+      // Escape: Salir de modales o deseleccionar
+      if (key === 'escape') {
+        e.preventDefault();
+        setShowStickersModal(false);
+        setShowShapesDropdown(false);
+        setShowFramesDropdown(false);
+        setShowTemplatesSidebar(false);
+        setShowExportDropdown(false);
+        setShowBgDropdown(false);
+        setShowZoomDropdown(false);
+        setShowShortcutsModal(false);
+        if (activeObj) {
+          canvas.discardActiveObject();
+          canvas.renderAll();
+          setSelectedStickyGroup(null);
+        } else {
+          setActiveTool('select');
+        }
+        return;
+      }
+
+      // Mover elemento seleccionado con flechas (Nudge)
+      if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key) && activeObj) {
+        e.preventDefault();
+        const step = e.shiftKey ? 20 : 3;
+        if (key === 'arrowup') activeObj.top = (activeObj.top || 0) - step;
+        if (key === 'arrowdown') activeObj.top = (activeObj.top || 0) + step;
+        if (key === 'arrowleft') activeObj.left = (activeObj.left || 0) - step;
+        if (key === 'arrowright') activeObj.left = (activeObj.left || 0) + step;
+        activeObj.setCoords();
+        canvas.requestRenderAll();
+        triggerAutoSave();
+        return;
+      }
+
+      // Herramientas directas con teclado
+      if (!isCtrlOrMeta && !e.altKey) {
+        if (key === 'v') {
+          setActiveTool('select');
+        } else if (key === 'h') {
+          setActiveTool('pan');
+        } else if (key === 'p' || key === 'd') {
+          setActiveTool('draw');
+        } else if (key === 'b') {
+          setActiveTool('highlighter');
+        } else if (key === 'e') {
+          setActiveTool('eraser');
+        } else if (key === 't') {
+          addText();
+        } else if (key === 's' || key === 'n') {
+          addStickyNote();
+        } else if (key === 'r') {
+          addShape('rect');
+        } else if (key === 'q') {
+          addShape('square');
+        } else if (key === 'c') {
+          addShape('circle');
+        } else if (key === 'k') {
+          setShowStickersModal((prev) => !prev);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [historyIndex, historyStack, selectedStickyColor, currentColor, editingSticky, isStickyObject, openStickyEditor]);
+
+  // Mantener barra espaciadora para mover el lienzo temporalmente
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.code === 'Space' && !e.repeat && activeTool !== 'pan') {
+        prevToolBeforeSpace.current = activeTool;
+        setActiveTool('pan');
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && activeTool === 'pan') {
+        setActiveTool(prevToolBeforeSpace.current);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [activeTool]);
 
   // 1. Agregar Texto
   const addText = () => {
@@ -385,41 +990,55 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
     setActiveTool('select');
   };
 
-  // 2. Agregar Nota Adhesiva (Sticky Note) con sombra y efecto doblado
-  const addStickyNote = (stickyColor = currentStickyColor) => {
+  // 2. Agregar Nota Adhesiva (Sticky Note) con edición inmediata
+  const addStickyNote = (colorOpt: StickyColorOption = selectedStickyColor) => {
     const canvas = fabricCanvasRef.current;
     const fabric = (window as any).fabric;
     if (!canvas || !fabric) return;
 
     const center = getCanvasCenter();
-    const size = 180;
+    const size = 190;
 
     const bgRect = new fabric.Rect({
       width: size,
       height: size,
-      fill: stickyColor,
-      rx: 4,
-      ry: 4,
+      fill: colorOpt.bg,
+      stroke: colorOpt.border,
+      strokeWidth: 1,
+      rx: 10,
+      ry: 10,
       shadow: new fabric.Shadow({
         color: 'rgba(0,0,0,0.12)',
-        blur: 10,
+        blur: 14,
         offsetX: 2,
-        offsetY: 4,
+        offsetY: 6,
       }),
     });
 
-    const stickyText = new fabric.Textbox('Nota rápida...', {
-      width: size - 30,
+    const tape = new fabric.Rect({
+      width: 52,
+      height: 14,
+      fill: colorOpt.tape,
+      rx: 3,
+      ry: 3,
+      opacity: 0.85,
+      top: 0,
+      left: size / 2 - 26,
+    });
+
+    const stickyText = new fabric.Textbox('Escribe tu nota aquí...', {
+      width: size - 32,
       fontSize: 16,
-      fontFamily: 'Inter, cursive, sans-serif',
-      fill: '#1e293b',
-      top: 15,
-      left: 15,
+      fontFamily: 'Inter, sans-serif',
+      fontWeight: '500',
+      fill: colorOpt.text,
+      top: 24,
+      left: 16,
       textAlign: 'left',
       splitByGrapheme: true,
     });
 
-    const group = new fabric.Group([bgRect, stickyText], {
+    const group = new fabric.Group([bgRect, tape, stickyText], {
       left: center.x,
       top: center.y,
       originX: 'center',
@@ -435,10 +1054,110 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
     canvas.setActiveObject(group);
     canvas.renderAll();
     setActiveTool('select');
+    setShowStickyPalette(false);
+    setSelectedStickyGroup(group);
+
+    // Abrir automáticamente el editor interactivo
+    setTimeout(() => {
+      openStickyEditor(group);
+    }, 60);
   };
 
-  // 3. Agregar Formas Geométricas
-  const addShape = (shapeType: 'rect' | 'circle' | 'triangle' | 'star' | 'arrow' | 'line') => {
+  // 3. Agregar Stickers / Emojis & Badges de Trabajo
+  const addSticker = (sticker: StickerItem) => {
+    const canvas = fabricCanvasRef.current;
+    const fabric = (window as any).fabric;
+    if (!canvas || !fabric) return;
+
+    const center = getCanvasCenter();
+
+    if (sticker.emoji) {
+      const circleBg = new fabric.Circle({
+        radius: 36,
+        fill: '#ffffff',
+        stroke: '#e2e8f0',
+        strokeWidth: 2,
+        originX: 'center',
+        originY: 'center',
+        shadow: new fabric.Shadow({
+          color: 'rgba(0,0,0,0.12)',
+          blur: 14,
+          offsetX: 0,
+          offsetY: 6,
+        }),
+      });
+
+      const emojiText = new fabric.Text(sticker.emoji, {
+        fontSize: 38,
+        originX: 'center',
+        originY: 'center',
+        top: 2,
+      });
+
+      const group = new fabric.Group([circleBg, emojiText], {
+        left: center.x,
+        top: center.y,
+        originX: 'center',
+        originY: 'center',
+      });
+
+      canvas.add(group);
+      canvas.setActiveObject(group);
+      canvas.renderAll();
+    } else if (sticker.badge) {
+      const padX = 22;
+      const padY = 10;
+      const fontSize = 15;
+
+      const badgeText = new fabric.Text(sticker.badge.text, {
+        fontSize,
+        fontFamily: 'Inter, sans-serif',
+        fontWeight: 'bold',
+        fill: sticker.badge.textColor,
+        originX: 'center',
+        originY: 'center',
+      });
+
+      const textWidth = badgeText.width || 120;
+      const textHeight = badgeText.height || 20;
+
+      const badgeBg = new fabric.Rect({
+        width: textWidth + padX * 2,
+        height: textHeight + padY * 2,
+        fill: sticker.badge.bg,
+        stroke: sticker.badge.border,
+        strokeWidth: 2,
+        rx: 16,
+        ry: 16,
+        originX: 'center',
+        originY: 'center',
+        shadow: new fabric.Shadow({
+          color: 'rgba(0,0,0,0.1)',
+          blur: 12,
+          offsetX: 0,
+          offsetY: 4,
+        }),
+      });
+
+      const group = new fabric.Group([badgeBg, badgeText], {
+        left: center.x,
+        top: center.y,
+        originX: 'center',
+        originY: 'center',
+      });
+
+      canvas.add(group);
+      canvas.setActiveObject(group);
+      canvas.renderAll();
+    }
+
+    setShowStickersModal(false);
+    setActiveTool('select');
+    toast('success', `Sticker ${sticker.label} añadido`);
+  };
+
+  // 4. Agregar Formas Geométricas
+  const addShape = (shapeType: 'rect' | 'square' | 'circle' | 'triangle' | 'diamond' | 'arrow' | 'line') => {
     const canvas = fabricCanvasRef.current;
     const fabric = (window as any).fabric;
     if (!canvas || !fabric) return;
@@ -446,62 +1165,111 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
     const center = getCanvasCenter();
     let obj: any = null;
 
+    let shapeFill = '#ffffff';
+    let strokeColor = currentColor === '#ffffff' ? '#0f172a' : currentColor;
+
+    if (shapeFillMode === 'soft') {
+      const r = parseInt(strokeColor.slice(1, 3) || '25', 16) || 37;
+      const g = parseInt(strokeColor.slice(3, 5) || '63', 16) || 99;
+      const b = parseInt(strokeColor.slice(5, 7) || 'eb', 16) || 235;
+      shapeFill = `rgba(${r}, ${g}, ${b}, 0.12)`;
+    } else if (shapeFillMode === 'outline') {
+      shapeFill = 'transparent';
+    } else if (shapeFillMode === 'solid-color') {
+      shapeFill = strokeColor;
+    }
+
     if (shapeType === 'rect') {
       obj = new fabric.Rect({
         left: center.x,
         top: center.y,
-        width: 160,
-        height: 100,
-        fill: '#ffffff',
-        stroke: currentColor,
-        strokeWidth: 2,
-        rx: 8,
-        ry: 8,
+        width: 180,
+        height: 110,
+        fill: shapeFill,
+        stroke: strokeColor,
+        strokeWidth: 2.5,
+        rx: 12,
+        ry: 12,
         originX: 'center',
         originY: 'center',
-        shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.06)', blur: 6, offsetY: 2 }),
+        shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.08)', blur: 10, offsetY: 3 }),
+      });
+    } else if (shapeType === 'square') {
+      obj = new fabric.Rect({
+        left: center.x,
+        top: center.y,
+        width: 140,
+        height: 140,
+        fill: shapeFill,
+        stroke: strokeColor,
+        strokeWidth: 2.5,
+        rx: 12,
+        ry: 12,
+        originX: 'center',
+        originY: 'center',
+        shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.08)', blur: 10, offsetY: 3 }),
       });
     } else if (shapeType === 'circle') {
       obj = new fabric.Circle({
         left: center.x,
         top: center.y,
-        radius: 60,
-        fill: '#ffffff',
-        stroke: currentColor,
-        strokeWidth: 2,
+        radius: 65,
+        fill: shapeFill,
+        stroke: strokeColor,
+        strokeWidth: 2.5,
         originX: 'center',
         originY: 'center',
+        shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.08)', blur: 10, offsetY: 3 }),
       });
     } else if (shapeType === 'triangle') {
       obj = new fabric.Triangle({
         left: center.x,
         top: center.y,
-        width: 120,
+        width: 130,
+        height: 115,
+        fill: shapeFill,
+        stroke: strokeColor,
+        strokeWidth: 2.5,
+        originX: 'center',
+        originY: 'center',
+      });
+    } else if (shapeType === 'diamond') {
+      const diamond = new fabric.Rect({
+        width: 110,
         height: 110,
-        fill: '#ffffff',
-        stroke: currentColor,
-        strokeWidth: 2,
+        angle: 45,
+        fill: shapeFill,
+        stroke: strokeColor,
+        strokeWidth: 2.5,
+        rx: 6,
+        ry: 6,
+        originX: 'center',
+        originY: 'center',
+      });
+      obj = new fabric.Group([diamond], {
+        left: center.x,
+        top: center.y,
         originX: 'center',
         originY: 'center',
       });
     } else if (shapeType === 'line') {
-      obj = new fabric.Line([center.x - 80, center.y, center.x + 80, center.y], {
-        stroke: currentColor,
+      obj = new fabric.Line([center.x - 90, center.y, center.x + 90, center.y], {
+        stroke: strokeColor,
         strokeWidth: 3,
         strokeLineCap: 'round',
       });
     } else if (shapeType === 'arrow') {
-      const line = new fabric.Line([0, 0, 140, 0], {
-        stroke: currentColor,
-        strokeWidth: 3,
+      const line = new fabric.Line([0, 0, 150, 0], {
+        stroke: strokeColor,
+        strokeWidth: 3.5,
         originX: 'center',
         originY: 'center',
       });
       const triangle = new fabric.Triangle({
-        width: 16,
-        height: 18,
-        fill: currentColor,
-        left: 70,
+        width: 18,
+        height: 20,
+        fill: strokeColor,
+        left: 75,
         top: 0,
         angle: 90,
         originX: 'center',
@@ -520,10 +1288,11 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
       canvas.setActiveObject(obj);
       canvas.renderAll();
       setActiveTool('select');
+      setShowShapesDropdown(false);
     }
   };
 
-  // 4. Agregar Marcos (Frames)
+  // 5. Agregar Marcos (Frames)
   const addFrame = (frameType: '16:9' | '1:1' | '9:16' | 'a4') => {
     const canvas = fabricCanvasRef.current;
     const fabric = (window as any).fabric;
@@ -537,7 +1306,7 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
     if (frameType === '1:1') {
       w = 1080;
       h = 1080;
-      label = 'Post Social (1:1)';
+      label = 'Post Cuadrado (1:1)';
     } else if (frameType === '9:16') {
       w = 1080;
       h = 1920;
@@ -584,8 +1353,8 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
     setActiveTool('select');
   };
 
-  // 5. Inserción de Plantillas Prediseñadas
-  const insertTemplate = (templateType: 'kanban' | 'swot' | 'rotulo' | 'wireframe' | 'funnel') => {
+  // 6. Inserción de Plantillas Prediseñadas
+  const insertTemplate = (templateType: 'kanban' | 'swot' | 'rotulo') => {
     const canvas = fabricCanvasRef.current;
     const fabric = (window as any).fabric;
     if (!canvas || !fabric) return;
@@ -593,7 +1362,6 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
     const center = getCanvasCenter();
 
     if (templateType === 'kanban') {
-      // Tablero Kanban 3 Columnas
       const colWidth = 260;
       const colHeight = 500;
       const gap = 20;
@@ -644,7 +1412,6 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
         canvas.add(colGroup);
       });
     } else if (templateType === 'swot') {
-      // Matriz FODA (SWOT)
       const size = 320;
       const quadrants = [
         { label: 'Fortalezas (F)', color: '#dcfce7', textCol: '#15803d', x: -170, y: -170 },
@@ -683,7 +1450,6 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
         canvas.add(group);
       });
     } else if (templateType === 'rotulo') {
-      // Rótulo de Proyecto
       const box = new fabric.Rect({
         width: 320,
         height: 110,
@@ -729,7 +1495,7 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
     toast('success', 'Plantilla insertada en el lienzo');
   };
 
-  // 6. Subir imagen al lienzo
+  // 7. Subir imagen al lienzo
   const handleUploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -787,7 +1553,6 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
     try {
       setSaveStatus('saving');
       const contentJson = JSON.stringify(canvas.toJSON(['id', 'isSticky', 'isFrame']));
-      // Generar miniatura en base64 de tamaño óptimo
       const thumbnail = canvas.toDataURL({
         format: 'jpeg',
         quality: 0.6,
@@ -827,7 +1592,7 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
     setHistoryStack((prev) => {
       const next = prev.slice(0, historyIndex + 1);
       next.push(json);
-      return next.slice(-25); // Mantener últimos 25 estados
+      return next.slice(-25);
     });
     setHistoryIndex((prev) => prev + 1);
   };
@@ -862,7 +1627,9 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
     });
   };
 
-  // Zoom Controls
+  // -------------------------------------------------------------
+  // CONTROLES DE ZOOM RÁPIDO & AJUSTE AL CONTENIDO
+  // -------------------------------------------------------------
   const applyZoom = (delta: number) => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
@@ -875,6 +1642,17 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
     updateMinimap();
   };
 
+  const setExactZoom = (percent: number) => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+    const zoom = percent / 100;
+    canvas.setZoom(zoom);
+    setZoomLevel(percent);
+    canvas.renderAll();
+    updateMinimap();
+    setShowZoomDropdown(false);
+  };
+
   const resetZoom = () => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
@@ -883,13 +1661,62 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
     canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
     canvas.renderAll();
     updateMinimap();
+    setShowZoomDropdown(false);
   };
 
-  // Actualizar Minimapa flotante
+  const fitToContent = () => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+    const objects = canvas.getObjects();
+    if (objects.length === 0) {
+      resetZoom();
+      return;
+    }
+
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
+    objects.forEach((obj: any) => {
+      const bound = obj.getBoundingRect(true, true);
+      minX = Math.min(minX, bound.left);
+      minY = Math.min(minY, bound.top);
+      maxX = Math.max(maxX, bound.left + bound.width);
+      maxY = Math.max(maxY, bound.top + bound.height);
+    });
+
+    const padding = 100;
+    const objWidth = Math.max(120, maxX - minX + padding * 2);
+    const objHeight = Math.max(120, maxY - minY + padding * 2);
+    const canvasWidth = canvas.getWidth();
+    const canvasHeight = canvas.getHeight();
+    const scaleX = canvasWidth / objWidth;
+    const scaleY = canvasHeight / objHeight;
+    let newZoom = Math.min(scaleX, scaleY, 1.4);
+    newZoom = Math.max(0.15, Math.min(newZoom, 3));
+
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    const vpt = canvas.viewportTransform;
+    vpt[0] = newZoom;
+    vpt[3] = newZoom;
+    vpt[4] = canvasWidth / 2 - centerX * newZoom;
+    vpt[5] = canvasHeight / 2 - centerY * newZoom;
+
+    canvas.setViewportTransform(vpt);
+    setZoomLevel(Math.round(newZoom * 100));
+    canvas.renderAll();
+    updateMinimap();
+    setShowZoomDropdown(false);
+    toast('info', 'Vista ajustada a los elementos');
+  };
+
+  // Minimapa de navegación
   const updateMinimap = () => {
     const canvas = fabricCanvasRef.current;
     const miniCanvas = minimapCanvasRef.current;
-    if (!canvas || !miniCanvas) return;
+    if (!canvas || !miniCanvas || !showMinimap) return;
 
     const ctx = miniCanvas.getContext('2d');
     if (!ctx) return;
@@ -901,7 +1728,6 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, miniW, miniH);
 
-    // Dibujar miniatura simplificada de objetos
     const objects = canvas.getObjects();
     const scale = 0.05;
 
@@ -914,8 +1740,7 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
       ctx.fillRect(left, top, w, h);
     });
 
-    // Marco del viewport
-    ctx.strokeStyle = '#3b82f6';
+    ctx.strokeStyle = '#6366f1';
     ctx.lineWidth = 1.5;
     ctx.strokeRect(miniW / 2 - 30, miniH / 2 - 20, 60, 40);
   };
@@ -929,7 +1754,7 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
     if (type === 'png' || type === 'jpeg') {
       const dataUrl = canvas.toDataURL({
         format: type,
-        multiplier: 2, // Doble resolución para alta nitidez
+        multiplier: 2,
       });
       const a = document.createElement('a');
       a.href = dataUrl;
@@ -965,7 +1790,9 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
     if (!canvas) return;
     if (window.confirm('¿Seguro que deseas limpiar todo el lienzo?')) {
       canvas.clear();
-      applyBackground(canvas, canvasBg, solidBgColor);
+      applyBackground(canvasBg, solidBgColor);
+      setSelectedStickyGroup(null);
+      setEditingSticky(null);
       triggerAutoSave();
       pushHistoryState();
       updateMinimap();
@@ -989,27 +1816,23 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
   };
 
   return (
-    <div
-      className={`fixed inset-0 z-40 bg-slate-100 dark:bg-slate-950 flex flex-col overflow-hidden select-none ${
-        isFullscreen ? 'p-0' : ''
-      }`}
-    >
+    <div className="fixed inset-0 z-40 bg-slate-100 dark:bg-slate-950 flex flex-col overflow-hidden select-none">
       {/* 1. BARRA SUPERIOR DE NAVEGACIÓN Y ACCIONES */}
-      <div className="h-14 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-4 flex items-center justify-between z-30 shrink-0 shadow-xs">
+      <div className="h-14 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl px-4 flex items-center justify-between z-30 shrink-0 shadow-xs">
         {/* Izquierda: Volver, Título y Carpeta */}
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={onBack}
-            className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+            className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4 text-purple-600 dark:text-purple-400" />
             <span>Pizarras</span>
           </button>
 
           {folder && (
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: folder.color }} />
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/50 dark:border-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-300">
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: folder.color }} />
               <span>{folder.name}</span>
             </div>
           )}
@@ -1024,12 +1847,12 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
                 onChange={(e) => setBoardTitle(e.target.value)}
                 onBlur={handleSaveTitle}
                 onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
-                className="px-2 py-1 rounded-lg border border-purple-500 bg-white dark:bg-slate-800 text-xs font-black text-slate-900 dark:text-white outline-none"
+                className="px-2 py-1 rounded-lg border-2 border-purple-500 bg-white dark:bg-slate-800 text-xs font-black text-slate-900 dark:text-white outline-none ring-2 ring-purple-500/20"
               />
             ) : (
               <h2
                 onClick={() => setIsEditingTitle(true)}
-                className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white cursor-pointer hover:underline truncate max-w-[180px] sm:max-w-xs"
+                className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white cursor-pointer hover:text-purple-600 dark:hover:text-purple-400 hover:underline truncate max-w-[180px] sm:max-w-xs transition"
                 title="Haz clic para renombrar"
               >
                 {boardTitle}
@@ -1043,8 +1866,8 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
               type="button"
               onClick={handleUndo}
               disabled={historyIndex <= 0}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 transition"
-              title="Deshacer (Ctrl+Z)"
+              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 transition cursor-pointer"
+              title="Deshacer (Ctrl + Z)"
             >
               <Undo2 className="w-4 h-4" />
             </button>
@@ -1052,27 +1875,27 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
               type="button"
               onClick={handleRedo}
               disabled={historyIndex >= historyStack.length - 1}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 transition"
-              title="Rehacer (Ctrl+Y)"
+              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 transition cursor-pointer"
+              title="Rehacer (Ctrl + Y)"
             >
               <Redo2 className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Derecha: Guardado, Fondo, Compartir, Exportar y Zoom */}
+        {/* Derecha: Indicador Guardado, Fondo, Ayuda Atajos, Compartir y Exportar */}
         <div className="flex items-center gap-2">
           {/* Indicador de Autosave */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
             {saveStatus === 'saved' ? (
               <>
-                <Check className="w-3.5 h-3.5 text-emerald-500" />
-                <span className="hidden sm:inline">Guardado</span>
+                <Check className="w-3.5 h-3.5 text-emerald-500 stroke-[3]" />
+                <span className="hidden sm:inline text-emerald-600 dark:text-emerald-400 font-extrabold">Guardado</span>
               </>
             ) : saveStatus === 'saving' ? (
               <>
                 <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-                <span className="hidden sm:inline">Guardando...</span>
+                <span className="hidden sm:inline text-amber-600">Guardando...</span>
               </>
             ) : (
               <>
@@ -1080,9 +1903,9 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
                 <button
                   type="button"
                   onClick={saveCanvasData}
-                  className="hover:underline font-black text-amber-600 dark:text-amber-400"
+                  className="hover:underline font-black text-amber-600 dark:text-amber-400 cursor-pointer"
                 >
-                  Guardar
+                  Guardar (Ctrl+S)
                 </button>
               </>
             )}
@@ -1093,7 +1916,7 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
             <button
               type="button"
               onClick={() => setShowBgDropdown(!showBgDropdown)}
-              className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               title="Fondo del lienzo"
             >
               <Grid className="w-4 h-4" />
@@ -1102,9 +1925,9 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
             {showBgDropdown && (
               <div
                 onMouseLeave={() => setShowBgDropdown(false)}
-                className="absolute right-0 top-full mt-1.5 w-44 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl z-50 p-2 space-y-1 animate-fadeIn"
+                className="absolute right-0 top-full mt-1.5 w-48 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl z-50 p-2 space-y-1 animate-fadeIn"
               >
-                <div className="text-[10px] font-bold uppercase text-slate-400 px-2 py-1">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-2 py-1">
                   Patrón de Fondo
                 </div>
                 {(['dots', 'grid', 'lines', 'solid'] as BgType[]).map((type) => (
@@ -1115,13 +1938,13 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
                       setCanvasBg(type);
                       setShowBgDropdown(false);
                     }}
-                    className={`w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold transition flex items-center justify-between ${
+                    className={`w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold transition flex items-center justify-between cursor-pointer ${
                       canvasBg === type
                         ? 'bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400'
                         : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
                     }`}
                   >
-                    <span className="capitalize">
+                    <span>
                       {type === 'dots'
                         ? 'Puntos'
                         : type === 'grid'
@@ -1130,18 +1953,28 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
                         ? 'Líneas'
                         : 'Sólido'}
                     </span>
-                    {canvasBg === type && <Check className="w-3.5 h-3.5" />}
+                    {canvasBg === type && <Check className="w-3.5 h-3.5 text-purple-600" />}
                   </button>
                 ))}
               </div>
             )}
           </div>
 
+          {/* Botón de Ayuda de Atajos y Gestos de Laptop */}
+          <button
+            type="button"
+            onClick={() => setShowShortcutsModal(true)}
+            className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            title="Atajos de teclado y gestos de laptop (?)"
+          >
+            <HelpCircle className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+          </button>
+
           {/* Compartir */}
           <button
             type="button"
             onClick={() => setShowShareModal(true)}
-            className="px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+            className="px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400 hover:bg-purple-100 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
           >
             <Share2 className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Compartir</span>
@@ -1152,7 +1985,7 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
             <button
               type="button"
               onClick={() => setShowExportDropdown(!showExportDropdown)}
-              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-black dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-black dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
             >
               <Download className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Exportar</span>
@@ -1162,12 +1995,12 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
             {showExportDropdown && (
               <div
                 onMouseLeave={() => setShowExportDropdown(false)}
-                className="absolute right-0 top-full mt-1.5 w-48 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl z-50 p-2 space-y-1 animate-fadeIn"
+                className="absolute right-0 top-full mt-1.5 w-52 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl z-50 p-2 space-y-1 animate-fadeIn"
               >
                 <button
                   type="button"
                   onClick={() => handleExport('png')}
-                  className="w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                  className="w-full px-3 py-2 rounded-xl text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
                 >
                   <FileDown className="w-4 h-4 text-emerald-500" />
                   <span>Imagen PNG (Alta Calidad)</span>
@@ -1175,7 +2008,7 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
                 <button
                   type="button"
                   onClick={() => handleExport('jpeg')}
-                  className="w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                  className="w-full px-3 py-2 rounded-xl text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
                 >
                   <FileDown className="w-4 h-4 text-blue-500" />
                   <span>Imagen JPEG</span>
@@ -1183,7 +2016,7 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
                 <button
                   type="button"
                   onClick={() => handleExport('pdf')}
-                  className="w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                  className="w-full px-3 py-2 rounded-xl text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
                 >
                   <FileDown className="w-4 h-4 text-red-500" />
                   <span>Documento PDF</span>
@@ -1191,7 +2024,7 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
                 <button
                   type="button"
                   onClick={() => handleExport('json')}
-                  className="w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                  className="w-full px-3 py-2 rounded-xl text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
                 >
                   <FileCode className="w-4 h-4 text-purple-500" />
                   <span>Exportar JSON (ROMA)</span>
@@ -1204,7 +2037,7 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
           <button
             type="button"
             onClick={handleClearCanvas}
-            className="p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
+            className="p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition cursor-pointer"
             title="Limpiar todo el lienzo"
           >
             <Trash2 className="w-4 h-4" />
@@ -1212,200 +2045,457 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
         </div>
       </div>
 
-      {/* 2. ÁREA DE LIENZO Y TOOLBAR FLOTANTE */}
+      {/* 2. ÁREA DE LIENZO Y HERRAMIENTAS FLOTANTES */}
       <div className="flex-1 relative overflow-hidden" ref={containerRef}>
-        {/* Canvas de Fabric.js */}
-        <canvas ref={canvasElRef} className="absolute inset-0 touch-none" />
 
-        {/* 3. TOOLBAR FLOTANTE DE HERRAMIENTAS */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 rounded-2xl p-1.5 shadow-2xl flex items-center gap-1">
-          {/* Herramienta 1: Seleccionar */}
+        {/* ----------------------------------------------------------------- */}
+        {/* BARRA CONTEXTUAL FLOTANTE PARA NOTA ADHESIVA SELECCIONADA         */}
+        {/* ----------------------------------------------------------------- */}
+        {selectedStickyGroup && !editingSticky && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/80 rounded-2xl px-3 py-1.5 shadow-2xl flex items-center gap-2 animate-fadeIn">
+            <button
+              type="button"
+              onClick={() => openStickyEditor(selectedStickyGroup)}
+              className="px-3 py-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              <span>Editar Texto (Doble Clic / Enter)</span>
+            </button>
+            <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" />
+            <div className="flex items-center gap-1.5">
+              {STICKY_COLORS.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => {
+                    updateStickyVisuals(selectedStickyGroup, c);
+                    triggerAutoSave();
+                  }}
+                  className="w-4 h-4 rounded-full border border-slate-300 dark:border-slate-600 hover:scale-125 transition transform cursor-pointer"
+                  style={{ backgroundColor: c.bg }}
+                  title={`Cambiar color a ${c.name}`}
+                />
+              ))}
+            </div>
+            <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" />
+            <button
+              type="button"
+              onClick={() => {
+                const canvas = fabricCanvasRef.current;
+                if (canvas && selectedStickyGroup) {
+                  canvas.remove(selectedStickyGroup);
+                  canvas.discardActiveObject();
+                  canvas.renderAll();
+                  setSelectedStickyGroup(null);
+                  triggerAutoSave();
+                  pushHistoryState();
+                  updateMinimap();
+                }
+              }}
+              className="p-1 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition cursor-pointer"
+              title="Eliminar nota"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* ----------------------------------------------------------------- */}
+        {/* EDITOR INTERACTIVO INLINE DE NOTA ADHESIVA (POST-IT)             */}
+        {/* ----------------------------------------------------------------- */}
+        {editingSticky && (
+          <div
+            className="absolute z-50 animate-scaleUp"
+            style={{
+              left: Math.max(16, Math.min((containerRef.current?.clientWidth || 800) - 260, editingSticky.screenX)),
+              top: Math.max(16, Math.min((containerRef.current?.clientHeight || 600) - 240, editingSticky.screenY)),
+              width: Math.max(210, editingSticky.width),
+            }}
+          >
+            {/* Barra superior de la nota: Paleta de color y botón Listo */}
+            <div className="flex items-center justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 mb-1.5 shadow-xl">
+              <div className="flex items-center gap-1.5">
+                {STICKY_COLORS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      setEditingSticky((prev) => (prev ? { ...prev, color: c } : null));
+                      updateStickyVisuals(editingSticky.group, c);
+                    }}
+                    className={`w-4 h-4 rounded-full border transition transform hover:scale-125 cursor-pointer ${
+                      editingSticky.color.id === c.id ? 'ring-2 ring-purple-600 scale-110' : 'border-slate-300 dark:border-slate-600'
+                    }`}
+                    style={{ backgroundColor: c.bg }}
+                    title={c.name}
+                  />
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => handleSaveSticky(tempStickyText, editingSticky.color)}
+                className="px-2.5 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold flex items-center gap-1 transition cursor-pointer shadow-xs active:scale-95"
+              >
+                <Check className="w-3 h-3 stroke-[3]" />
+                <span>Listo</span>
+              </button>
+            </div>
+
+            {/* Cuadro de texto interactivo con estilo Tailwind */}
+            <div
+              className="p-3.5 rounded-2xl shadow-2xl border transition-all"
+              style={{
+                backgroundColor: editingSticky.color.bg,
+                borderColor: editingSticky.color.border,
+              }}
+            >
+              <div
+                className="w-12 h-3 mx-auto mb-2 rounded-xs opacity-75"
+                style={{ backgroundColor: editingSticky.color.tape }}
+              />
+              <textarea
+                autoFocus
+                value={tempStickyText}
+                onChange={(e) => setTempStickyText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    handleSaveSticky(tempStickyText, editingSticky.color);
+                  } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    handleSaveSticky(tempStickyText, editingSticky.color);
+                  }
+                }}
+                placeholder="Escribe tu nota aquí..."
+                rows={4}
+                className="w-full bg-transparent resize-none outline-none text-sm font-medium leading-relaxed"
+                style={{
+                  color: editingSticky.color.text,
+                  fontFamily: 'Inter, sans-serif',
+                }}
+              />
+              <div
+                className="flex items-center justify-between text-[10px] font-semibold opacity-60 mt-1"
+                style={{ color: editingSticky.color.text }}
+              >
+                <span>Ctrl + Enter para guardar</span>
+                <span>Esc para salir</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ----------------------------------------------------------------- */}
+        {/* 3. TOOLBAR FLOTANTE DE HERRAMIENTAS (MODERNA CON TAILWIND GLASS)   */}
+        {/* ----------------------------------------------------------------- */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-1.5 shadow-2xl flex items-center gap-1 max-w-[calc(100vw-1.5rem)] overflow-x-auto no-scrollbar">
+          {/* Herramienta: Seleccionar [V] */}
           <button
             type="button"
             onClick={() => setActiveTool('select')}
-            className={`p-2.5 rounded-xl transition ${
+            className={`relative p-2.5 rounded-xl transition cursor-pointer ${
               activeTool === 'select'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/25'
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
-            title="Seleccionar y mover objetos (V)"
+            title="Seleccionar y mover objetos [V]"
           >
             <MousePointer className="w-4 h-4" />
           </button>
 
-          {/* Herramienta 2: Manito / Pan */}
+          {/* Herramienta: Manito / Pan [H] */}
           <button
             type="button"
             onClick={() => setActiveTool('pan')}
-            className={`p-2.5 rounded-xl transition ${
+            className={`relative p-2.5 rounded-xl transition cursor-pointer ${
               activeTool === 'pan'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/25'
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
-            title="Mover lienzo libremente (H o mantener Espacio)"
+            title="Mover lienzo libremente [H] o mantén la barra Espacio"
           >
             <Hand className="w-4 h-4" />
           </button>
 
-          <div className="w-px h-6 bg-slate-200 dark:border-slate-800 mx-0.5" />
+          <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-0.5" />
 
-          {/* Herramienta 3: Lápiz / Pincel */}
+          {/* Herramienta: Lápiz [P / D] */}
           <button
             type="button"
             onClick={() => setActiveTool('draw')}
-            className={`p-2.5 rounded-xl transition ${
+            className={`p-2.5 rounded-xl transition cursor-pointer ${
               activeTool === 'draw'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/25'
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
-            title="Dibujo a mano alzada (D)"
+            title="Dibujo a mano alzada [P / D]"
           >
             <Pencil className="w-4 h-4" />
           </button>
 
-          {/* Herramienta 4: Resaltador */}
+          {/* Herramienta: Resaltador [B] */}
           <button
             type="button"
             onClick={() => setActiveTool('highlighter')}
-            className={`p-2.5 rounded-xl transition ${
+            className={`p-2.5 rounded-xl transition cursor-pointer ${
               activeTool === 'highlighter'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/25'
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
-            title="Resaltador fluorescente"
+            title="Resaltador translúcido [B]"
           >
             <Highlighter className="w-4 h-4" />
           </button>
 
-          {/* Herramienta 5: Borrador */}
+          {/* Herramienta: Borrador [E] */}
           <button
             type="button"
             onClick={() => setActiveTool('eraser')}
-            className={`p-2.5 rounded-xl transition ${
+            className={`p-2.5 rounded-xl transition cursor-pointer ${
               activeTool === 'eraser'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/25'
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
-            title="Borrador de elementos (E)"
+            title="Borrador de elementos [E]"
           >
             <Eraser className="w-4 h-4" />
           </button>
 
-          {/* Selector de Color rápido */}
-          <div className="relative flex items-center mx-1">
+          {/* Selector de Color */}
+          <div className="relative flex items-center gap-1 px-1">
             <input
               type="color"
               value={currentColor}
               onChange={(e) => setCurrentColor(e.target.value)}
               className="w-7 h-7 rounded-lg cursor-pointer border-0 bg-transparent p-0"
-              title="Color de trazo y formas"
+              title="Paleta completa de colores"
             />
           </div>
 
-          <div className="w-px h-6 bg-slate-200 dark:border-slate-800 mx-0.5" />
+          <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-0.5" />
 
-          {/* Herramienta 6: Texto */}
+          {/* Herramienta: Texto [T] */}
           <button
             type="button"
             onClick={addText}
-            className="p-2.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-            title="Insertar texto enriquecido (T)"
+            className="p-2.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            title="Insertar texto enriquecido [T]"
           >
             <Type className="w-4 h-4" />
           </button>
 
-          {/* Herramienta 7: Nota Adhesiva (Sticky Note) */}
+          {/* Herramienta: Notas Adhesivas (Post-its) [N / S] */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => addStickyNote(selectedStickyColor)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setShowStickyPalette(!showStickyPalette);
+              }}
+              className="p-2.5 rounded-xl text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition cursor-pointer flex items-center gap-1"
+              title="Nota Adhesiva (Post-It) [N / S] — Clic derecho para cambiar color"
+            >
+              <StickyNote className="w-4 h-4" />
+              <span className={`w-2 h-2 rounded-full ${selectedStickyColor.dotColor}`} />
+            </button>
+
+            {showStickyPalette && (
+              <div
+                onMouseLeave={() => setShowStickyPalette(false)}
+                className="absolute bottom-full left-0 mb-2 w-44 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl z-50 p-2 space-y-1 animate-fadeIn"
+              >
+                <div className="text-[10px] font-black uppercase text-slate-400 px-2 py-1">
+                  Color de Nota
+                </div>
+                {STICKY_COLORS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedStickyColor(opt);
+                      addStickyNote(opt);
+                    }}
+                    className="w-full px-2.5 py-1.5 rounded-xl text-left text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="w-3.5 h-3.5 rounded-md border border-slate-300 dark:border-slate-600" style={{ backgroundColor: opt.bg }} />
+                      <span>{opt.name}</span>
+                    </div>
+                    {selectedStickyColor.id === opt.id && <Check className="w-3.5 h-3.5 text-purple-600" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Herramienta: Stickers & Emojis [K] */}
           <button
             type="button"
-            onClick={() => addStickyNote(currentStickyColor)}
-            className="p-2.5 rounded-xl text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition"
-            title="Insertar Nota Adhesiva (Post-It)"
+            onClick={() => setShowStickersModal(!showStickersModal)}
+            className={`p-2.5 rounded-xl transition cursor-pointer ${
+              showStickersModal
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/25'
+                : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40'
+            }`}
+            title="Stickers y Emojis de Reacción [K]"
           >
-            <StickyNote className="w-4 h-4" />
+            <SmilePlus className="w-4 h-4" />
           </button>
 
-          {/* Herramienta 8: Formas Geométricas */}
+          {/* Herramienta: Formas Geométricas */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowShapesDropdown(!showShapesDropdown)}
-              className="p-2.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-              title="Formas geométricas"
+              className="p-2.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-0.5"
+              title="Formas Geométricas: Rectángulos [R], Cuadrados [Q], Círculos [C]"
             >
               <Square className="w-4 h-4" />
+              <ChevronDown className="w-3 h-3 opacity-60" />
             </button>
 
             {showShapesDropdown && (
               <div
                 onMouseLeave={() => setShowShapesDropdown(false)}
-                className="absolute bottom-full left-0 mb-2 w-40 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl z-50 p-2 space-y-1 animate-fadeIn"
+                className="absolute bottom-full left-0 mb-2 w-52 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl z-50 p-2 space-y-1.5 animate-fadeIn"
               >
+                <div className="text-[10px] font-black uppercase text-slate-400 px-2 pt-1">
+                  Formas Geométricas
+                </div>
+
                 <button
                   type="button"
-                  onClick={() => {
-                    addShape('rect');
-                    setShowShapesDropdown(false);
-                  }}
-                  className="w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                  onClick={() => addShape('rect')}
+                  className="w-full px-2.5 py-1.5 rounded-xl text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between cursor-pointer"
                 >
-                  <Square className="w-3.5 h-3.5" />
-                  <span>Rectángulo</span>
+                  <div className="flex items-center gap-2">
+                    <Square className="w-4 h-4 text-purple-600" />
+                    <span>Rectángulo</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">R</span>
                 </button>
+
                 <button
                   type="button"
-                  onClick={() => {
-                    addShape('circle');
-                    setShowShapesDropdown(false);
-                  }}
-                  className="w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                  onClick={() => addShape('square')}
+                  className="w-full px-2.5 py-1.5 rounded-xl text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between cursor-pointer"
                 >
-                  <Circle className="w-3.5 h-3.5" />
-                  <span>Círculo</span>
+                  <div className="flex items-center gap-2">
+                    <Square className="w-4 h-4 text-indigo-600" />
+                    <span>Cuadrado 1:1</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">Q</span>
                 </button>
+
                 <button
                   type="button"
-                  onClick={() => {
-                    addShape('triangle');
-                    setShowShapesDropdown(false);
-                  }}
-                  className="w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                  onClick={() => addShape('circle')}
+                  className="w-full px-2.5 py-1.5 rounded-xl text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between cursor-pointer"
                 >
-                  <Triangle className="w-3.5 h-3.5" />
+                  <div className="flex items-center gap-2">
+                    <Circle className="w-4 h-4 text-emerald-600" />
+                    <span>Círculo</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">C</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => addShape('triangle')}
+                  className="w-full px-2.5 py-1.5 rounded-xl text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
+                >
+                  <Triangle className="w-4 h-4 text-amber-600" />
                   <span>Triángulo</span>
                 </button>
+
                 <button
                   type="button"
-                  onClick={() => {
-                    addShape('arrow');
-                    setShowShapesDropdown(false);
-                  }}
-                  className="w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                  onClick={() => addShape('diamond')}
+                  className="w-full px-2.5 py-1.5 rounded-xl text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
                 >
-                  <MoveRight className="w-3.5 h-3.5" />
-                  <span>Flecha</span>
+                  <Diamond className="w-4 h-4 text-pink-600" />
+                  <span>Rombo / Decisión</span>
                 </button>
+
                 <button
                   type="button"
-                  onClick={() => {
-                    addShape('line');
-                    setShowShapesDropdown(false);
-                  }}
-                  className="w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                  onClick={() => addShape('arrow')}
+                  className="w-full px-2.5 py-1.5 rounded-xl text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
                 >
-                  <Minus className="w-3.5 h-3.5" />
-                  <span>Línea</span>
+                  <MoveRight className="w-4 h-4 text-cyan-600" />
+                  <span>Flecha Conectora</span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => addShape('line')}
+                  className="w-full px-2.5 py-1.5 rounded-xl text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
+                >
+                  <Minus className="w-4 h-4 text-slate-600" />
+                  <span>Línea Divisoria</span>
+                </button>
+
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-700">
+                  <div className="text-[10px] font-black uppercase text-slate-400 px-2 mb-1">
+                    Estilo de Relleno
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 px-1">
+                    <button
+                      type="button"
+                      onClick={() => setShapeFillMode('soft')}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold text-center transition cursor-pointer ${
+                        shapeFillMode === 'soft'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
+                      }`}
+                    >
+                      Suave (15%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShapeFillMode('solid-white')}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold text-center transition cursor-pointer ${
+                        shapeFillMode === 'solid-white'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
+                      }`}
+                    >
+                      Blanco
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShapeFillMode('outline')}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold text-center transition cursor-pointer ${
+                        shapeFillMode === 'outline'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
+                      }`}
+                    >
+                      Solo Borde
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShapeFillMode('solid-color')}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold text-center transition cursor-pointer ${
+                        shapeFillMode === 'solid-color'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
+                      }`}
+                    >
+                      Sólido Color
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
 
-          {/* Herramienta 9: Marcos (Frames) */}
+          {/* Herramienta: Marcos (Frames) */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowFramesDropdown(!showFramesDropdown)}
-              className="p-2.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-              title="Marcos de Presentación y Medios"
+              className="p-2.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              title="Marcos de Presentación y Medios (16:9, 1:1, 9:16)"
             >
               <Columns className="w-4 h-4" />
             </button>
@@ -1421,7 +2511,7 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
                     addFrame('16:9');
                     setShowFramesDropdown(false);
                   }}
-                  className="w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  className="w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
                 >
                   Presentación (16:9)
                 </button>
@@ -1431,7 +2521,7 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
                     addFrame('1:1');
                     setShowFramesDropdown(false);
                   }}
-                  className="w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  className="w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
                 >
                   Post Cuadrado (1:1)
                 </button>
@@ -1441,7 +2531,7 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
                     addFrame('9:16');
                     setShowFramesDropdown(false);
                   }}
-                  className="w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  className="w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
                 >
                   Móvil / Story (9:16)
                 </button>
@@ -1451,7 +2541,7 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
                     addFrame('a4');
                     setShowFramesDropdown(false);
                   }}
-                  className="w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  className="w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
                 >
                   Documento A4
                 </button>
@@ -1459,12 +2549,12 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
             )}
           </div>
 
-          {/* Herramienta 10: Subir Imagen */}
+          {/* Herramienta: Subir Imagen */}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="p-2.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-            title="Subir imagen"
+            className="p-2.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            title="Subir imagen al lienzo"
           >
             <ImageIcon className="w-4 h-4" />
           </button>
@@ -1476,55 +2566,184 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
             className="hidden"
           />
 
-          <div className="w-px h-6 bg-slate-200 dark:border-slate-800 mx-0.5" />
+          <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-0.5" />
 
           {/* Plantillas Prediseñadas */}
           <button
             type="button"
             onClick={() => setShowTemplatesSidebar(!showTemplatesSidebar)}
-            className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 hover:bg-purple-100 transition"
+            className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 hover:bg-purple-100 transition cursor-pointer"
             title="Plantillas y Componentes rápidos"
           >
             <LayoutTemplate className="w-4 h-4" />
           </button>
         </div>
 
-        {/* 4. CONTROLES DE ZOOM FLOTANTES */}
-        <div className="absolute bottom-6 right-6 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 rounded-2xl p-1.5 shadow-xl flex items-center gap-1">
+        {/* ----------------------------------------------------------------- */}
+        {/* 4. MODAL FLOTANTE DE STICKERS (REACCIONES Y BADGES TAILWIND)      */}
+        {/* ----------------------------------------------------------------- */}
+        {showStickersModal && (
+          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 w-80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border border-slate-200/90 dark:border-slate-800/90 rounded-3xl p-4 shadow-2xl animate-fadeIn">
+            <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800 mb-3">
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setStickersCategory('reactions')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    stickersCategory === 'reactions'
+                      ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  Reacciones
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStickersCategory('badges')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    stickersCategory === 'badges'
+                      ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  Sellos / Badges
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowStickersModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {stickersCategory === 'reactions' ? (
+              <div className="grid grid-cols-5 gap-2 max-h-56 overflow-y-auto p-1">
+                {STICKERS_CATALOG.filter((s) => s.category === 'reactions').map((sticker) => (
+                  <button
+                    key={sticker.id}
+                    type="button"
+                    onClick={() => addSticker(sticker)}
+                    className="h-12 flex items-center justify-center text-2xl rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-purple-50 dark:hover:bg-purple-950/40 hover:scale-115 transition transform cursor-pointer border border-slate-100 dark:border-slate-800"
+                    title={sticker.label}
+                  >
+                    {sticker.emoji}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-56 overflow-y-auto p-1">
+                {STICKERS_CATALOG.filter((s) => s.category === 'badges').map((sticker) => (
+                  <button
+                    key={sticker.id}
+                    type="button"
+                    onClick={() => addSticker(sticker)}
+                    className="w-full p-2.5 rounded-2xl text-left font-bold text-xs transition cursor-pointer flex items-center justify-between border hover:scale-[1.02] transform shadow-xs"
+                    style={{
+                      backgroundColor: sticker.badge?.bg,
+                      color: sticker.badge?.textColor,
+                      borderColor: sticker.badge?.border,
+                    }}
+                  >
+                    <span>{sticker.badge?.text}</span>
+                    <span className="text-[10px] opacity-75 font-mono uppercase">Insertar</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ----------------------------------------------------------------- */}
+        {/* 5. CONTROLES DE ZOOM RÁPIDO FLOTANTES (BOTTOM RIGHT)              */}
+        {/* ----------------------------------------------------------------- */}
+        <div className="absolute bottom-6 right-6 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-1.5 shadow-2xl flex items-center gap-1">
           <button
             type="button"
-            onClick={() => applyZoom(-0.15)}
-            className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-            title="Alejar"
+            onClick={() => applyZoom(-0.2)}
+            className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            title="Alejar [-]"
           >
             <ZoomOut className="w-4 h-4" />
           </button>
 
-          <button
-            type="button"
-            onClick={resetZoom}
-            className="px-2.5 py-1 text-xs font-mono font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
-            title="Restablecer al 100%"
-          >
-            {zoomLevel}%
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowZoomDropdown(!showZoomDropdown)}
+              className="px-2.5 py-1 text-xs font-mono font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer flex items-center gap-1"
+              title="Ajustar nivel de zoom"
+            >
+              <span>{zoomLevel}%</span>
+              <ChevronDown className="w-3 h-3 opacity-60" />
+            </button>
+
+            {showZoomDropdown && (
+              <div
+                onMouseLeave={() => setShowZoomDropdown(false)}
+                className="absolute bottom-full right-0 mb-2 w-44 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl z-50 p-2 space-y-1 animate-fadeIn"
+              >
+                <button
+                  type="button"
+                  onClick={fitToContent}
+                  className="w-full px-3 py-1.5 rounded-lg text-left text-xs font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950 flex items-center justify-between cursor-pointer"
+                >
+                  <span>Ajustar al contenido</span>
+                  <span className="text-[10px] font-mono text-slate-400">F</span>
+                </button>
+                <div className="h-px bg-slate-100 dark:bg-slate-700 my-1" />
+                {[25, 50, 75, 100, 150, 200].map((val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setExactZoom(val)}
+                    className={`w-full px-3 py-1 rounded-lg text-left text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                      zoomLevel === val
+                        ? 'bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400'
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    <span>{val}%</span>
+                    {zoomLevel === val && <Check className="w-3.5 h-3.5 text-purple-600" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           <button
             type="button"
-            onClick={() => applyZoom(0.15)}
-            className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-            title="Acercar"
+            onClick={() => applyZoom(0.2)}
+            className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            title="Acercar [+]"
           >
             <ZoomIn className="w-4 h-4" />
           </button>
+
+          <button
+            type="button"
+            onClick={fitToContent}
+            className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            title="Ajustar y encuadrar todo [F]"
+          >
+            <Maximize className="w-4 h-4" />
+          </button>
         </div>
 
-        {/* 5. MINIMAPA DE NAVEGACIÓN FLOTANTE */}
-        <div className="absolute bottom-20 right-6 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-2xl p-2 shadow-xl hidden md:block">
-          <canvas ref={minimapCanvasRef} className="rounded-xl border border-slate-100 dark:border-slate-800" />
-        </div>
+        {/* ----------------------------------------------------------------- */}
+        {/* 6. MINIMAPA DE NAVEGACIÓN FLOTANTE                                */}
+        {/* ----------------------------------------------------------------- */}
+        {showMinimap && (
+          <div className="absolute bottom-20 right-6 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-2 shadow-xl hidden md:block">
+            <canvas ref={minimapCanvasRef} className="rounded-xl border border-slate-100 dark:border-slate-800" />
+          </div>
+        )}
 
-        {/* 6. SIDEBAR FLOTANTE DE PLANTILLAS */}
+        {/* ----------------------------------------------------------------- */}
+        {/* 7. SIDEBAR FLOTANTE DE PLANTILLAS                                 */}
+        {/* ----------------------------------------------------------------- */}
         {showTemplatesSidebar && (
           <div className="absolute top-4 left-4 bottom-24 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-2xl z-30 flex flex-col overflow-y-auto animate-fadeIn">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-4">
@@ -1535,18 +2754,17 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
               <button
                 type="button"
                 onClick={() => setShowTemplatesSidebar(false)}
-                className="text-slate-400 hover:text-slate-600"
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
             <div className="space-y-3">
-              {/* Plantilla: Tablero Kanban */}
               <button
                 type="button"
                 onClick={() => insertTemplate('kanban')}
-                className="w-full p-3 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-purple-500 text-left transition flex items-center gap-3 group"
+                className="w-full p-3 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-purple-500 text-left transition flex items-center gap-3 group cursor-pointer"
               >
                 <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950 text-purple-600 flex items-center justify-center shrink-0">
                   <Kanban className="w-5 h-5" />
@@ -1559,11 +2777,10 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
                 </div>
               </button>
 
-              {/* Plantilla: Matriz FODA */}
               <button
                 type="button"
                 onClick={() => insertTemplate('swot')}
-                className="w-full p-3 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-purple-500 text-left transition flex items-center gap-3 group"
+                className="w-full p-3 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-purple-500 text-left transition flex items-center gap-3 group cursor-pointer"
               >
                 <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center shrink-0">
                   <LayoutTemplate className="w-5 h-5" />
@@ -1576,11 +2793,10 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
                 </div>
               </button>
 
-              {/* Plantilla: Rótulo de Proyecto */}
               <button
                 type="button"
                 onClick={() => insertTemplate('rotulo')}
-                className="w-full p-3 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-purple-500 text-left transition flex items-center gap-3 group"
+                className="w-full p-3 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-purple-500 text-left transition flex items-center gap-3 group cursor-pointer"
               >
                 <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
                   <Layers className="w-5 h-5" />
@@ -1592,6 +2808,139 @@ export const WhiteboardEditorView: React.FC<WhiteboardEditorViewProps> = ({
                   <p className="text-[10px] text-slate-400">Ficha técnica y nombre de campaña</p>
                 </div>
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* ----------------------------------------------------------------- */}
+        {/* 8. MODAL DE AYUDA DE ATAJOS Y GESTOS DE LAPTOP / TOUCH           */}
+        {/* ----------------------------------------------------------------- */}
+        {showShortcutsModal && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl animate-scaleUp">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-purple-50 dark:bg-purple-950 text-purple-600 flex items-center justify-center">
+                    <Keyboard className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                      Navegación Rápida & Gestos
+                    </h3>
+                    <p className="text-xs text-slate-500">Diseñado para teclado, mouse y laptops con trackpad/touch</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowShortcutsModal(false)}
+                  className="p-1 rounded-xl text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-extrabold uppercase text-purple-600 dark:text-purple-400 mb-2">
+                    <Laptop className="w-4 h-4" />
+                    <span>Trackpad de Laptop & Pantalla Touch</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+                      <div className="font-bold text-slate-900 dark:text-white">2 Dedos Deslizar</div>
+                      <div className="text-slate-500 text-[11px]">Paneo fluido y continuo por el lienzo</div>
+                    </div>
+                    <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+                      <div className="font-bold text-slate-900 dark:text-white">Pellizcar (Pinch to Zoom)</div>
+                      <div className="text-slate-500 text-[11px]">Zoom instantáneo centrado en tu cursor</div>
+                    </div>
+                    <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+                      <div className="font-bold text-slate-900 dark:text-white">Espacio + Arrastre</div>
+                      <div className="text-slate-500 text-[11px]">Mover lienzo sin cambiar de herramienta</div>
+                    </div>
+                    <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+                      <div className="font-bold text-slate-900 dark:text-white">Rueda central de mouse</div>
+                      <div className="text-slate-500 text-[11px]">Clic y arrastre para paneo rápido</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-extrabold uppercase text-indigo-600 dark:text-indigo-400 mb-2">
+                    <Keyboard className="w-4 h-4" />
+                    <span>Atajos de Teclado Esenciales</span>
+                  </div>
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Seleccionar / Mover</span>
+                      <kbd className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 font-mono text-[11px] font-bold shadow-xs">V</kbd>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Mano de Paneo</span>
+                      <kbd className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 font-mono text-[11px] font-bold shadow-xs">H o Espacio</kbd>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Lápiz / Pincel</span>
+                      <kbd className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 font-mono text-[11px] font-bold shadow-xs">P o D</kbd>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Resaltador / Borrador</span>
+                      <div className="flex gap-1">
+                        <kbd className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 font-mono text-[11px] font-bold shadow-xs">B</kbd>
+                        <kbd className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 font-mono text-[11px] font-bold shadow-xs">E</kbd>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Texto / Nota Adhesiva (Post-It)</span>
+                      <div className="flex gap-1">
+                        <kbd className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 font-mono text-[11px] font-bold shadow-xs">T</kbd>
+                        <kbd className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 font-mono text-[11px] font-bold shadow-xs">N o S</kbd>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Editar Nota Seleccionada</span>
+                      <kbd className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 font-mono text-[11px] font-bold shadow-xs">Doble Clic o Enter</kbd>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Rectángulo / Cuadrado / Círculo</span>
+                      <div className="flex gap-1">
+                        <kbd className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 font-mono text-[11px] font-bold shadow-xs">R</kbd>
+                        <kbd className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 font-mono text-[11px] font-bold shadow-xs">Q</kbd>
+                        <kbd className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 font-mono text-[11px] font-bold shadow-xs">C</kbd>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Stickers y Emojis</span>
+                      <kbd className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 font-mono text-[11px] font-bold shadow-xs">K</kbd>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Ajustar al Contenido / Zoom 100%</span>
+                      <div className="flex gap-1">
+                        <kbd className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 font-mono text-[11px] font-bold shadow-xs">F</kbd>
+                        <kbd className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 font-mono text-[11px] font-bold shadow-xs">0</kbd>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Deshacer / Rehacer</span>
+                      <kbd className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 font-mono text-[11px] font-bold shadow-xs">Ctrl + Z / Ctrl + Y</kbd>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Guardar Pizarra</span>
+                      <kbd className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 font-mono text-[11px] font-bold shadow-xs">Ctrl + S</kbd>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowShortcutsModal(false)}
+                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition cursor-pointer shadow-md shadow-purple-500/20"
+                >
+                  Entendido
+                </button>
+              </div>
             </div>
           </div>
         )}
