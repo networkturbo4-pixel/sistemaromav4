@@ -1369,6 +1369,8 @@ export interface FinanceTransaction {
   reference?: string;
   status: 'completed' | 'pending' | 'cancelled';
   receiptUrl?: string;
+  sourceModule?: string;
+  sourceEntityId?: string;
   createdAt: string;
   updatedAt: string;
 }

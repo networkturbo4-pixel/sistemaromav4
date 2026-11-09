@@ -1173,6 +1173,7 @@ export class DatabaseManager {
       updatedAt: now,
     };
     this.localState.paymentNotes.unshift(newNote);
+    await this.syncPaymentNoteToFinances(tenantId, newNote);
     this.saveLocalState();
     return newNote;
   }
@@ -1185,16 +1186,200 @@ export class DatabaseManager {
       ...data,
       updatedAt: new Date().toISOString(),
     };
+    const updated = this.localState.paymentNotes[idx];
+    await this.syncPaymentNoteToFinances(tenantId, updated);
     this.saveLocalState();
-    return this.localState.paymentNotes[idx];
+    return updated;
   }
 
   public async deletePaymentNote(id: string, tenantId: string): Promise<boolean> {
     const before = this.localState.paymentNotes.length;
     this.localState.paymentNotes = this.localState.paymentNotes.filter((p) => !(p.id === id && p.tenantId === tenantId));
     const deleted = this.localState.paymentNotes.length < before;
-    if (deleted) this.saveLocalState();
+    if (deleted) {
+      await this.removePaymentNoteFinances(tenantId, id);
+      this.saveLocalState();
+    }
     return deleted;
+  }
+
+  public async syncPaymentNoteToFinances(tenantId: string, note: PaymentNote): Promise<void> {
+    if (!this.localState.financeTransactions) this.localState.financeTransactions = [];
+
+    // Si la nota está cancelada, removemos transacciones previas asociadas
+    if (note.status === 'cancelled') {
+      await this.removePaymentNoteFinances(tenantId, note.id);
+      return;
+    }
+
+    interface ExpectedIncome {
+      sourceEntityId: string;
+      category: string;
+      amount: number;
+      currency: 'PEN' | 'USD';
+      date: string;
+      description: string;
+      paymentMethod: string;
+      reference: string;
+      receiptUrl?: string;
+    }
+
+    const expectedIncomes: ExpectedIncome[] = [];
+    const clientLabel = note.companyName || note.clientName || 'Cliente';
+
+    // 1. Caso Membresía por cuotas/meses
+    if (note.isMembership && Array.isArray(note.membershipInstallments) && note.membershipInstallments.length > 0) {
+      for (const inst of note.membershipInstallments) {
+        if (inst.isSplit && Array.isArray(inst.subInstallments) && inst.subInstallments.length > 0) {
+          for (const sub of inst.subInstallments) {
+            if (sub.status === 'paid' && Number(sub.amount) > 0) {
+              expectedIncomes.push({
+                sourceEntityId: `${note.id}_inst_${inst.id || inst.monthNumber}_sub_${sub.id}`,
+                category: 'Membresías Mensuales',
+                amount: Number(sub.amount),
+                currency: (note.currency as 'PEN' | 'USD') || 'PEN',
+                date: sub.paidDate || inst.paidDate || note.issueDate,
+                description: `Abono Cuota Mes ${inst.monthNumber} (${inst.periodName || inst.planName || 'Plan'}) - Nota #${note.code} (${clientLabel})`,
+                paymentMethod: note.paymentMethod || 'Transferencia Bancaria',
+                reference: sub.operationNumber || inst.operationNumber || note.code,
+                receiptUrl: sub.voucherUrl || inst.voucherUrl,
+              });
+            }
+          }
+        } else if (inst.status === 'paid' && Number(inst.amount) > 0) {
+          expectedIncomes.push({
+            sourceEntityId: `${note.id}_inst_${inst.id || inst.monthNumber}`,
+            category: 'Membresías Mensuales',
+            amount: Number(inst.amount),
+            currency: (note.currency as 'PEN' | 'USD') || 'PEN',
+            date: inst.paidDate || note.issueDate,
+            description: `Cuota Mes ${inst.monthNumber} (${inst.periodName || inst.planName || 'Plan'}) - Nota #${note.code} (${clientLabel})`,
+            paymentMethod: note.paymentMethod || 'Transferencia Bancaria',
+            reference: inst.operationNumber || note.code,
+            receiptUrl: inst.voucherUrl,
+          });
+        }
+      }
+
+      // Extras asociados a la membresía
+      if (Array.isArray(note.extraItems)) {
+        for (const extra of note.extraItems) {
+          if (extra.status === 'paid') {
+            const extraAmt = Number(extra.total || (extra.unitPrice * extra.quantity)) || 0;
+            if (extraAmt > 0) {
+              expectedIncomes.push({
+                sourceEntityId: `${note.id}_extra_${extra.id}`,
+                category: 'Ventas de Servicios',
+                amount: extraAmt,
+                currency: (note.currency as 'PEN' | 'USD') || 'PEN',
+                date: extra.paidDate || note.issueDate,
+                description: `Servicio Extra: ${extra.title} - Nota #${note.code} (${clientLabel})`,
+                paymentMethod: note.paymentMethod || 'Transferencia Bancaria',
+                reference: extra.operationNumber || note.code,
+                receiptUrl: extra.voucherUrl,
+              });
+            }
+          }
+        }
+      }
+    } else {
+      // 2. Nota de venta estándar / Pago total o parcial
+      const isPaid = note.status === 'paid';
+      const paidAmt = Number(note.paidAmount) || 0;
+      const totalAmt = Number(note.total) || 0;
+
+      if (isPaid || paidAmt > 0) {
+        const finalAmt = isPaid && paidAmt === 0 ? totalAmt : paidAmt;
+        if (finalAmt > 0) {
+          expectedIncomes.push({
+            sourceEntityId: `${note.id}_payment`,
+            category: 'Ventas de Servicios',
+            amount: finalAmt,
+            currency: (note.currency as 'PEN' | 'USD') || 'PEN',
+            date: note.paymentDate || note.issueDate,
+            description: `Cobro Nota de Pago #${note.code} - ${clientLabel}`,
+            paymentMethod: note.paymentMethod || 'Transferencia Bancaria',
+            reference: note.operationNumber || note.code,
+            receiptUrl: note.items?.[0]?.voucherUrl,
+          });
+        }
+      }
+    }
+
+    const expectedKeys = new Set(expectedIncomes.map((e) => e.sourceEntityId));
+    const now = new Date().toISOString();
+
+    for (const exp of expectedIncomes) {
+      const existingIdx = this.localState.financeTransactions.findIndex(
+        (t) => t.tenantId === tenantId && t.sourceModule === 'payment_notes' && t.sourceEntityId === exp.sourceEntityId
+      );
+
+      if (existingIdx !== -1) {
+        this.localState.financeTransactions[existingIdx] = {
+          ...this.localState.financeTransactions[existingIdx],
+          amount: exp.amount,
+          currency: exp.currency,
+          date: exp.date,
+          description: exp.description,
+          paymentMethod: exp.paymentMethod,
+          reference: exp.reference,
+          receiptUrl: exp.receiptUrl || this.localState.financeTransactions[existingIdx].receiptUrl,
+          category: exp.category,
+          updatedAt: now,
+        };
+      } else {
+        const newTx: FinanceTransaction = {
+          id: crypto.randomUUID(),
+          tenantId,
+          type: 'income',
+          category: exp.category,
+          amount: exp.amount,
+          currency: exp.currency,
+          date: exp.date || now.split('T')[0],
+          description: exp.description,
+          paymentMethod: exp.paymentMethod,
+          reference: exp.reference,
+          status: 'completed',
+          receiptUrl: exp.receiptUrl,
+          sourceModule: 'payment_notes',
+          sourceEntityId: exp.sourceEntityId,
+          createdAt: now,
+          updatedAt: now,
+        };
+        this.localState.financeTransactions.unshift(newTx);
+      }
+    }
+
+    // Remover transacciones que correspondían a esta nota pero fueron desmarcadas
+    const prefix = `${note.id}_`;
+    this.localState.financeTransactions = this.localState.financeTransactions.filter((t) => {
+      if (t.tenantId === tenantId && t.sourceModule === 'payment_notes' && t.sourceEntityId?.startsWith(prefix)) {
+        return expectedKeys.has(t.sourceEntityId);
+      }
+      return true;
+    });
+  }
+
+  public async removePaymentNoteFinances(tenantId: string, noteId: string): Promise<void> {
+    if (!this.localState.financeTransactions) return;
+    const prefix = `${noteId}_`;
+    this.localState.financeTransactions = this.localState.financeTransactions.filter((t) => {
+      if (t.tenantId === tenantId && t.sourceModule === 'payment_notes') {
+        return !(t.sourceEntityId === noteId || t.sourceEntityId?.startsWith(prefix));
+      }
+      return true;
+    });
+  }
+
+  public async syncAllPaymentNotesToFinances(tenantId: string): Promise<{ syncedCount: number; totalNotes: number }> {
+    const notes = await this.getPaymentNotesByTenant(tenantId);
+    let count = 0;
+    for (const note of notes) {
+      await this.syncPaymentNoteToFinances(tenantId, note);
+      count++;
+    }
+    this.saveLocalState();
+    return { syncedCount: count, totalNotes: notes.length };
   }
 
   // ===========================================================================
@@ -3432,6 +3617,8 @@ export class DatabaseManager {
       reference: data.reference || '',
       status: data.status || 'completed',
       receiptUrl: data.receiptUrl,
+      sourceModule: data.sourceModule,
+      sourceEntityId: data.sourceEntityId,
       createdAt: now,
       updatedAt: now,
     };

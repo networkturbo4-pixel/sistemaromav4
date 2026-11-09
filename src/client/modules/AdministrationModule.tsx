@@ -223,6 +223,23 @@ export const AdministrationModule: React.FC = () => {
     }
   };
 
+  const handleSyncPaymentNotes = async () => {
+    try {
+      const res = await apiFetch<{
+        ok: boolean;
+        syncedCount: number;
+        totalNotes: number;
+        transactions: FinanceTransaction[];
+      }>('/api/administration/finances/sync-payment-notes', { method: 'POST' });
+      if (res.transactions) {
+        setTransactions(res.transactions);
+      }
+      toast(`✨ ${res.syncedCount || 0} notas de cobro sincronizadas con éxito`, 'success');
+    } catch (err: any) {
+      toast(err.message || 'Error al sincronizar notas de cobro', 'error');
+    }
+  };
+
   // Handlers Contabilidad
   const handleCreateAccountingEntry = async (data: Partial<AccountingEntry>) => {
     try {
@@ -442,6 +459,7 @@ export const AdministrationModule: React.FC = () => {
           transactions={transactions}
           onCreateTransaction={handleCreateTransaction}
           onDeleteTransaction={handleDeleteTransaction}
+          onSyncPaymentNotes={handleSyncPaymentNotes}
         />
       )}
 
