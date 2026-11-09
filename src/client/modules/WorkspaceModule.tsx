@@ -220,7 +220,7 @@ export const WorkspaceModule: React.FC = () => {
         contractedPosts: 12,
         contractedReels: 4,
         contractedStories: 20,
-        assignedUsers: teamUsers.slice(0, 2).map((u) => ({ id: u.id, name: u.name, role: u.jobTitle })),
+        assignedUsers: user ? [{ id: user.id, name: user.fullName || user.name, role: user.jobTitle || 'Líder' }] : [],
         periodStart: new Date().toISOString().split('T')[0],
         periodEnd: new Date(Date.now() + 86400000 * 30).toISOString().split('T')[0],
       });
@@ -269,7 +269,12 @@ export const WorkspaceModule: React.FC = () => {
       contractedPosts: 12,
       contractedReels: 4,
       contractedStories: 20,
-      assignedUsers: assignedMembers.length > 0 ? assignedMembers : teamUsers.slice(0, 2).map((u) => ({ id: u.id, name: u.name, role: u.jobTitle })),
+      assignedUsers:
+        assignedMembers.length > 0
+          ? assignedMembers
+          : user
+          ? [{ id: user.id, name: user.fullName || user.name, role: user.jobTitle || 'Líder' }]
+          : [],
       periodStart: os.startDate || new Date().toISOString().split('T')[0],
       periodEnd: os.deliveryDate || new Date(Date.now() + 86400000 * 30).toISOString().split('T')[0],
     });
@@ -1002,7 +1007,10 @@ export const WorkspaceModule: React.FC = () => {
               onBackToHub={() => setCurrentView('hub')}
               onOpenNewProject={handleOpenNewProject}
               onOpenEditProject={(proj) => {
-                setEditingProject({ ...proj });
+                setEditingProject({
+                  ...proj,
+                  assignedUsers: Array.isArray(proj.assignedUsers) ? [...proj.assignedUsers] : [],
+                });
                 setIsProjectModalOpen(true);
               }}
               onToggleArchiveProject={handleToggleArchiveProject}

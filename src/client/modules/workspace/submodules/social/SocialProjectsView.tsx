@@ -311,19 +311,27 @@ export const SocialProjectsView: React.FC<SocialProjectsViewProps> = ({
                     </span>
                     <div className="flex -space-x-1.5 overflow-hidden">
                       {proj.assignedUsers && proj.assignedUsers.length > 0 ? (
-                        proj.assignedUsers.slice(0, 3).map((u, idx) => (
-                          <div
-                            key={idx}
-                            className="w-6 h-6 rounded-full bg-indigo-600 text-white border-2 border-white dark:border-slate-900 font-extrabold text-[10px] flex items-center justify-center uppercase shrink-0 shadow-2xs"
-                            title={`${u.name} (${u.role || 'Equipo'})`}
-                          >
-                            {u.name.charAt(0)}
-                          </div>
-                        ))
+                        <>
+                          {proj.assignedUsers.slice(0, 3).map((u, idx) => (
+                            <div
+                              key={idx}
+                              className="w-6 h-6 rounded-full bg-indigo-600 text-white border-2 border-white dark:border-slate-900 font-extrabold text-[10px] flex items-center justify-center uppercase shrink-0 shadow-2xs"
+                              title={`${u.name} (${u.role || 'Equipo'})`}
+                            >
+                              {(u.name || 'U').charAt(0)}
+                            </div>
+                          ))}
+                          {proj.assignedUsers.length > 3 && (
+                            <div
+                              className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-2 border-white dark:border-slate-900 font-bold text-[9px] flex items-center justify-center shrink-0 shadow-2xs"
+                              title={`${proj.assignedUsers.length - 3} miembros más`}
+                            >
+                              +{proj.assignedUsers.length - 3}
+                            </div>
+                          )}
+                        </>
                       ) : (
-                        <div className="w-6 h-6 rounded-full bg-indigo-600 text-white font-extrabold text-[10px] flex items-center justify-center uppercase shrink-0">
-                          {(tenant.companyInfo?.commercialName || 'A').charAt(0)}
-                        </div>
+                        <span className="text-[10px] text-slate-400 italic">Solo administradores</span>
                       )}
                     </div>
                   </div>

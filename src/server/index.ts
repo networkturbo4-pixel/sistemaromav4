@@ -33,6 +33,7 @@ import {
   requirePermission,
   requireAnyPermission,
   signSessionToken,
+  isRoleAdmin,
 } from './middleware/auth';
 import { PERMISSIONS_CATALOG, hasPermission, hasAnyPermission } from '../shared/permissions';
 import driveRouter from './routes/drive.routes';
@@ -1464,7 +1465,22 @@ app.get(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const clientId = req.query.clientId as string | undefined;
-      const projects = await db.getWorkspaceProjects(req.auth!.tenant.id, clientId);
+      let projects = await db.getWorkspaceProjects(req.auth!.tenant.id, clientId);
+      const isAdm = isRoleAdmin(req.auth!.role);
+      const userId = req.auth!.user.id;
+
+      // Si no es administrador, filtrar exclusivamente proyectos donde esté asignado
+      if (!isAdm) {
+        projects = projects.filter((p) => {
+          if (!p.assignedUsers || !Array.isArray(p.assignedUsers) || p.assignedUsers.length === 0) {
+            return false;
+          }
+          return p.assignedUsers.some((u: any) =>
+            typeof u === 'string' ? u === userId : (u && u.id === userId)
+          );
+        });
+      }
+
       res.json({ projects });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
@@ -1545,7 +1561,24 @@ app.get(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const projectId = req.query.projectId as string | undefined;
-      const months = await db.getWorkspaceMonths(req.auth!.tenant.id, projectId);
+      let months = await db.getWorkspaceMonths(req.auth!.tenant.id, projectId);
+      const isAdm = isRoleAdmin(req.auth!.role);
+      const userId = req.auth!.user.id;
+
+      if (!isAdm) {
+        const allProjects = await db.getWorkspaceProjects(req.auth!.tenant.id);
+        const allowedProjectIds = new Set(
+          allProjects
+            .filter((p) =>
+              (p.assignedUsers || []).some((u: any) =>
+                typeof u === 'string' ? u === userId : (u && u.id === userId)
+              )
+            )
+            .map((p) => p.id)
+        );
+        months = months.filter((m) => allowedProjectIds.has(m.projectId));
+      }
+
       res.json({ months });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
@@ -1688,7 +1721,32 @@ app.get(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const clientId = req.query.clientId as string | undefined;
-      const posts = await db.getWorkspacePosts(req.auth!.tenant.id, clientId);
+      let posts = await db.getWorkspacePosts(req.auth!.tenant.id, clientId);
+      const isAdm = isRoleAdmin(req.auth!.role);
+      const userId = req.auth!.user.id;
+
+      if (!isAdm) {
+        const allProjects = await db.getWorkspaceProjects(req.auth!.tenant.id);
+        const allowedProjectIds = new Set(
+          allProjects
+            .filter((p) =>
+              (p.assignedUsers || []).some((u: any) =>
+                typeof u === 'string' ? u === userId : (u && u.id === userId)
+              )
+            )
+            .map((p) => p.id)
+        );
+        const allMonths = await db.getWorkspaceMonths(req.auth!.tenant.id);
+        const allowedMonthIds = new Set(
+          allMonths.filter((m) => allowedProjectIds.has(m.projectId)).map((m) => m.id)
+        );
+        posts = posts.filter((p) => {
+          if (p.projectId && allowedProjectIds.has(p.projectId)) return true;
+          if (p.monthId && allowedMonthIds.has(p.monthId)) return true;
+          return false;
+        });
+      }
+
       res.json({ posts });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });

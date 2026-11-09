@@ -179,21 +179,58 @@ export const PublicServiceOrderView: React.FC<{ token: string }> = ({ token }) =
   const statusStyle = STATUS_CONFIG[order.status] || STATUS_CONFIG.active;
 
   const getPlatformBadge = (plat: string) => {
-    switch (plat) {
+    switch (plat?.toLowerCase()) {
       case 'instagram':
-        return { label: 'Instagram', color: 'from-pink-500 via-rose-500 to-amber-500 text-white' };
+        return {
+          label: 'Instagram',
+          color: 'bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 text-white',
+          icon: <Instagram className="w-3.5 h-3.5" />,
+        };
       case 'facebook':
-        return { label: 'Facebook', color: 'bg-blue-600 text-white' };
+        return {
+          label: 'Facebook',
+          color: 'bg-blue-600 text-white',
+          icon: <Facebook className="w-3.5 h-3.5" />,
+        };
       case 'tiktok':
-        return { label: 'TikTok', color: 'bg-slate-900 text-white' };
+        return {
+          label: 'TikTok',
+          color: 'bg-slate-900 text-white',
+          icon: (
+            <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+              <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.298-.002.595.042.88.13V9.4a6.33 6.33 0 0 0-1-.08A6.34 6.34 0 0 0 3 15.66a6.34 6.34 0 0 0 10.82 4.49 6.3 6.3 0 0 0 1.87-4.49V8.5a8.28 8.28 0 0 0 4.9 1.6V6.69z" />
+            </svg>
+          ),
+        };
       case 'linkedin':
-        return { label: 'LinkedIn', color: 'bg-sky-700 text-white' };
+        return {
+          label: 'LinkedIn',
+          color: 'bg-sky-700 text-white',
+          icon: <Linkedin className="w-3.5 h-3.5" />,
+        };
       case 'youtube':
-        return { label: 'YouTube', color: 'bg-red-600 text-white' };
+        return {
+          label: 'YouTube',
+          color: 'bg-red-600 text-white',
+          icon: <Youtube className="w-3.5 h-3.5" />,
+        };
       case 'x':
-        return { label: 'X (Twitter)', color: 'bg-black text-white' };
+      case 'twitter':
+        return {
+          label: 'X (Twitter)',
+          color: 'bg-black text-white',
+          icon: (
+            <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+          ),
+        };
       default:
-        return { label: plat, color: 'bg-slate-700 text-white' };
+        return {
+          label: plat,
+          color: 'bg-slate-700 text-white',
+          icon: <Check className="w-3.5 h-3.5" />,
+        };
     }
   };
 
@@ -418,7 +455,7 @@ export const PublicServiceOrderView: React.FC<{ token: string }> = ({ token }) =
           {order.socialMedia?.enabled && (
             <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm">
               <div className="flex items-center gap-3 pb-5 border-b border-slate-100 dark:border-slate-800 mb-6">
-                <div className="w-10 h-10 rounded-2xl bg-pink-600 text-white flex items-center justify-center shadow-md">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 text-white flex items-center justify-center shadow-md">
                   <Instagram className="w-5 h-5" />
                 </div>
                 <div>
@@ -445,7 +482,7 @@ export const PublicServiceOrderView: React.FC<{ token: string }> = ({ token }) =
                           key={plat}
                           className={`px-3 py-1.5 rounded-xl text-xs font-extrabold shadow-xs flex items-center gap-1.5 ${p.color}`}
                         >
-                          <Check className="w-3.5 h-3.5" />
+                          {p.icon}
                           {p.label}
                         </span>
                       );

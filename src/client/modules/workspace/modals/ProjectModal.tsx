@@ -1,27 +1,36 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   FileText,
   Folder,
   FolderPlus,
   ExternalLink,
+  Users,
+  Check,
+  Search,
 } from 'lucide-react';
 import {
   WorkspaceProject,
   WorkspaceProjectStatus,
   ServiceOrder,
   SocialPostPlatform,
+  Client,
 } from '../../../../shared/types';
 import { getPlatformIcon } from '../types';
+import { useApp } from '../../../context/AppContext';
 
 interface ProjectModalProps {
   isOpen: boolean;
   editingProject: Partial<WorkspaceProject> | null;
   setEditingProject: React.Dispatch<React.SetStateAction<Partial<WorkspaceProject> | null>>;
   serviceOrders: ServiceOrder[];
+  clients?: Client[];
+  teamUsers?: any[];
+  isSavingProject?: boolean;
   onClose: () => void;
   onSaveProject: (e: React.FormEvent) => void;
   onSelectServiceOrder: (osId: string) => void;
+  onTogglePlatform?: (plat: SocialPostPlatform) => void;
   onOpenDrivePicker: () => void;
 }
 
@@ -30,12 +39,41 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
   editingProject,
   setEditingProject,
   serviceOrders,
+  clients,
+  teamUsers,
+  isSavingProject,
   onClose,
   onSaveProject,
   onSelectServiceOrder,
+  onTogglePlatform,
   onOpenDrivePicker,
 }) => {
+  const { apiFetch } = useApp();
+  const [internalUsers, setInternalUsers] = useState<any[]>(teamUsers || []);
+  const [userSearch, setUserSearch] = useState('');
+
+  useEffect(() => {
+    if (teamUsers && teamUsers.length > 0) {
+      setInternalUsers(teamUsers);
+    } else {
+      apiFetch<{ users: any[] }>('/api/settings/users')
+        .then((res) => {
+          if (Array.isArray(res.users)) setInternalUsers(res.users);
+        })
+        .catch(() => {});
+    }
+  }, [teamUsers, apiFetch]);
+
   if (!isOpen || !editingProject) return null;
+
+  const usersList = (internalUsers.length > 0 ? internalUsers : (teamUsers || [])).filter((u: any) => {
+    if (!userSearch.trim()) return true;
+    const term = userSearch.toLowerCase();
+    const name = (u.fullName || u.name || '').toLowerCase();
+    const email = (u.email || '').toLowerCase();
+    const job = (u.jobTitle || '').toLowerCase();
+    return name.includes(term) || email.includes(term) || job.includes(term);
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fadeIn">
@@ -269,11 +307,15 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
                       key={plat}
                       type="button"
                       onClick={() => {
-                        const current = editingProject.platforms || [];
-                        const next = isSelected
-                          ? current.filter((p) => p !== plat)
-                          : [...current, plat];
-                        setEditingProject({ ...editingProject, platforms: next });
+                        if (onTogglePlatform) {
+                          onTogglePlatform(plat);
+                        } else {
+                          const current = editingProject.platforms || [];
+                          const next = isSelected
+                            ? current.filter((p) => p !== plat)
+                            : [...current, plat];
+                          setEditingProject({ ...editingProject, platforms: next });
+                        }
                       }}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                         isSelected
@@ -286,6 +328,104 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
                     </button>
                   );
                 }
+              )}
+            </div>
+          </div>
+
+          {/* Asignación de Usuarios / Equipo con Acceso al Proyecto */}
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <label className="font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 text-xs">
+                  <Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  <span>Equipo Asignado con Acceso al Proyecto</span>
+                </label>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Los usuarios asignados podrán ver y gestionar este proyecto. Los usuarios no asignados (salvo administradores) no podrán ver este proyecto.
+                </p>
+              </div>
+              <span className="px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-[11px] font-extrabold text-indigo-700 dark:text-indigo-300 self-start sm:self-auto shrink-0">
+                {(editingProject.assignedUsers || []).length} asignado(s)
+              </span>
+            </div>
+
+            {internalUsers.length > 4 && (
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Buscar miembros por nombre, correo o cargo..."
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                />
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+              {usersList.length > 0 ? (
+                usersList.map((u: any) => {
+                  const isAssigned = (editingProject.assignedUsers || []).some(
+                    (au: any) => (typeof au === 'string' ? au === u.id : au?.id === u.id)
+                  );
+                  const displayName = u.fullName || u.name || u.email || 'Usuario';
+                  const job = u.jobTitle || 'Miembro del equipo';
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => {
+                        const current = editingProject.assignedUsers || [];
+                        let next;
+                        if (isAssigned) {
+                          next = current.filter((au: any) =>
+                            typeof au === 'string' ? au !== u.id : au?.id !== u.id
+                          );
+                        } else {
+                          next = [...current, { id: u.id, name: displayName, role: job }];
+                        }
+                        setEditingProject({
+                          ...editingProject,
+                          assignedUsers: next,
+                        });
+                      }}
+                      className={`p-2.5 rounded-xl border text-left flex items-center justify-between gap-2.5 transition cursor-pointer ${
+                        isAssigned
+                          ? 'bg-indigo-50/90 dark:bg-indigo-950/40 border-indigo-400 dark:border-indigo-600 text-indigo-950 dark:text-indigo-100 shadow-2xs'
+                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          className={`w-7 h-7 rounded-full flex items-center justify-center font-black text-[11px] shrink-0 uppercase shadow-2xs ${
+                            isAssigned
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {displayName.charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold truncate leading-tight">{displayName}</p>
+                          <p className="text-[10px] text-slate-400 truncate leading-tight">{job}</p>
+                        </div>
+                      </div>
+                      <div
+                        className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 border transition ${
+                          isAssigned
+                            ? 'bg-indigo-600 border-indigo-600 text-white'
+                            : 'border-slate-300 dark:border-slate-600 bg-transparent'
+                        }`}
+                      >
+                        {isAssigned && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="text-xs text-slate-400 italic col-span-2 text-center py-2">
+                  No se encontraron miembros del equipo.
+                </p>
               )}
             </div>
           </div>
