@@ -225,16 +225,18 @@ export const AdministrationModule: React.FC = () => {
 
   const handleSyncPaymentNotes = async () => {
     try {
-      const res = await apiFetch<{
-        ok: boolean;
-        syncedCount: number;
-        totalNotes: number;
-        transactions: FinanceTransaction[];
-      }>('/api/administration/finances/sync-payment-notes', { method: 'POST' });
-      if (res.transactions) {
-        setTransactions(res.transactions);
+      let res: any;
+      try {
+        res = await apiFetch('/api/administration/finances/sync-payment-notes', { method: 'POST' });
+      } catch {
+        res = await apiFetch('/api/administration/sync-payment-notes', { method: 'POST' });
       }
-      toast(`✨ ${res.syncedCount || 0} notas de cobro sincronizadas con éxito`, 'success');
+      if (res?.transactions) {
+        setTransactions(res.transactions);
+      } else {
+        await loadData();
+      }
+      toast(`✨ ${res?.syncedCount ?? 0} notas de cobro sincronizadas con éxito`, 'success');
     } catch (err: any) {
       toast(err.message || 'Error al sincronizar notas de cobro', 'error');
     }

@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   DollarSign,
   TrendingUp,
@@ -6,12 +7,9 @@ import {
   Scale,
   Plus,
   Search,
-  Filter,
   Trash2,
-  Calendar,
   Tag,
   CreditCard,
-  FileSpreadsheet,
   Camera,
   UploadCloud,
   Sparkles,
@@ -19,10 +17,8 @@ import {
   Loader2,
   Eye,
   X,
-  FileText,
   Image as ImageIcon,
   ExternalLink,
-  Smartphone,
   RefreshCw,
 } from 'lucide-react';
 import { FinanceTransaction } from '../../../../../shared/types';
@@ -250,49 +246,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 animate-fadeIn">
-      {/* Botones de Acción Rápida (Mobile & Desktop Friendly) */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 p-4 sm:p-6 rounded-3xl text-white shadow-xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-        <div>
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/10 text-emerald-300 backdrop-blur-xs mb-2">
-            <Sparkles className="w-3.5 h-3.5" /> Módulo de Finanzas & Caja
-          </span>
-          <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-            Control de Ingresos, Egresos y Vouchers
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-xl">
-            Registra movimientos manuales o escanea comprobantes (Yape, Plin, BCP, BBVA) con OCR instantáneo desde tu móvil o PC.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => openModalWithDefaults('income')}
-            className="flex-1 sm:flex-none px-4 py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
-          >
-            <TrendingUp className="w-4 h-4" /> + Ingreso Rápido
-          </button>
-
-          <button
-            type="button"
-            onClick={() => openModalWithDefaults('expense')}
-            className="flex-1 sm:flex-none px-4 py-2.5 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-black shadow-lg shadow-rose-500/25 flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
-          >
-            <TrendingDown className="w-4 h-4" /> - Egreso Rápido
-          </button>
-
-          <button
-            type="button"
-            onClick={() => openModalWithDefaults('income', true)}
-            className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer border border-indigo-400/30"
-            title="Escanear voucher con la cámara de tu celular"
-          >
-            <Camera className="w-4 h-4" /> Escanear Voucher (OCR)
-          </button>
-        </div>
-      </div>
-
+    <div className="space-y-6">
       {/* Tarjetas de Métricas de Finanzas */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-xs">
@@ -341,7 +295,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
         </div>
       </div>
 
-      {/* Barra de Filtros y Búsqueda */}
+      {/* Barra de Filtros y Acciones */}
       <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2 flex-1">
           <div className="relative flex-1 min-w-[200px] max-w-sm">
@@ -424,13 +378,25 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => openModalWithDefaults('income')}
-          className="px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 text-xs font-black shadow-md flex items-center justify-center gap-1.5 transition cursor-pointer"
-        >
-          <Plus className="w-4 h-4" /> Nuevo Movimiento
-        </button>
+        {/* Botones de Acción al lado: Escanear OCR y Nuevo Movimiento */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => openModalWithDefaults('income', true)}
+            className="px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black shadow-md shadow-indigo-600/25 flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer border border-indigo-500/30"
+            title="Escanear comprobante con OCR o cámara móvil"
+          >
+            <Camera className="w-4 h-4" /> Escanear Voucher (OCR)
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openModalWithDefaults('income')}
+            className="px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 text-xs font-black shadow-md flex items-center justify-center gap-1.5 transition cursor-pointer"
+          >
+            <Plus className="w-4 h-4" /> Nuevo Movimiento
+          </button>
+        </div>
       </div>
 
       {/* Tabla de Movimientos */}
@@ -441,9 +407,16 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
             Sin transacciones registradas
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
-            Comienza registrando tus primeros ingresos o egresos con el formulario rápido o escaneando un voucher.
+            Comienza registrando tus primeros ingresos o egresos o escaneando un comprobante con OCR.
           </p>
           <div className="mt-4 flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => openModalWithDefaults('income', true)}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+            >
+              <Camera className="w-4 h-4" /> Escanear Voucher
+            </button>
             <button
               type="button"
               onClick={() => openModalWithDefaults('income')}
@@ -563,30 +536,34 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
         </div>
       )}
 
-      {/* Modal Nuevo Movimiento con OCR Inteligente */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm animate-fadeIn overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-xl p-5 sm:p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto">
-            {/* Header del Modal */}
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+      {/* Modal Nuevo Movimiento con Portal directo a document.body */}
+      {isModalOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            {/* Header del Modal idéntico a todos los modales del sistema */}
+            <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
               <div>
-                <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-                  <span>Registrar Movimiento Financiero</span>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 inline-block mb-1">
+                  Finanzas • Movimiento
+                </span>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                  Registrar Movimiento Financiero
                 </h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   Completa los datos manualmente o escanea el comprobante con OCR automático.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Formulario con scroll vertical */}
+            <form onSubmit={handleSubmit} className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
               {/* Tipo de movimiento: Ingreso o Egreso */}
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -604,7 +581,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   className={`py-2.5 rounded-2xl text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${
                     formData.type === 'income'
                       ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                   }`}
                 >
                   <TrendingUp className="w-4 h-4" /> + Ingreso
@@ -624,7 +601,7 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                   className={`py-2.5 rounded-2xl text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${
                     formData.type === 'expense'
                       ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                   }`}
                 >
                   <TrendingDown className="w-4 h-4" /> - Egreso / Gasto
@@ -671,13 +648,13 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                     className="py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer disabled:opacity-50"
                   >
                     <Camera className="w-4 h-4" />
-                    Tomar Foto (Cámara Móvil)
+                    Tomar Foto (Cámara)
                   </button>
                   <button
                     type="button"
                     onClick={() => galleryInputRef.current?.click()}
                     disabled={isOcrProcessing}
-                    className="py-2.5 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition hover:bg-slate-100 cursor-pointer disabled:opacity-50"
+                    className="py-2.5 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer disabled:opacity-50"
                   >
                     <UploadCloud className="w-4 h-4 text-slate-500" />
                     Subir Voucher / Captura
@@ -898,8 +875,8 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                 </div>
               </div>
 
-              {/* Botones de Acción */}
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+              {/* Botones de Acción del Modal */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
@@ -933,11 +910,12 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* Modal Lightbox para Visualizar Comprobante */}
-      {previewReceiptUrl && (
+      {/* Modal Lightbox para Visualizar Comprobante con Portal directo a document.body */}
+      {previewReceiptUrl && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
           <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-4 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-3">
             <div className="flex items-center justify-between">
@@ -981,7 +959,8 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -2770,6 +2770,21 @@ app.post(
 );
 
 app.post(
+  '/api/administration/sync-payment-notes',
+  requireAuth,
+  requirePermission('administration.finances.manage'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const result = await db.syncAllPaymentNotesToFinances(req.auth!.tenant.id);
+      const transactions = await db.getFinanceTransactions(req.auth!.tenant.id);
+      res.json({ ok: true, ...result, transactions });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+app.post(
   '/api/administration/finances/sync-payment-notes',
   requireAuth,
   requirePermission('administration.finances.manage'),
