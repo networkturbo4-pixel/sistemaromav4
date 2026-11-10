@@ -50,6 +50,7 @@ interface MusicPlayerContextType {
   removeFromQueue: (index: number) => void;
   clearQueue: () => void;
   createPlaylist: (name: string, description?: string) => Playlist;
+  updatePlaylist: (id: string, updates: Partial<Pick<Playlist, 'name' | 'description' | 'accentColor'>>) => void;
   deletePlaylist: (id: string) => void;
   addSongToPlaylist: (playlistId: string, song: Song) => void;
   removeSongFromPlaylist: (playlistId: string, songId: string) => void;
@@ -262,6 +263,22 @@ export const MusicPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return newPl;
   }, []);
 
+  const updatePlaylist = useCallback(
+    (id: string, updates: Partial<Pick<Playlist, 'name' | 'description' | 'accentColor'>>) => {
+      setPlaylists((prev) =>
+        prev.map((p) => {
+          if (p.id !== id) return p;
+          return {
+            ...p,
+            ...updates,
+            name: updates.name !== undefined ? updates.name.trim() || p.name : p.name,
+          };
+        })
+      );
+    },
+    []
+  );
+
   const deletePlaylist = useCallback((id: string) => {
     setPlaylists((prev) => prev.filter((p) => p.id !== id));
   }, []);
@@ -362,6 +379,7 @@ export const MusicPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
         removeFromQueue,
         clearQueue,
         createPlaylist,
+        updatePlaylist,
         deletePlaylist,
         addSongToPlaylist,
         removeSongFromPlaylist,

@@ -26,6 +26,11 @@ export const YouTubeAudioEngine: React.FC = () => {
   const intervalRef = useRef<any>(null);
   const isApiLoadedRef = useRef<boolean>(false);
   const silentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const isPlayingRef = useRef<boolean>(isPlaying);
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
 
   // Silent audio generator to keep mobile browsers running in background
   useEffect(() => {
@@ -96,23 +101,41 @@ export const YouTubeAudioEngine: React.FC = () => {
             }
           },
           onStateChange: (event: any) => {
+            const state = event.data;
             // YT.PlayerState.ENDED === 0
-            if (event.data === 0) {
+            if (state === 0) {
               onEngineSongEnded();
             }
             // YT.PlayerState.PLAYING === 1
-            else if (event.data === 1) {
+            else if (state === 1) {
               onEnginePlayerStateChange(true);
               if (silentAudioRef.current) {
                 silentAudioRef.current.play().catch(() => {});
               }
             }
             // YT.PlayerState.PAUSED === 2
-            else if (event.data === 2) {
-              onEnginePlayerStateChange(false);
-              if (silentAudioRef.current) {
-                silentAudioRef.current.pause();
+            else if (state === 2) {
+              // Si el estado de la app indica que debe reproducirse (por ejemplo carga inicial o buffer),
+              // forzar reproducción y NO pausar el estado en React
+              if (isPlayingRef.current) {
+                try {
+                  playerRef.current?.playVideo?.();
+                } catch {}
+              } else {
+                onEnginePlayerStateChange(false);
+                if (silentAudioRef.current) {
+                  silentAudioRef.current.pause();
+                }
               }
+            }
+          },
+          onError: (event: any) => {
+            console.warn('YouTube Audio Engine error:', event?.data);
+            // Si el video está bloqueado para incrustación (101 / 150), saltar a la siguiente
+            if (event?.data === 150 || event?.data === 101 || event?.data === 100) {
+              setTimeout(() => {
+                onEngineSongEnded();
+              }, 800);
             }
           },
         },
@@ -131,9 +154,13 @@ export const YouTubeAudioEngine: React.FC = () => {
       prevVideoIdRef.current = currentSong.videoId;
       try {
         if (typeof playerRef.current.loadVideoById === 'function') {
-          playerRef.current.loadVideoById(currentSong.videoId);
-          if (isPlaying && typeof playerRef.current.playVideo === 'function') {
-            playerRef.current.playVideo();
+          if (isPlaying) {
+            playerRef.current.loadVideoById(currentSong.videoId);
+            try {
+              playerRef.current.playVideo();
+            } catch {}
+          } else {
+            playerRef.current.cueVideoById(currentSong.videoId);
           }
         }
       } catch (err) {
