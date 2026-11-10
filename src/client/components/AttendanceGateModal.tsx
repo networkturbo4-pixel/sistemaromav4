@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Camera,
   MapPin,
@@ -297,11 +298,21 @@ export const AttendanceGateModal: React.FC<AttendanceGateModalProps> = ({
     }
   };
 
+  // Bloquear scroll de fondo mientras esté activo
+  useEffect(() => {
+    if (!isOpen || alreadyCheckedIn) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isOpen, alreadyCheckedIn]);
+
   if (!isOpen || alreadyCheckedIn) return null;
 
-  return (
+  const modalContent = (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/90 backdrop-blur-md animate-fadeIn">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-scaleUp">
         {/* CABECERA: MODALIDAD DE ACCESO O BLOQUEO TOTAL */}
         <div
           className={`p-5 text-white flex items-center justify-between ${
@@ -552,4 +563,6 @@ export const AttendanceGateModal: React.FC<AttendanceGateModalProps> = ({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : null;
 };

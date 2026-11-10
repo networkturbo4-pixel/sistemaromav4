@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Camera,
   MapPin,
@@ -96,6 +97,25 @@ export const AttendanceRegisterModal: React.FC<AttendanceRegisterModalProps> = (
         .catch(() => setBiometricsAvailable(false));
     }
   }, []);
+
+  // Bloquear scroll del fondo y soportar tecla Escape mientras el modal esté abierto
+  useEffect(() => {
+    if (!isOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isSubmitting) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, isSubmitting, onClose]);
 
   // Inicializar cámara y geolocalización al abrir
   useEffect(() => {
@@ -245,9 +265,19 @@ export const AttendanceRegisterModal: React.FC<AttendanceRegisterModalProps> = (
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-fadeIn"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isSubmitting) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-scaleUp"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Cabecera */}
         <div className={`p-4 sm:p-5 text-white ${actionDetails.bgHeader} flex items-center justify-between`}>
           <div>
@@ -460,4 +490,6 @@ export const AttendanceRegisterModal: React.FC<AttendanceRegisterModalProps> = (
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : null;
 };
