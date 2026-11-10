@@ -195,11 +195,131 @@ export const ServiceOrdersModule: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  // Escuchar navegación dirigida desde Command Palette
+  // Escuchar navegación dirigida desde Command Palette o desde Catálogo de Servicios
   useEffect(() => {
-    if (orders.length === 0) return;
+    const handleTarget = (target: {
+      entityId?: string;
+      id?: string;
+      code?: string;
+      query?: string;
+      action?: string;
+      serviceData?: any;
+    }) => {
+      if (target.action === 'create_from_service' && target.serviceData) {
+        const srv = target.serviceData;
+        const nextNum = orders.length + 1;
+        const autoCode = `OS-${new Date().getFullYear()}-${String(nextNum).padStart(3, '0')}`;
+        const lower = `${srv.title || ''} ${srv.categoryName || ''}`.toLowerCase();
+        const isBranding = /brand|marca|identidad|logo|manual/.test(lower);
+        const isSocial = /social|redes|community|contenido|tiktok|instagram/.test(lower);
+        const isWeb = /web|landing|ecommerce|tienda|ux|ui|sistema/.test(lower);
+        const isVideo = /video|audiovisual|reel|producci|foto|spot/.test(lower);
+        const defaultCat = isBranding
+          ? 'branding'
+          : isWeb
+          ? 'web'
+          : isVideo
+          ? 'audiovisual'
+          : isSocial
+          ? 'social_media'
+          : 'branding';
 
-    const handleTarget = (target: { entityId?: string; id?: string; code?: string; query?: string }) => {
+        const mappedDeliverables =
+          Array.isArray(srv.deliverables) && srv.deliverables.length > 0
+            ? srv.deliverables.map((del: any, idx: number) => ({
+                id: `del-${Date.now()}-${idx}`,
+                category: defaultCat as any,
+                title: `${del.phase ? `[${del.phase}] ` : ''}${del.title}`,
+                description: del.details || '',
+                quantity: 1,
+                assignedUserId: teamUsers[0]?.id || '',
+                assignedUserName: teamUsers[0]?.name || '',
+                assignedUserRole: teamUsers[0]?.jobTitle || '',
+                status: idx === 0 ? ('in_progress' as const) : ('pending' as const),
+                dueDate: new Date(Date.now() + (idx + 1) * 4 * 86400000).toISOString().split('T')[0],
+              }))
+            : [
+                {
+                  id: `del-${Date.now()}-1`,
+                  category: defaultCat as any,
+                  title: srv.title || 'Entregable Principal',
+                  description: srv.briefDescription || '',
+                  quantity: 1,
+                  assignedUserId: teamUsers[0]?.id || '',
+                  assignedUserName: teamUsers[0]?.name || '',
+                  assignedUserRole: teamUsers[0]?.jobTitle || '',
+                  status: 'in_progress' as const,
+                  dueDate: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0],
+                },
+              ];
+
+        const reqNotes =
+          Array.isArray(srv.requirements) && srv.requirements.length > 0
+            ? `REQUISITOS DEL CLIENTE (${srv.title}):\n` +
+              srv.requirements.map((r: any) => `• ${r.title}: ${r.description || ''}`).join('\n') +
+              '\n\n'
+            : '';
+
+        setEditingOrder({
+          code: autoCode,
+          title: `Proyecto: ${srv.title}`,
+          clientId: clients[0]?.id || '',
+          clientName: clients[0]?.name || '',
+          companyName: clients[0]?.name || '',
+          brandName: clients[0]?.brands?.[0]?.name || clients[0]?.name || '',
+          documentType: (clients[0]?.documentType as any) || 'RUC',
+          documentNumber: clients[0]?.documentNumber || '',
+          whatsapp: clients[0]?.whatsapp || '',
+          email: clients[0]?.email || '',
+          startDate: new Date().toISOString().split('T')[0],
+          deliveryDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+          projectManagerId: teamUsers[0]?.id || user?.id || '',
+          projectManagerName: teamUsers[0]?.name || user?.name || '',
+          status: 'active',
+          totalProgress: 0,
+          socialMedia: {
+            enabled: isSocial,
+            hasBudget: false,
+            budgetAmount: 0,
+            budgetCurrency: 'PEN',
+            budgetManagedBy: 'agency',
+            platforms: ['instagram', 'facebook'],
+            postsCount: 12,
+            reelsCount: 4,
+            storiesCount: 15,
+            scopeNotes: srv.briefDescription || '',
+          },
+          branding: {
+            enabled: isBranding || (!isSocial && !isWeb && !isVideo),
+            deliverablesList: [...INITIAL_DELIVERABLES_BRANDING],
+            initialProposalsCount: 2,
+            reviewRoundsCount: 2,
+            scopeNotes: srv.briefDescription || '',
+          },
+          audiovisual: {
+            enabled: isVideo,
+            deliverablesList: [...INITIAL_DELIVERABLES_AUDIOVISUAL],
+            shootingHours: 4,
+            location: 'Estudio / Locación del cliente',
+            scopeNotes: srv.briefDescription || '',
+          },
+          web: {
+            enabled: isWeb,
+            deliverablesList: [...INITIAL_DELIVERABLES_WEB],
+            platform: 'Web Corporativa / Medida',
+            includesHosting: true,
+            domainName: '',
+            scopeNotes: srv.briefDescription || '',
+          },
+          deliverables: mappedDeliverables,
+          notes: `${reqNotes}Tiempo estimado del servicio: ${srv.deliveryTime || '3 a 5 días hábiles'}.`,
+        });
+        setIsModalOpen(true);
+        toast(`Orden de Servicio pre-cargada desde "${srv.title}"`, 'success');
+        return;
+      }
+
+      if (orders.length === 0) return;
       const targetId = target.entityId || target.id;
       const found = orders.find(
         (o) =>
@@ -218,8 +338,10 @@ export const ServiceOrdersModule: React.FC = () => {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed.module === 'service_orders') {
-          sessionStorage.removeItem('roma_open_target');
-          handleTarget(parsed);
+          if (parsed.action === 'create_from_service' || orders.length > 0) {
+            sessionStorage.removeItem('roma_open_target');
+            handleTarget(parsed);
+          }
         }
       }
     } catch {}
@@ -232,7 +354,7 @@ export const ServiceOrdersModule: React.FC = () => {
     };
     window.addEventListener('roma:open-target', listener);
     return () => window.removeEventListener('roma:open-target', listener);
-  }, [orders]);
+  }, [orders, clients, teamUsers]);
 
   const handleSaveOrder = async (e: React.FormEvent) => {
     e.preventDefault();

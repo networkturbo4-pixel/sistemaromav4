@@ -27,7 +27,6 @@ import { PublicBrandGuidelineView } from './components/PublicBrandGuidelineView'
 import { AttendanceGateModal } from './components/AttendanceGateModal';
 import { MusicPlayerProvider } from './context/MusicPlayerContext';
 import { YouTubeAudioEngine } from './components/music/YouTubeAudioEngine';
-import { AppleMusicWidget } from './components/music/AppleMusicWidget';
 
 const MainRouter: React.FC = () => {
   const { user, role, isLoading, can, logout, attendanceCheck, setAttendanceCheck } = useApp();
@@ -446,7 +445,9 @@ const MainRouter: React.FC = () => {
         )}
         {activeModule === 'clients' && can('clients.view') && <ClientsModule />}
         {activeModule === 'quotes' && can('quotes.view') && <QuotesModule />}
-        {activeModule === 'services' && can('services.view') && <ServicesModule />}
+        {activeModule === 'services' && can('services.view') && (
+          <ServicesModule onNavigate={handleNavigate} />
+        )}
         {activeModule === 'payments' && can('payments.view') && <PaymentNotesModule />}
         {activeModule === 'service_orders' && can('service_orders.view') && <ServiceOrdersModule />}
         {activeModule === 'workspace' && can('workspace.view') && <WorkspaceModule />}
@@ -460,7 +461,6 @@ const MainRouter: React.FC = () => {
         )}
       </AppShell>
       <YouTubeAudioEngine />
-      <AppleMusicWidget activeModule={activeModule} />
     </>
   );
 };

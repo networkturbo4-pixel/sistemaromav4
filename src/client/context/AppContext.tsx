@@ -1611,7 +1611,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       {/* CONTENEDOR GLOBAL DE TOASTS PERSONALIZABLES POR TENANT (SWIPE, PILA 3D, DYNAMIC ISLAND, ACCIONES) */}
       <div
-        className={`fixed z-50 flex flex-col gap-2.5 pointer-events-none max-w-sm sm:max-w-md w-full px-4 sm:px-0 ${toastPosClass} transition-all duration-300`}
+        role="region"
+        aria-label="Notificaciones"
+        className={`fixed z-[10050] flex flex-col gap-2.5 pointer-events-none max-w-sm sm:max-w-md w-full px-4 sm:px-0 ${toastPosClass} transition-all duration-300`}
       >
         {isStackExpanded && toasts.length > 1 && (
           <div className="pointer-events-auto flex items-center justify-between px-3.5 py-1.5 rounded-full backdrop-blur-md bg-black/85 text-white text-xs font-bold border border-white/15 shadow-xl w-full max-w-xs">

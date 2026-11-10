@@ -49,6 +49,7 @@ import { QuickOnboardingCreatorModal } from './QuickOnboardingCreatorModal';
 import { NotificationCenterModal } from './NotificationCenterModal';
 import { RomitaAgentModal } from './RomitaAgentModal';
 import { UserProfileModal } from './UserProfileModal';
+import { AppleMusicWidget } from './music/AppleMusicWidget';
 
 export type ActiveModule =
   | 'dashboard'
@@ -174,6 +175,16 @@ export const AppShell: React.FC<AppShellProps> = ({
   const [romitaOpen, setRomitaOpen] = useState(false);
   const [creatorModalOpen, setCreatorModalOpen] = useState(false);
 
+  // Bloquear scroll del body cuando el drawer móvil está abierto para evitar scroll fantasma en celulares
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [mobileMenuOpen]);
+
   // Atajos de teclado globales:
   // - Ctrl + K / Cmd + K : Command Palette
   // - Ctrl + J / Cmd + J : Asistente IA Romita
@@ -195,15 +206,15 @@ export const AppShell: React.FC<AppShellProps> = ({
   }, []);
 
   const sidebarWorkspaceRef = useRef<HTMLDivElement | null>(null);
+  const mobileSidebarWorkspaceRef = useRef<HTMLDivElement | null>(null);
   const headerUserRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (
-        sidebarWorkspaceRef.current &&
-        !sidebarWorkspaceRef.current.contains(target)
-      ) {
+      const inDesktopWs = sidebarWorkspaceRef.current?.contains(target) ?? false;
+      const inMobileWs = mobileSidebarWorkspaceRef.current?.contains(target) ?? false;
+      if (!inDesktopWs && !inMobileWs) {
         setSidebarWorkspaceOpen(false);
       }
       if (
@@ -501,17 +512,21 @@ export const AppShell: React.FC<AppShellProps> = ({
     </div>
   );
 
-  const renderSidebarContent = () => (
+  const renderSidebarContent = (isMobileDrawer = false) => (
     <div
-      className="flex flex-col h-full justify-between p-4 sm:p-5 select-none transition-colors duration-200"
+      className={
+        isMobileDrawer
+          ? 'flex flex-col min-h-full justify-between gap-5 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[calc(2.5rem+env(safe-area-inset-bottom,0px))] select-none transition-colors duration-200'
+          : 'flex flex-col h-full justify-between select-none transition-colors duration-200'
+      }
       style={{
         backgroundColor: 'var(--app-surface)',
       }}
     >
       {/* 1. SECCIÓN SUPERIOR: WORKSPACE / TENANT SWITCHER PROFESIONAL */}
-      <div className="space-y-4">
+      <div className={isMobileDrawer ? 'space-y-4 shrink-0' : 'shrink-0 px-4 sm:px-5 pt-4 sm:pt-5 pb-2 space-y-4'}>
         {/* Cabecera Principal con Switcher de Tenant */}
-        <div className="relative" ref={sidebarWorkspaceRef}>
+        <div className="relative" ref={isMobileDrawer ? mobileSidebarWorkspaceRef : sidebarWorkspaceRef}>
           <button
             type="button"
             onClick={() => {
@@ -571,73 +586,88 @@ export const AppShell: React.FC<AppShellProps> = ({
           )}
         </div>
 
-        {/* 2. MENÚ DE NAVEGACIÓN */}
-        <div className="space-y-1.5 pt-2">
-          <p className="px-2 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
-            Navegación
-          </p>
-
-          <nav className="space-y-1.5">
-            {navItems
-              .filter((item) => item.allowed)
-              .map((item) => {
-                const isActive = activeModule === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      onSelectModule(item.id);
-                      setMobileMenuOpen(false);
-                    }}
-                    className={`w-full flex items-center justify-between p-3 rounded-2xl text-left transition-all cursor-pointer ${
-                      isActive
-                        ? 'bg-indigo-50/80 dark:bg-indigo-500/15 border border-indigo-200/80 dark:border-indigo-500/30 shadow-xs'
-                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:text-slate-200'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${item.iconBg}`}
-                      >
-                        {item.icon}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`text-xs font-extrabold block truncate ${
-                              isActive
-                                ? 'text-indigo-600 dark:text-indigo-400'
-                                : 'text-slate-900 dark:text-slate-100'
-                            }`}
-                          >
-                            {item.label}
-                          </span>
-                          {item.id === 'settings' && updateAvailableInfo.available && (
-                            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-emerald-500 text-white animate-pulse shadow-xs">
-                              1-CLIC
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate block">
-                          {item.id === 'settings' && updateAvailableInfo.available
-                            ? '¡Nueva versión disponible!'
-                            : item.description}
-                        </span>
-                      </div>
-                    </div>
-                    {isActive && (
-                      <ChevronRight className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                    )}
-                  </button>
-                );
-              })}
-          </nav>
-        </div>
+        <p className="px-2 pt-1 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+          Navegación
+        </p>
       </div>
 
-      {/* 3. SECCIÓN INFERIOR: TEMA, USUARIO & CIERRE DE SESIÓN */}
-      <div className="pt-4 space-y-3 border-t border-slate-100 dark:border-slate-800">
+      {/* 2. MENÚ DE NAVEGACIÓN */}
+      <div
+        className={
+          isMobileDrawer
+            ? 'flex-1'
+            : 'flex-1 min-h-0 overflow-y-auto px-4 sm:px-5 py-1'
+        }
+      >
+        <nav className="space-y-1.5">
+          {navItems
+            .filter((item) => item.allowed)
+            .map((item) => {
+              const isActive = activeModule === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    onSelectModule(item.id);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between p-3 rounded-2xl text-left transition-all cursor-pointer ${
+                    isActive
+                      ? 'bg-indigo-50/80 dark:bg-indigo-500/15 border border-indigo-200/80 dark:border-indigo-500/30 shadow-xs'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:text-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${item.iconBg}`}
+                    >
+                      {item.icon}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`text-xs font-extrabold block truncate ${
+                            isActive
+                              ? 'text-indigo-600 dark:text-indigo-400'
+                              : 'text-slate-900 dark:text-slate-100'
+                          }`}
+                        >
+                          {item.label}
+                        </span>
+                        {item.id === 'settings' && updateAvailableInfo.available && (
+                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-emerald-500 text-white animate-pulse shadow-xs">
+                            1-CLIC
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate block">
+                        {item.id === 'settings' && updateAvailableInfo.available
+                          ? '¡Nueva versión disponible!'
+                          : item.description}
+                      </span>
+                    </div>
+                  </div>
+                  {isActive && (
+                    <ChevronRight className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  )}
+                </button>
+              );
+            })}
+        </nav>
+      </div>
+
+      {/* 3. SECCIÓN INFERIOR: REPRODUCTOR FIJO EN PC, TEMA, USUARIO & CIERRE DE SESIÓN */}
+      <div
+        className={
+          isMobileDrawer
+            ? 'pt-4 space-y-3 border-t border-slate-100 dark:border-slate-800 shrink-0'
+            : 'shrink-0 px-4 sm:px-5 pt-3 pb-4 sm:pb-5 space-y-2.5 border-t border-slate-100 dark:border-slate-800'
+        }
+      >
+        {/* Reproductor acoplado al sidebar únicamente en PC (no flotante) */}
+        {!isMobileDrawer && <AppleMusicWidget variant="sidebar" activeModule={activeModule} />}
+
         {/* Selector de Tema */}
         <div className="p-1 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center justify-between">
           <button
@@ -689,7 +719,10 @@ export const AppShell: React.FC<AppShellProps> = ({
             <div className="flex items-center justify-between gap-2">
               <button
                 type="button"
-                onClick={() => setUserProfileModalOpen(true)}
+                onClick={() => {
+                  if (isMobileDrawer) setMobileMenuOpen(false);
+                  setUserProfileModalOpen(true);
+                }}
                 className="flex items-center gap-2.5 min-w-0 flex-1 text-left hover:opacity-80 transition cursor-pointer"
                 title="Abrir Mi Perfil y Dispositivos"
               >
@@ -723,7 +756,10 @@ export const AppShell: React.FC<AppShellProps> = ({
               {/* Centro de Notificaciones en el Sidebar */}
               <button
                 type="button"
-                onClick={() => setNotificationModalOpen(true)}
+                onClick={() => {
+                  if (isMobileDrawer) setMobileMenuOpen(false);
+                  setNotificationModalOpen(true);
+                }}
                 className="relative p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 hover:bg-white dark:hover:bg-slate-800 transition cursor-pointer shadow-2xs group flex items-center justify-center shrink-0"
                 title="Centro de Notificaciones & Alertas"
                 aria-label="Abrir centro de notificaciones"
@@ -759,7 +795,10 @@ export const AppShell: React.FC<AppShellProps> = ({
         {/* Botón Salir */}
         <button
           type="button"
-          onClick={handleLogoutClick}
+          onClick={() => {
+            if (isMobileDrawer) setMobileMenuOpen(false);
+            handleLogoutClick();
+          }}
           className="w-full py-2.5 px-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 dark:hover:bg-rose-950/20 transition flex items-center justify-center gap-2 cursor-pointer"
         >
           <LogOut className="w-4 h-4" />
@@ -785,36 +824,38 @@ export const AppShell: React.FC<AppShellProps> = ({
           borderColor: 'var(--app-border)',
         }}
       >
-        {renderSidebarContent()}
+        {renderSidebarContent(false)}
       </aside>
 
       {/* 2. DRAWER MÓVIL */}
       {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex">
+        <div className="md:hidden fixed inset-0 h-dvh max-h-dvh z-50 flex">
           <div
             className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
             onClick={() => setMobileMenuOpen(false)}
           />
           <div
-            className="relative w-72 max-w-[85vw] h-full shadow-2xl z-10 flex flex-col overflow-y-auto transition-colors duration-200 animate-in slide-in-from-left duration-200"
+            className="relative w-72 max-w-[82vw] h-dvh max-h-dvh shadow-2xl z-10 overflow-y-auto overscroll-y-contain transition-colors duration-200 animate-in slide-in-from-left duration-200"
             style={{
               backgroundColor: 'var(--app-surface)',
             }}
           >
-            {renderSidebarContent()}
+            {renderSidebarContent(true)}
           </div>
 
-          {/* Botón de Cierre fuera del sidebar */}
-          <div className="relative z-20 p-3 self-start">
+          {/* Botón de Cierre y Botón de Reproductor fuera del sidebar (Responsive) */}
+          <div className="relative z-20 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] self-start flex flex-col items-center gap-2.5">
             <button
               type="button"
               onClick={() => setMobileMenuOpen(false)}
-              className="p-2.5 rounded-2xl bg-slate-900/80 hover:bg-slate-900 text-white border border-white/20 backdrop-blur-md shadow-xl flex items-center justify-center cursor-pointer transition-all active:scale-95"
+              className="w-11 h-11 rounded-2xl bg-slate-900/85 hover:bg-slate-900 text-white border border-white/20 backdrop-blur-md shadow-xl flex items-center justify-center cursor-pointer transition-all active:scale-95"
               aria-label="Cerrar menú móvil"
               title="Cerrar menú"
             >
               <X className="w-5 h-5" />
             </button>
+
+            <AppleMusicWidget variant="mobile-drawer" activeModule={activeModule} />
           </div>
         </div>
       )}
@@ -1109,7 +1150,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       
       {/* 4.1 SHEET DESPLEGABLE DE WORKSPACE (ACCESOS DIRECTOS) */}
       {mobileWorkspaceSheetOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex flex-col justify-end bg-slate-950/60 backdrop-blur-xs animate-fadeIn">
+        <div className="md:hidden fixed inset-0 h-dvh z-50 flex flex-col justify-end bg-slate-950/60 backdrop-blur-xs animate-fadeIn">
           {/* Backdrop click to close */}
           <div
             className="flex-1"
@@ -1117,7 +1158,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           />
 
           <div
-            className="w-full max-w-md mx-auto rounded-t-3xl border-t border-x border-slate-200 dark:border-slate-800 p-5 pb-8 space-y-4 shadow-2xl animate-slideUp"
+            className="w-full max-w-md mx-auto max-h-[85dvh] overflow-y-auto overscroll-y-contain rounded-t-3xl border-t border-x border-slate-200 dark:border-slate-800 p-5 pb-[calc(2rem+env(safe-area-inset-bottom,0px))] space-y-4 shadow-2xl animate-slideUp"
             style={{
               backgroundColor: 'var(--app-surface)',
               color: 'var(--app-text)',
@@ -1432,14 +1473,14 @@ export const AppShell: React.FC<AppShellProps> = ({
 
       {/* 4.2 SHEET DE MÓDULOS ADICIONALES (MÁS) */}
       {mobileMoreSheetOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex flex-col justify-end bg-slate-950/60 backdrop-blur-xs animate-fadeIn">
+        <div className="md:hidden fixed inset-0 h-dvh z-50 flex flex-col justify-end bg-slate-950/60 backdrop-blur-xs animate-fadeIn">
           <div
             className="flex-1"
             onClick={() => setMobileMoreSheetOpen(false)}
           />
 
           <div
-            className="w-full max-w-md mx-auto rounded-t-3xl border-t border-x border-slate-200 dark:border-slate-800 p-5 pb-8 space-y-3 shadow-2xl"
+            className="w-full max-w-md mx-auto max-h-[85dvh] overflow-y-auto overscroll-y-contain rounded-t-3xl border-t border-x border-slate-200 dark:border-slate-800 p-5 pb-[calc(2rem+env(safe-area-inset-bottom,0px))] space-y-3 shadow-2xl"
             style={{
               backgroundColor: 'var(--app-surface)',
               color: 'var(--app-text)',

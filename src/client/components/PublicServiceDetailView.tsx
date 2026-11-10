@@ -27,9 +27,41 @@ import {
   Tag,
   Star,
   CheckCheck,
+  Compass,
+  Palette,
+  Video,
+  Globe,
+  Award,
+  Target,
+  Cpu,
+  TrendingUp,
+  Megaphone,
+  PenTool,
 } from 'lucide-react';
 
-interface PublicServiceData {
+const FEATURE_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  Compass,
+  CheckCircle2,
+  Sparkles,
+  Palette,
+  Layers,
+  Shield,
+  Zap,
+  Video,
+  Globe,
+  Package,
+  FileCheck,
+  Clock,
+  Star,
+  Award,
+  Target,
+  Cpu,
+  TrendingUp,
+  Megaphone,
+  PenTool,
+};
+
+export interface PublicServiceData {
   tenant: Tenant;
   service: Service;
   relatedServices: Service[];
@@ -37,11 +69,17 @@ interface PublicServiceData {
 
 interface PublicServiceDetailViewProps {
   slugOrId: string;
+  previewData?: PublicServiceData;
+  isPreviewMode?: boolean;
 }
 
-export const PublicServiceDetailView: React.FC<PublicServiceDetailViewProps> = ({ slugOrId }) => {
-  const [data, setData] = useState<PublicServiceData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+export const PublicServiceDetailView: React.FC<PublicServiceDetailViewProps> = ({
+  slugOrId,
+  previewData,
+  isPreviewMode = false,
+}) => {
+  const [data, setData] = useState<PublicServiceData | null>(previewData || null);
+  const [isLoading, setIsLoading] = useState(!previewData);
   const [error, setError] = useState<string | null>(null);
 
   // Estados interactivos de la vista
@@ -70,8 +108,9 @@ export const PublicServiceDetailView: React.FC<PublicServiceDetailViewProps> = (
     }
   }, []);
 
-  // Forzar siempre modo claro en la vista pública de detalle
+  // Forzar siempre modo claro en la vista pública de detalle (solo cuando no es modal embebido)
   useEffect(() => {
+    if (isPreviewMode) return;
     const root = document.documentElement;
     const hadDark = root.classList.contains('dark');
     root.classList.remove('dark');
@@ -83,9 +122,19 @@ export const PublicServiceDetailView: React.FC<PublicServiceDetailViewProps> = (
         root.style.colorScheme = 'dark';
       }
     };
-  }, []);
+  }, [isPreviewMode]);
 
   useEffect(() => {
+    if (previewData) {
+      setData(previewData);
+      setIsLoading(false);
+      if (previewData.service?.pricingType === 'packages' && previewData.service?.packages?.length > 0) {
+        const popular = previewData.service.packages.find((p: ServicePackageTier) => p.isPopular);
+        setSelectedPackageId(popular ? popular.id : previewData.service.packages[0].id);
+      }
+      return;
+    }
+
     const fetchService = async () => {
       try {
         setIsLoading(true);
@@ -111,7 +160,7 @@ export const PublicServiceDetailView: React.FC<PublicServiceDetailViewProps> = (
       }
     };
     fetchService();
-  }, [slugOrId, tenantSlug]);
+  }, [slugOrId, tenantSlug, previewData]);
 
   // Actualizar temporizador de urgencia en tiempo real
   useEffect(() => {
@@ -141,20 +190,18 @@ export const PublicServiceDetailView: React.FC<PublicServiceDetailViewProps> = (
     return () => clearInterval(interval);
   }, [data]);
 
-  // Forzar siempre modo claro en la vista pública
-  useEffect(() => {
-    const root = document.documentElement;
-    const hadDark = root.classList.contains('dark');
-    root.classList.remove('dark');
-    root.style.colorScheme = 'light';
-
-    return () => {
-      if (hadDark) {
-        root.classList.add('dark');
-        root.style.colorScheme = 'dark';
-      }
-    };
-  }, []);
+  const handleTrackWhatsappClick = () => {
+    if (isPreviewMode || !data?.service) return;
+    const slugTarget = data.service.seo?.slug || data.service.id;
+    const url = tenantSlug
+      ? `/api/public/services/${encodeURIComponent(slugTarget)}/track?tenant=${encodeURIComponent(tenantSlug)}`
+      : `/api/public/services/${encodeURIComponent(slugTarget)}/track?tenant=${encodeURIComponent(data.tenant.slug)}`;
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ metric: 'whatsapp' }),
+    }).catch(() => {});
+  };
 
   // Cálculos dinámicos de inversión según paquete y extras seleccionados
   const { currentBasePrice, totalExtrasPrice, finalPrice } = useMemo(() => {
@@ -438,6 +485,26 @@ export const PublicServiceDetailView: React.FC<PublicServiceDetailViewProps> = (
               </div>
             ) : null}
           </div>
+
+          {/* DESCRIPCIÓN DETALLADA / PITCH COMERCIAL */}
+          {service.fullDescription && service.fullDescription.trim() && (
+            <div className="rounded-3xl p-6 sm:p-8 border border-slate-200 bg-white shadow-2xs space-y-3">
+              <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-indigo-600">
+                <Sparkles className="w-4 h-4" />
+                <span>Propuesta de Valor & Metodología</span>
+              </div>
+              {/<[a-z][\s\S]*>/i.test(service.fullDescription) ? (
+                <div
+                  className="prose prose-sm sm:prose-base max-w-none text-slate-700 leading-relaxed [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_p]:my-2 [&_strong]:text-slate-900"
+                  dangerouslySetInnerHTML={{ __html: service.fullDescription }}
+                />
+              ) : (
+                <div className="text-sm sm:text-base text-slate-700 leading-relaxed whitespace-pre-line">
+                  {service.fullDescription}
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         {/* SELECTOR DE PAQUETES / MODELO DE PRECIOS */}
@@ -590,6 +657,7 @@ export const PublicServiceDetailView: React.FC<PublicServiceDetailViewProps> = (
                   href={waUrl}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={handleTrackWhatsappClick}
                   className="px-6 py-3.5 rounded-2xl text-xs sm:text-sm font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition flex items-center gap-2"
                 >
                   <MessageCircle className="w-4 h-4" />
@@ -653,22 +721,25 @@ export const PublicServiceDetailView: React.FC<PublicServiceDetailViewProps> = (
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {service.features.map((feat) => (
-                <div
-                  key={feat.id}
-                  className="rounded-3xl p-5 border border-slate-200 bg-white space-y-2.5 shadow-2xs"
-                >
-                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                    <CheckCircle2 className="w-5 h-5" />
+              {service.features.map((feat) => {
+                const FeatIcon = (feat.icon && FEATURE_ICON_MAP[feat.icon]) || CheckCircle2;
+                return (
+                  <div
+                    key={feat.id}
+                    className="rounded-3xl p-5 border border-slate-200 bg-white space-y-2.5 shadow-2xs"
+                  >
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                      <FeatIcon className="w-5 h-5" />
+                    </div>
+                    <h4 className="font-extrabold text-sm sm:text-base text-slate-900">
+                      {feat.title}
+                    </h4>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      {feat.description}
+                    </p>
                   </div>
-                  <h4 className="font-extrabold text-sm sm:text-base text-slate-900">
-                    {feat.title}
-                  </h4>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    {feat.description}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}
@@ -919,7 +990,11 @@ export const PublicServiceDetailView: React.FC<PublicServiceDetailViewProps> = (
       )}
 
       {/* FLOATING ACTION BAR (STICKY APP BAR INFERIOR RESPONSIVE MODO CLARO) */}
-      <aside className="fixed bottom-0 left-0 right-0 z-40 backdrop-blur-xl bg-white/95 border-t border-slate-200/80 p-3 sm:p-4 shadow-xl">
+      <aside
+        className={`${
+          isPreviewMode ? 'sticky bottom-0' : 'fixed bottom-0 left-0 right-0'
+        } z-40 backdrop-blur-xl bg-white/95 border-t border-slate-200/80 p-3 sm:p-4 shadow-xl`}
+      >
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
           <div>
             <span className="text-[10px] uppercase font-bold text-slate-400 block">
@@ -942,6 +1017,7 @@ export const PublicServiceDetailView: React.FC<PublicServiceDetailViewProps> = (
                 href={waUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={handleTrackWhatsappClick}
                 className="px-5 py-3 rounded-2xl text-xs sm:text-sm font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition flex items-center gap-2"
               >
                 <MessageCircle className="w-4 h-4" />

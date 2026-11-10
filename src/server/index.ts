@@ -175,6 +175,19 @@ app.get('/api/public/services/:slugOrId', async (req: Request, res: Response) =>
   }
 });
 
+// Tracking de interacciones públicas de un servicio (ej. clics a WhatsApp)
+app.post('/api/public/services/:slugOrId/track', async (req: Request, res: Response) => {
+  try {
+    const slug = (req.query.tenant as string) || (req.headers['x-tenant-slug'] as string) || '';
+    const { slugOrId } = req.params;
+    const metric = (req.body?.metric as 'views' | 'whatsapp' | 'quotes') || 'whatsapp';
+    await db.incrementServiceMetric(slug, slugOrId as string, metric);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 function parseUserAgent(uaString: string): {
   deviceName: string;
   deviceType: 'desktop' | 'mobile' | 'tablet';
@@ -3430,6 +3443,286 @@ app.get(
         pricingType: pricingType as string,
       });
       res.json({ services });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// Subida de imágenes para Portada, Galería y SEO de Servicios
+const serviceUploadSingle = (req: Request, res: Response, next: NextFunction) => {
+  if (!multerModule) {
+    return res.status(503).json({
+      error: 'El módulo multer para carga de archivos no está disponible.',
+    });
+  }
+  const servicesUploadStorage = multerModule.diskStorage({
+    destination: (_req: any, _file: any, cb: any) => {
+      const dir = path.resolve(process.cwd(), 'uploads', 'services');
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      cb(null, dir);
+    },
+    filename: (_req: any, file: any, cb: any) => {
+      const ext = path.extname(file.originalname || '.jpg').toLowerCase() || '.jpg';
+      const cleanBase = path
+        .basename(file.originalname || 'service_img', ext)
+        .replace(/[^a-zA-Z0-9-_]/g, '_')
+        .slice(0, 45);
+      const unique = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      cb(null, `${cleanBase}_${unique}${ext}`);
+    },
+  });
+
+  const upload = multerModule({
+    storage: servicesUploadStorage,
+    limits: { fileSize: 25 * 1024 * 1024 },
+  });
+
+  return upload.single('file')(req, res, next);
+};
+
+app.post(
+  '/api/services/upload-image',
+  requireAuth,
+  serviceUploadSingle,
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.file) {
+        res.status(400).json({ error: 'No se ha proporcionado ninguna imagen.' });
+        return;
+      }
+      res.json({
+        url: `/uploads/services/${req.file.filename}`,
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+      });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  }
+);
+
+// Generador inteligente de estructura de servicio con Romita IA / Gemini + Fallback especializado
+app.post(
+  '/api/services/ai-generate',
+  requireAuth,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const {
+        title = '',
+        categoryName = 'Servicios Creativos',
+        basePrice = 1200,
+        currencySymbol = 'S/',
+        pricingType = 'fixed',
+        deliveryTime = '5 a 7 días hábiles',
+      } = req.body || {};
+
+      const cleanTitle = String(title || '').trim() || 'Servicio Estratégico Integral';
+      const priceNum = Number(basePrice) || 1200;
+      const tenantName = req.auth?.tenant?.name || 'Nuestra Agencia';
+
+      // Intentar con Gemini si hay API Key configurada
+      let apiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
+      const tenantObj = await db.getTenantById(req.auth!.tenant.id);
+      if (tenantObj?.aiConfig?.geminiApiKey) {
+        apiKey = tenantObj.aiConfig.geminiApiKey.trim();
+      }
+
+      if (apiKey && !apiKey.startsWith('AQ.')) {
+        try {
+          const { GoogleGenAI } = await import('@google/genai');
+          const ai = new GoogleGenAI({ apiKey });
+          const prompt = `Eres un director creativo y estratega comercial B2B para la agencia "${tenantName}".
+Genera la estructura comercial persuasiva en español para el servicio: "${cleanTitle}" (Categoría: "${categoryName}", Precio base: ${currencySymbol} ${priceNum}, Tiempo estimado: ${deliveryTime}).
+Devuelve ÚNICAMENTE un JSON válido sin bloques markdown con la siguiente estructura exacta:
+{
+  "briefDescription": "Resumen atractivo de 2-3 líneas (máx 210 caracteres)",
+  "fullDescription": "HTML enriquecido con <p>, <strong>, <ul><li> explicando propuesta de valor, metodología y beneficios clave",
+  "deliveryTime": "ej. 5 a 8 días hábiles",
+  "features": [
+    { "title": "...", "description": "...", "icon": "Compass|CheckCircle2|Sparkles|Palette|Layers|Shield|Video|Globe|Package|FileCheck" }
+  ],
+  "deliverables": [
+    { "phase": "Fase 1: ...", "title": "...", "details": "..." }
+  ],
+  "packages": [
+    { "name": "Plan Esencial", "description": "...", "price": ${Math.round(priceNum * 0.85)}, "deliveryTime": "5 días hábiles", "features": ["..."], "isPopular": false },
+    { "name": "Plan Corporativo Pro", "description": "...", "price": ${priceNum}, "deliveryTime": "${deliveryTime}", "features": ["..."], "isPopular": true, "badgeText": "MÁS ELEGIDO" },
+    { "name": "Plan Full 360°", "description": "...", "price": ${Math.round(priceNum * 1.6)}, "deliveryTime": "12 días hábiles", "features": ["..."], "isPopular": false }
+  ],
+  "requirements": [
+    { "title": "...", "description": "..." }
+  ],
+  "faqs": [
+    { "question": "...", "answer": "..." }
+  ],
+  "extras": [
+    { "title": "...", "description": "...", "price": ${Math.round(priceNum * 0.25)}, "volumeDiscountText": "..." }
+  ],
+  "seo": {
+    "metaTitle": "...",
+    "metaDescription": "..."
+  }
+}`;
+          const response = await ai.models.generateContent({
+            model: tenantObj?.aiConfig?.preferredModel || 'gemini-2.5-flash',
+            contents: prompt,
+          });
+          const rawText = (response.text || '').trim().replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
+          const parsed = JSON.parse(rawText);
+          if (parsed && parsed.briefDescription) {
+            res.json({ generated: parsed, source: 'gemini' });
+            return;
+          }
+        } catch (aiErr) {
+          console.warn('[Services AI] Usando generador experto local por fallback:', (aiErr as Error).message);
+        }
+      }
+
+      // Generador experto contextual por tipo de servicio
+      const lower = `${cleanTitle} ${categoryName}`.toLowerCase();
+      const isBranding = /brand|marca|identidad|logo|manual|naming|rebranding/.test(lower);
+      const isSocial = /social|redes|community|contenido|tiktok|instagram|meta|pauta|ads/.test(lower);
+      const isWeb = /web|landing|ecommerce|tienda|ux|ui|sistema|app|desarrollo|seo/.test(lower);
+      const isVideo = /video|audiovisual|reel|producci|foto|spot|drone|motion/.test(lower);
+
+      const generated = {
+        briefDescription: isBranding
+          ? `Construimos un sistema de identidad visual memorable y estratégico para "${cleanTitle}", diseñado para posicionar tu marca con autoridad y coherencia en todos sus puntos de contacto.`
+          : isSocial
+          ? `Impulsa el posicionamiento, comunidad y conversión de tu marca con "${cleanTitle}": estrategia de contenidos, diseño de alto impacto y optimización continua.`
+          : isWeb
+          ? `Diseñamos y desarrollamos "${cleanTitle}" con enfoque en experiencia de usuario (UX/UI), velocidad de carga ultrarrápida y arquitectura orientada a conversiones.`
+          : isVideo
+          ? `Producción audiovisual de alto impacto para "${cleanTitle}": dirección creativa, rodaje/edición profesional y piezas optimizadas para captar la atención en segundos.`
+          : `Solución integral de "${cleanTitle}" diseñada a medida por ${tenantName} para escalar la presencia comercial y resultados operativos de tu empresa.`,
+        fullDescription: `<p>Nuestro servicio de <strong>${cleanTitle}</strong> combina estrategia comercial, dirección de arte y ejecución técnica de estándar corporativo para que tu marca destaque frente a su competencia.</p>
+<p><strong>¿Por qué elegir esta solución con ${tenantName}?</strong></p>
+<ul>
+  <li><strong>Metodología estructurada por fases:</strong> Avances claros, cronograma cumplido y validación conjunta en cada etapa crítica.</li>
+  <li><strong>Enfoque en retorno de inversión:</strong> Cada pieza y entregable se construye pensando en la conversión y recordación de marca.</li>
+  <li><strong>Archivos maestros 100% organizados:</strong> Entrega en la nube con estructura lista para producción digital e impresa.</li>
+</ul>`,
+        deliveryTime: isWeb ? '10 a 15 días hábiles' : isBranding ? '7 a 10 días hábiles' : deliveryTime,
+        features: isBranding
+          ? [
+              { title: 'Auditoría & Diagnóstico Estratégico', description: 'Investigación de mercado, arquetipo de marca, benchmark competitivo y definición de propuesta de valor.', icon: 'Compass' },
+              { title: 'Sistema de Identidad Visual Completo', description: 'Diseño de logotipo principal, variantes responsivas, paleta cromática oficial y sistema tipográfico.', icon: 'Palette' },
+              { title: 'Brandbook / Manual Corporativo', description: 'Guía normativa detallada de uso correcto, retícula constructiva, áreas de protección y aplicaciones.', icon: 'FileCheck' },
+              { title: 'Archivos Maestros Editables', description: 'Paquete completo en formatos vectoriales (AI, EPS, SVG, PDF) y alta resolución (PNG, WebP).', icon: 'Package' },
+            ]
+          : isSocial
+          ? [
+              { title: 'Estrategia & Parrilla Mensual', description: 'Planificación estratégica de pilares de contenido, copywriting persuasivo y calendario editorial.', icon: 'Compass' },
+              { title: 'Diseño Gráfico & Carruseles Pro', description: 'Piezas visuales alineadas a la identidad de tu marca para alimentar tu feed e historias.', icon: 'Palette' },
+              { title: 'Edición Dinámica de Reels / TikTok', description: 'Videos verticales con subtítulos dinámicos, ganchos visuales y tendencias de retención.', icon: 'Video' },
+              { title: 'Reporte de Métricas & Optimización', description: 'Análisis mensual de alcance, interacción y recomendaciones accionables de crecimiento.', icon: 'CheckCircle2' },
+            ]
+          : isWeb
+          ? [
+              { title: 'Arquitectura UX/UI Centrada en Conversión', description: 'Diseño de interfaz moderna, adaptable a móviles (100% responsive) y enfocada en generar leads.', icon: 'Globe' },
+              { title: 'Optimización de Velocidad & SEO Técnico', description: 'Estructura semántica, metadatos configurados, carga veloz y buenas prácticas de Core Web Vitals.', icon: 'Sparkles' },
+              { title: 'Integración de WhatsApp & Formularios', description: 'Embudos de contacto directo, botones flotantes y captura automatizada de prospectos.', icon: 'CheckCircle2' },
+              { title: 'Capacitación & Garantía Técnica', description: 'Sesión grabada de administración autónoma y soporte técnico post-lanzamiento incluido.', icon: 'Shield' },
+            ]
+          : [
+              { title: 'Diagnóstico & Planificación Inicial', description: 'Alineación de objetivos comerciales, público objetivo y alcance detallado del proyecto.', icon: 'Compass' },
+              { title: 'Desarrollo Creativo & Técnico', description: 'Ejecución por especialistas senior con estándares de calidad de agencia.', icon: 'Sparkles' },
+              { title: 'Rondas de Revisión Estructuradas', description: 'Ajustes y refinamiento colaborativo para asegurar tu total satisfacción.', icon: 'CheckCircle2' },
+              { title: 'Entrega de Activos & Respaldo Cloud', description: 'Repositorio ordenado con todos los entregables finales listos para implementar.', icon: 'Package' },
+            ],
+        deliverables: [
+          {
+            phase: 'Fase 1: Kick-off & Estrategia',
+            title: 'Briefing Estratégico y Ruta Creativa',
+            details: 'Documento de diagnóstico, referencias visuales (Moodboard) y cronograma de hitos validado.',
+          },
+          {
+            phase: 'Fase 2: Desarrollo & Propuesta',
+            title: `Presentación de ${cleanTitle}`,
+            details: 'Presentación ejecutiva interactiva con el desarrollo principal y aplicaciones en contexto real.',
+          },
+          {
+            phase: 'Fase 3: Ajustes & Entrega Final',
+            title: 'Repositorio Maestro de Entregables',
+            details: 'Carpeta en Google Drive con todos los archivos fuente, exportables optimizados y guía de uso.',
+          },
+        ],
+        packages: [
+          {
+            name: 'Paquete Esencial',
+            description: 'Ideal para negocios que buscan resultados rápidos con los entregables fundamentales.',
+            price: Math.max(100, Math.round(priceNum * 0.8)),
+            deliveryTime: '5 días hábiles',
+            features: ['Diagnóstico inicial y alineación', 'Entregables principales en alta calidad', '1 ronda de ajustes incluida', 'Entrega digital en la nube'],
+            isPopular: false,
+          },
+          {
+            name: 'Paquete Corporativo Pro',
+            description: 'Nuestra solución más completa y equilibrada para marcas en crecimiento.',
+            price: priceNum,
+            deliveryTime: deliveryTime || '8 días hábiles',
+            features: ['Todo lo del Paquete Esencial', 'Archivos maestros 100% editables', 'Guía de implementación / Manual', '3 rondas de revisiones', 'Soporte prioritario por WhatsApp'],
+            isPopular: true,
+            badgeText: 'MÁS RECOMENDADO',
+          },
+          {
+            name: 'Paquete Full 360°',
+            description: 'Alcance extendido con acompañamiento estratégico y entregables adicionales.',
+            price: Math.round(priceNum * 1.55),
+            deliveryTime: '12 días hábiles',
+            features: ['Todo lo del Paquete Pro', 'Piezas y adaptaciones extra de lanzamiento', 'Asesoría estratégica personalizada 1 a 1', 'Prioridad en cola de producción'],
+            isPopular: false,
+            badgeText: 'PREMIUM',
+          },
+        ],
+        requirements: [
+          {
+            title: 'Cuestionario / Brief de Marca',
+            description: 'Completar nuestro formulario breve con los objetivos comerciales, público y referencias.',
+          },
+          {
+            title: 'Activos Previos (Si aplica)',
+            description: 'Logotipo actual, fotos de productos/servicios o accesos necesarios en una carpeta compartida.',
+          },
+        ],
+        faqs: [
+          {
+            question: '¿Cuál es la modalidad de pago para iniciar?',
+            answer: 'Trabajamos con el 50% de adelanto para agendar el kick-off e iniciar la Fase 1, y el 50% restante contra aprobación previa al envío de archivos maestros.',
+          },
+          {
+            question: '¿Qué sucede si necesito cambios sobre la propuesta?',
+            answer: 'El servicio incluye rondas de revisión estructuradas donde pulimos cada detalle según tu feedback hasta lograr el resultado ideal.',
+          },
+          {
+            question: '¿Entregan los archivos editables originales?',
+            answer: 'Sí, al finalizar el proyecto entregamos un enlace en la nube con todos los archivos fuente editables y formatos listos para web e impresión.',
+          },
+        ],
+        extras: [
+          {
+            title: 'Entrega Express Prioritaria (Fast-Track)',
+            description: 'Asignación de equipo dedicado para reducir el tiempo de entrega a la mitad.',
+            price: Math.max(150, Math.round(priceNum * 0.25)),
+            volumeDiscountText: 'Sujeto a disponibilidad semanal',
+          },
+          {
+            title: 'Sesión de Consultoría Extra (1 Hora)',
+            description: 'Reunión estratégica adicional por Google Meet con dirección creativa.',
+            price: Math.max(120, Math.round(priceNum * 0.15)),
+            volumeDiscountText: '15% off contratando 2 o más sesiones',
+          },
+        ],
+        seo: {
+          metaTitle: `${cleanTitle} | ${tenantName}`,
+          metaDescription: `Potencia tu marca con nuestro servicio de ${cleanTitle}. Conoce entregables, fases de trabajo, paquetes y solicita tu cotización en ${tenantName}.`,
+        },
+      };
+
+      res.json({ generated, source: 'template' });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }

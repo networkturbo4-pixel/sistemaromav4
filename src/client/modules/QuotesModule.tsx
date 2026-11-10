@@ -347,11 +347,121 @@ export const QuotesModule: React.FC = () => {
     });
   };
 
-  // Escuchar navegación dirigida desde Command Palette
+  // Escuchar navegación dirigida desde Command Palette o desde Catálogo de Servicios
   useEffect(() => {
-    if (quotes.length === 0) return;
+    const handleTarget = (target: {
+      entityId?: string;
+      id?: string;
+      code?: string;
+      query?: string;
+      action?: string;
+      serviceData?: any;
+    }) => {
+      if (target.action === 'create_from_service' && target.serviceData) {
+        const srv = target.serviceData;
+        const nextNum = quotes.length + 1;
+        const autoCode = `COT-${new Date().getFullYear()}-${String(nextNum).padStart(3, '0')}`;
+        const unitPrice = Number(srv.basePrice) || 1200;
+        const taxAmount = +(unitPrice * 0.18).toFixed(2);
+        const total = +(unitPrice + taxAmount).toFixed(2);
 
-    const handleTarget = (target: { entityId?: string; id?: string; code?: string; query?: string }) => {
+        const featuresHtml =
+          Array.isArray(srv.features) && srv.features.length > 0
+            ? `<p><strong>¿Qué incluye el servicio?</strong></p><ul class="list-disc pl-5">${srv.features
+                .map((f: any) => `<li><strong>${f.title}:</strong> ${f.description || ''}</li>`)
+                .join('')}</ul>`
+            : '';
+        const deliverablesHtml =
+          Array.isArray(srv.deliverables) && srv.deliverables.length > 0
+            ? `<p><strong>Entregables por Fase:</strong></p><ul class="list-disc pl-5">${srv.deliverables
+                .map((d: any) => `<li><strong>${d.phase} — ${d.title}:</strong> ${d.details || ''}</li>`)
+                .join('')}</ul>`
+            : '';
+
+        const descHtml = `<p>${srv.briefDescription || ''}</p>${featuresHtml}${deliverablesHtml}`;
+
+        const ganttColors = ['#7c3aed', '#ec4899', '#0ea5e9', '#10b981', '#f59e0b'];
+        const ganttPhases =
+          Array.isArray(srv.deliverables) && srv.deliverables.length > 0
+            ? srv.deliverables.map((del: any, idx: number) => ({
+                id: `phase-${Date.now()}-${idx}`,
+                name: del.phase || `Fase ${idx + 1}: ${del.title}`,
+                startDate: new Date(Date.now() + idx * 4 * 86400000).toISOString().split('T')[0],
+                endDate: new Date(Date.now() + (idx + 1) * 4 * 86400000).toISOString().split('T')[0],
+                progress: idx === 0 ? 100 : 50,
+                color: ganttColors[idx % ganttColors.length],
+                deliverables: `${del.title}: ${del.details || ''}`,
+              }))
+            : [
+                {
+                  id: `phase-${Date.now()}`,
+                  name: 'Fase 1: Ejecución del Servicio',
+                  startDate: new Date().toISOString().split('T')[0],
+                  endDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+                  progress: 100,
+                  color: '#7c3aed',
+                  deliverables: srv.title,
+                },
+              ];
+
+        const reqsHtml =
+          Array.isArray(srv.requirements) && srv.requirements.length > 0
+            ? `<p><strong>Requisitos Previos para Iniciar:</strong></p><ul class="list-disc pl-5">${srv.requirements
+                .map((r: any) => `<li><strong>${r.title}:</strong> ${r.description || ''}</li>`)
+                .join('')}</ul>`
+            : '';
+
+        setActiveQuote(null);
+        setIsCreating(true);
+        setFormData({
+          code: autoCode,
+          clientId: '',
+          clientName: '',
+          companyName: '',
+          documentType: 'RUC',
+          documentNumber: '',
+          whatsapp: '+51 ',
+          email: '',
+          issueDate: new Date().toISOString().split('T')[0],
+          validUntil: new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
+          currency: srv.currency || 'PEN',
+          currencySymbol: srv.currencySymbol || 'S/',
+          status: 'draft',
+          theme: 'modern-violet',
+          items: [
+            {
+              id: `item-${Date.now()}`,
+              title: `${srv.code ? `[${srv.code}] ` : ''}${srv.title}`,
+              description: descHtml,
+              quantity: 1,
+              unitPrice,
+              discount: 0,
+              total: unitPrice,
+            },
+          ],
+          subtotal: unitPrice,
+          includeTax: true,
+          taxRate: 18,
+          taxAmount,
+          discountAmount: 0,
+          total,
+          showGantt: true,
+          ganttPhases,
+          additionalNotes:
+            `${reqsHtml}<p><strong>Condiciones Comerciales:</strong></p><ul class="list-disc pl-5"><li>Tiempo estimado de entrega: ${
+              srv.deliveryTime || 'Segun cronograma'
+            }.</li><li>Validez de la oferta: 15 días calendario.</li><li>Forma de pago: 50% de anticipo y 50% contra entrega final.</li></ul>`,
+          termsAndConditions:
+            '<p><strong>Propiedad Intelectual:</strong> Al cancelarse el 100% del proyecto, los derechos de explotación pasan en su totalidad al cliente.</p>',
+          showPaymentMethods: true,
+          paymentMethods: JSON.parse(JSON.stringify(globalBankAccounts)),
+          registerAsNewClient: false,
+        });
+        toast(`Cotización pre-cargada con el servicio "${srv.title}"`, 'success');
+        return;
+      }
+
+      if (quotes.length === 0) return;
       const targetId = target.entityId || target.id;
       const found = quotes.find(
         (q) =>
@@ -370,8 +480,10 @@ export const QuotesModule: React.FC = () => {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed.module === 'quotes') {
-          sessionStorage.removeItem('roma_open_target');
-          handleTarget(parsed);
+          if (parsed.action === 'create_from_service' || quotes.length > 0) {
+            sessionStorage.removeItem('roma_open_target');
+            handleTarget(parsed);
+          }
         }
       }
     } catch {}
@@ -384,7 +496,7 @@ export const QuotesModule: React.FC = () => {
     };
     window.addEventListener('roma:open-target', listener);
     return () => window.removeEventListener('roma:open-target', listener);
-  }, [quotes]);
+  }, [quotes, globalBankAccounts]);
 
   // Al seleccionar un cliente existente, rellenar los datos
   const handleSelectClient = (clientId: string) => {
