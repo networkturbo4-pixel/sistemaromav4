@@ -31,9 +31,11 @@ interface MusicPlayerContextType {
   favorites: Song[];
   isWidgetVisible: boolean;
   isWidgetExpanded: boolean;
+  isMusicSubmoduleOpen: boolean;
   seekRequested: number | null;
 
   // Actions
+  setIsMusicSubmoduleOpen: (open: boolean) => void;
   playSong: (song: Song, playlist?: Playlist) => void;
   togglePlayPause: () => void;
   playNext: () => void;
@@ -86,6 +88,7 @@ export const MusicPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const [isWidgetVisible, setWidgetVisible] = useState<boolean>(true);
   const [isWidgetExpanded, setWidgetExpanded] = useState<boolean>(false);
+  const [isMusicSubmoduleOpen, setIsMusicSubmoduleOpen] = useState<boolean>(false);
 
   // Sync playlists
   useEffect(() => {
@@ -342,6 +345,8 @@ export const MusicPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
         favorites,
         isWidgetVisible,
         isWidgetExpanded,
+        isMusicSubmoduleOpen,
+        setIsMusicSubmoduleOpen,
         seekRequested,
         playSong,
         togglePlayPause,

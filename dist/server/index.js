@@ -38,6 +38,7 @@ const whiteboards_routes_1 = __importDefault(require("./routes/whiteboards.route
 const brand_guidelines_routes_1 = __importDefault(require("./routes/brand-guidelines.routes"));
 const romita_routes_1 = __importDefault(require("./routes/romita.routes"));
 const emails_routes_1 = __importDefault(require("./routes/emails.routes"));
+const music_routes_1 = __importDefault(require("./routes/music.routes"));
 const googleDriveService_1 = require("./services/googleDriveService");
 const totp_1 = require("./utils/totp");
 const notificationService_1 = require("./services/notificationService");
@@ -68,6 +69,8 @@ app.use('/api/brand-guidelines', brand_guidelines_routes_1.default);
 app.use('/api/romita', romita_routes_1.default);
 // Submódulo de Workspace: Correos Corporativos (SMTP / IMAP)
 app.use('/api/workspace/emails', emails_routes_1.default);
+// Módulo de Música / Soundify Widget
+app.use('/api/music', music_routes_1.default);
 // =============================================================================
 // 1. ENDPOINTS PÚBLICOS Y AUTENTICACIÓN POR PIN DE 8 DÍGITOS
 // =============================================================================

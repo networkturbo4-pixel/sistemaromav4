@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Music,
   Search,
@@ -62,7 +62,13 @@ export const MusicSubmoduleView: React.FC<MusicSubmoduleViewProps> = ({ onBackTo
     removeSongFromPlaylist,
     toggleFavorite,
     isFavorite,
+    setIsMusicSubmoduleOpen,
   } = useMusicPlayer();
+
+  useEffect(() => {
+    setIsMusicSubmoduleOpen(true);
+    return () => setIsMusicSubmoduleOpen(false);
+  }, [setIsMusicSubmoduleOpen]);
 
   const [activeTab, setActiveTab] = useState<'explore' | 'search' | 'playlists' | 'favorites'>('explore');
   const [searchQuery, setSearchQuery] = useState('');

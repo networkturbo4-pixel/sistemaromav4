@@ -60,6 +60,7 @@ export const AppleMusicWidget: React.FC<AppleMusicWidgetProps> = ({ activeModule
     isFavorite,
     isWidgetVisible,
     setWidgetVisible,
+    isMusicSubmoduleOpen,
   } = useMusicPlayer();
 
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
@@ -191,8 +192,8 @@ export const AppleMusicWidget: React.FC<AppleMusicWidgetProps> = ({ activeModule
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  // Si estamos en el Dashboard, ocultamos la píldora flotante para evitar duplicidad y estorbo
-  if (activeModule === 'dashboard') {
+  // Si estamos en el Dashboard o en el submódulo de Música, ocultamos la píldora flotante
+  if (activeModule === 'dashboard' || isMusicSubmoduleOpen) {
     return null;
   }
 
