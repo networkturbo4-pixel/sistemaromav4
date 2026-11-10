@@ -25,6 +25,9 @@ import { PublicEmployeePaymentsView } from './components/PublicEmployeePaymentsV
 import { PublicFormView } from './components/PublicFormView';
 import { PublicBrandGuidelineView } from './components/PublicBrandGuidelineView';
 import { AttendanceGateModal } from './components/AttendanceGateModal';
+import { MusicPlayerProvider } from './context/MusicPlayerContext';
+import { YouTubeAudioEngine } from './components/music/YouTubeAudioEngine';
+import { AppleMusicWidget } from './components/music/AppleMusicWidget';
 
 const MainRouter: React.FC = () => {
   const { user, role, isLoading, can, logout, attendanceCheck, setAttendanceCheck } = useApp();
@@ -456,6 +459,8 @@ const MainRouter: React.FC = () => {
           />
         )}
       </AppShell>
+      <YouTubeAudioEngine />
+      <AppleMusicWidget activeModule={activeModule} />
     </>
   );
 };
@@ -464,7 +469,9 @@ export const App: React.FC = () => {
   return (
     <AppProvider>
       <DriveUploadProvider>
-        <MainRouter />
+        <MusicPlayerProvider>
+          <MainRouter />
+        </MusicPlayerProvider>
       </DriveUploadProvider>
     </AppProvider>
   );

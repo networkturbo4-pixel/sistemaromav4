@@ -257,3 +257,78 @@ dialog.offcanvas-right[open] {
   animation: scaleUp 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* ==========================================================================
+   ANIMACIONES APPLE DYNAMIC ISLAND (RESORTE ELÁSTICO & MORFOLOGÍA OLED)
+   ========================================================================== */
+@keyframes dynamic-island-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.35, 0.45);
+    filter: blur(8px);
+  }
+  48% {
+    opacity: 1;
+    transform: scale(1.04, 1.02);
+    filter: blur(0px);
+  }
+  72% {
+    transform: scale(0.985, 0.99);
+  }
+  88% {
+    transform: scale(1.006, 1.003);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1, 1);
+  }
+}
+
+@keyframes dynamic-island-content-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  42% {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes dynamic-island-wave {
+  0%, 100% {
+    height: 4px;
+    opacity: 0.55;
+  }
+  50% {
+    height: 14px;
+    opacity: 1;
+  }
+}
+
+.animate-dynamic-island {
+  animation: dynamic-island-enter 0.46s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: center center;
+  will-change: transform, opacity, filter;
+}
+
+.animate-dynamic-island-content {
+  animation: dynamic-island-content-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-island-wave-1 {
+  animation: dynamic-island-wave 0.8s ease-in-out infinite;
+}
+
+.animate-island-wave-2 {
+  animation: dynamic-island-wave 0.8s ease-in-out infinite 0.16s;
+}
+
+.animate-island-wave-3 {
+  animation: dynamic-island-wave 0.8s ease-in-out infinite 0.32s;
+}
+
+

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Share2, ListTodo, HardDrive, ArrowRight, Sparkles, Wrench, FileText, Video, Bot, Mail, ShieldAlert } from 'lucide-react';
+import { Share2, ListTodo, HardDrive, ArrowRight, Sparkles, Wrench, FileText, Video, Bot, Mail, ShieldAlert, Headphones } from 'lucide-react';
 import { WorkspaceProject, WorkspaceTask } from '../../../../shared/types';
 import { useApp } from '../../../../context/AppContext';
 
@@ -9,7 +9,7 @@ interface WorkspaceHubViewProps {
   formsCount?: number;
   meetingsCount?: number;
   whiteboardsCount?: number;
-  onSelectSubmodule: (view: 'social' | 'tasks' | 'drive' | 'tools' | 'forms' | 'meetings' | 'whiteboards' | 'brand-guidelines' | 'romita' | 'emails') => void;
+  onSelectSubmodule: (view: 'social' | 'tasks' | 'drive' | 'tools' | 'forms' | 'meetings' | 'whiteboards' | 'brand-guidelines' | 'romita' | 'emails' | 'music') => void;
 }
 
 export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
@@ -403,6 +403,38 @@ export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
             </div>
           </button>
         )}
+
+        {/* SUBMÓDULO 11: MÚSICA & SOUNDIFY */}
+        <button
+          type="button"
+          onClick={() => onSelectSubmodule('music')}
+          className="group bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 text-left shadow-xs hover:shadow-md hover:border-rose-500 dark:hover:border-rose-500 hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between cursor-pointer"
+        >
+          <div>
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 mb-2.5 sm:mb-3 group-hover:bg-rose-600 group-hover:text-white transition-colors duration-200">
+              <Headphones className="w-5 h-5 sm:w-6 sm:h-6" />
+            </div>
+
+            <div className="flex items-center gap-1.5 mb-0.5 sm:mb-1">
+              <span className="text-[10px] sm:text-xs font-bold text-slate-400">
+                Playlists & YouTube
+              </span>
+            </div>
+
+            <h3 className="text-xs sm:text-base font-extrabold text-slate-900 dark:text-white group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors line-clamp-1">
+              Música
+            </h3>
+
+            <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-tight sm:leading-relaxed">
+              Crea playlists, busca música para concentrarte y reproduce en segundo plano mientras trabajas.
+            </p>
+          </div>
+
+          <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] sm:text-xs font-bold text-rose-600 dark:text-rose-400">
+            <span>Ingresar</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </button>
 
         {!anyAccess && (
           <div className="col-span-full p-8 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl space-y-3">

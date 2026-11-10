@@ -42,6 +42,7 @@ import { WhiteboardsSubmoduleView } from './workspace/submodules/whiteboards/Whi
 import { BrandGuidelinesSubmoduleView } from './workspace/submodules/brand-guidelines/BrandGuidelinesSubmoduleView';
 import { RomitaWorkspaceView } from './workspace/submodules/romita/RomitaWorkspaceView';
 import { EmailsSubmoduleView } from './workspace/submodules/emails/EmailsSubmoduleView';
+import { MusicSubmoduleView } from './workspace/submodules/music/MusicSubmoduleView';
 
 // Modales
 import { ProjectModal } from './workspace/modals/ProjectModal';
@@ -109,7 +110,7 @@ export const WorkspaceModule: React.FC = () => {
   const canViewServiceOrders = isSuperAdmin || can('service_orders.view') || can('workspace.view');
 
   // Nivel 0: Navegación de Submódulos ('hub', 'social', 'tasks', 'drive', 'tools', 'forms', 'meetings', 'whiteboards', 'brand-guidelines', 'romita')
-  const [currentView, setCurrentView] = useState<'hub' | 'social' | 'tasks' | 'drive' | 'tools' | 'forms' | 'meetings' | 'whiteboards' | 'brand-guidelines' | 'romita' | 'emails'>('hub');
+  const [currentView, setCurrentView] = useState<'hub' | 'social' | 'tasks' | 'drive' | 'tools' | 'forms' | 'meetings' | 'whiteboards' | 'brand-guidelines' | 'romita' | 'emails' | 'music'>('hub');
   const [forms, setForms] = useState<WorkspaceForm[]>([]);
   const [meetings, setMeetings] = useState<WorkspaceMeeting[]>([]);
   const [whiteboardsCount, setWhiteboardsCount] = useState<number>(0);
@@ -1294,6 +1295,15 @@ export const WorkspaceModule: React.FC = () => {
       {currentView === 'emails' && (
         <div className="space-y-4 animate-fadeIn">
           <EmailsSubmoduleView onBackToHub={() => setCurrentView('hub')} />
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* SUBMÓDULO: MÚSICA & SOUNDIFY */}
+      {/* ===================================================================== */}
+      {currentView === 'music' && (
+        <div className="space-y-4 animate-fadeIn">
+          <MusicSubmoduleView onBackToHub={() => setCurrentView('hub')} />
         </div>
       )}
 

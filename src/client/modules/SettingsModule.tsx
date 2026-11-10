@@ -2883,28 +2883,41 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                     </p>
                   </button>
 
-                  {/* Toast 4: Isla Dinámica / Pill */}
+                  {/* Toast 4: Isla Dinámica Apple Style */}
                   <button
                     type="button"
-                    onClick={() => handleCustChange({ ...custForm, toastStyle: 'pill' })}
+                    onClick={() => handleCustChange({ ...custForm, toastStyle: 'dynamic-island' })}
                     className={`p-4 rounded-2xl border text-left transition-all ${
-                      custForm.toastStyle === 'pill'
+                      custForm.toastStyle === 'dynamic-island' || custForm.toastStyle === 'pill'
                         ? 'border-emerald-600 ring-2 ring-emerald-500/20 shadow-sm'
                         : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
                     }`}
                   >
-                    {/* Miniatura Wireframe */}
+                    {/* Miniatura Wireframe Apple Dynamic Island */}
                     <div className="h-16 flex items-center justify-center mb-3">
-                      <div className="h-9 px-3.5 rounded-full bg-slate-950 text-white flex items-center gap-2 border border-slate-800 shadow-md">
-                        <Check className="w-3 h-3 text-emerald-400 shrink-0" />
-                        <div className="h-1.5 w-14 rounded-full bg-slate-200" />
+                      <div className="h-10 px-4 rounded-full bg-black text-white flex items-center gap-2.5 border border-white/15 shadow-xl ring-1 ring-white/10">
+                        <div className="w-5 h-5 rounded-full bg-emerald-500/20 ring-1 ring-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0">
+                          <Check className="w-3 h-3" />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="h-1.5 w-16 rounded-full bg-white" />
+                          <div className="h-1 w-10 rounded-full bg-zinc-400" />
+                        </div>
+                        <div className="flex items-center gap-0.5 ml-1">
+                          <span className="w-0.5 h-2.5 bg-emerald-400 rounded-full animate-pulse" />
+                          <span className="w-0.5 h-3.5 bg-emerald-400 rounded-full" />
+                          <span className="w-0.5 h-2 bg-emerald-400 rounded-full" />
+                        </div>
                       </div>
                     </div>
-                    <p className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                      Isla Dinámica
+                    <p className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                      <span>Isla Dinámica</span>
+                      <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-zinc-900 dark:bg-zinc-800 text-zinc-300 border border-zinc-700">
+                        Apple iOS
+                      </span>
                     </p>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                      Cápsula oscura flotante
+                      Cápsula OLED flotante con resorte elástico y dock superior
                     </p>
                   </button>
                 </div>
@@ -3031,6 +3044,26 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                     </div>
 
                     <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          toast('Notificación interactiva con resorte elástico y dock superior', 'success', {
+                            title: 'Isla Dinámica Apple',
+                            styleOverride: 'dynamic-island',
+                            actions: [
+                              {
+                                label: 'Ver Detalle',
+                                variant: 'primary',
+                                onClick: () => {},
+                              },
+                            ],
+                          })
+                        }
+                        className="px-3 py-1.5 rounded-xl border border-zinc-700 bg-black text-white text-xs font-semibold hover:bg-zinc-900 transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                      >
+                        <span>🏝️ Probar Isla Dinámica</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={() =>

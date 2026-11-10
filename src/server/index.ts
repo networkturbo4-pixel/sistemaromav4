@@ -42,6 +42,7 @@ import whiteboardRouter from './routes/whiteboards.routes';
 import brandGuidelinesRouter from './routes/brand-guidelines.routes';
 import romitaRouter from './routes/romita.routes';
 import emailsRouter from './routes/emails.routes';
+import musicRouter from './routes/music.routes';
 import { googleDriveService } from './services/googleDriveService';
 import { generateTotpSecret, generateTotpCode, verifyTotpCode, buildOtpAuthUri } from './utils/totp';
 import { notificationService, notifyEvent } from './services/notificationService';
@@ -84,6 +85,9 @@ app.use('/api/romita', romitaRouter);
 
 // Submódulo de Workspace: Correos Corporativos (SMTP / IMAP)
 app.use('/api/workspace/emails', emailsRouter);
+
+// Módulo de Música / Soundify Widget
+app.use('/api/music', musicRouter);
 
 // =============================================================================
 // 1. ENDPOINTS PÚBLICOS Y AUTENTICACIÓN POR PIN DE 8 DÍGITOS

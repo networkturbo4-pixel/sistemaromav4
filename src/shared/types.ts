@@ -1,7 +1,7 @@
 import { PermissionKey } from './permissions';
 
 export type TypographyScale = 'compact' | 'normal' | 'comfortable' | 'large';
-export type ToastStyleVariant = 'glass' | 'minimal' | 'solid' | 'pill';
+export type ToastStyleVariant = 'glass' | 'minimal' | 'solid' | 'pill' | 'dynamic-island';
 export type ToastAudioTheme = 'chime' | 'pop' | 'beep' | 'glass' | 'silent';
 export type ToastPosition =
   | 'top-right'

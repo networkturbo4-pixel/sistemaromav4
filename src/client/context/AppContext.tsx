@@ -237,34 +237,7 @@ const InteractiveToastCard: React.FC<InteractiveToastCardProps> = ({
     touchStartRef.current = null;
   };
 
-  const icon =
-    item.type === 'success' ? (
-      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-    ) : item.type === 'error' ? (
-      <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
-    ) : item.type === 'warning' ? (
-      <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
-    ) : (
-      <Info className="w-5 h-5 text-sky-400 shrink-0" />
-    );
-
-  let variantClass = '';
-  if (styleVariant === 'glass') {
-    variantClass =
-      'backdrop-blur-xl bg-slate-900/90 text-white border border-white/15 rounded-2xl shadow-2xl p-3.5';
-  } else if (styleVariant === 'minimal') {
-    variantClass =
-      'tenant-surface tenant-text border-l-4 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg p-3.5';
-  } else if (styleVariant === 'solid') {
-    variantClass =
-      item.type === 'error'
-        ? 'bg-rose-600 text-white rounded-xl shadow-xl p-3.5 font-medium'
-        : 'tenant-btn-primary text-white rounded-xl shadow-xl p-3.5 font-medium';
-  } else {
-    // pill
-    variantClass =
-      'backdrop-blur-md bg-slate-950/95 text-white border border-purple-500/40 rounded-3xl shadow-2xl p-3';
-  }
+  const isIsland = styleVariant === 'dynamic-island' || styleVariant === 'pill';
 
   // Estilos de Prioridad Urgente / Crítica
   let priorityRing = '';
@@ -296,6 +269,213 @@ const InteractiveToastCard: React.FC<InteractiveToastCardProps> = ({
         transition: isDragging ? 'none' : 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
         zIndex: 50,
       };
+
+  // VARIANTE ESPECIAL: ISLA DINÁMICA (APPLE DYNAMIC ISLAND SPRING ANIMATION)
+  if (isIsland) {
+    const hasActions = !!(item.actions && item.actions.length > 0);
+    const islandTheme =
+      item.type === 'success'
+        ? {
+            badgeBg:
+              'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.35)]',
+            waveColor: 'bg-emerald-400',
+            glowColor:
+              'shadow-[0_20px_50px_rgba(0,0,0,0.85),0_0_24px_rgba(16,185,129,0.18)]',
+          }
+        : item.type === 'error'
+        ? {
+            badgeBg:
+              'bg-rose-500/20 text-rose-400 ring-1 ring-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.35)]',
+            waveColor: 'bg-rose-400',
+            glowColor:
+              'shadow-[0_20px_50px_rgba(0,0,0,0.85),0_0_24px_rgba(244,63,94,0.22)]',
+          }
+        : item.type === 'warning'
+        ? {
+            badgeBg:
+              'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.35)]',
+            waveColor: 'bg-amber-400',
+            glowColor:
+              'shadow-[0_20px_50px_rgba(0,0,0,0.85),0_0_24px_rgba(245,158,11,0.18)]',
+          }
+        : {
+            badgeBg:
+              'bg-indigo-500/20 text-indigo-400 ring-1 ring-indigo-500/40 shadow-[0_0_12px_rgba(99,102,241,0.35)]',
+            waveColor: 'bg-indigo-400',
+            glowColor:
+              'shadow-[0_20px_50px_rgba(0,0,0,0.85),0_0_24px_rgba(99,102,241,0.2)]',
+          };
+
+    const islandAnimationClass =
+      !isDragging && !isStackedLayer ? 'animate-dynamic-island' : '';
+
+    return (
+      <div
+        style={stackStyle}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className={`pointer-events-auto select-none relative w-full max-w-md bg-black/95 text-white ring-1 ring-white/15 border border-white/10 backdrop-blur-3xl transition-all duration-300 ${
+          hasActions
+            ? 'rounded-[26px] p-3.5 sm:p-4'
+            : 'rounded-full px-4 py-2.5 sm:px-5 sm:py-3'
+        } ${islandTheme.glowColor} ${priorityRing} ${islandAnimationClass}`}
+      >
+        <div className="flex items-center gap-3">
+          {/* Icono de Cápsula Dinámica */}
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${islandTheme.badgeBg}`}
+          >
+            {item.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4" />
+            ) : item.type === 'error' ? (
+              <XCircle className="w-4 h-4" />
+            ) : item.type === 'warning' ? (
+              <AlertTriangle className="w-4 h-4" />
+            ) : (
+              <Info className="w-4 h-4" />
+            )}
+          </div>
+
+          {/* Contenido Central: Título y Mensaje con reveal suave */}
+          <div className="flex-1 min-w-0 animate-dynamic-island-content">
+            {item.title ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-white tracking-tight leading-tight line-clamp-1">
+                    {item.title}
+                  </span>
+                  {item.priority === 'critical' && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase bg-rose-500 text-white tracking-wider">
+                      Crítico
+                    </span>
+                  )}
+                  {item.priority === 'urgent' && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-extrabold uppercase bg-amber-500 text-white tracking-wider">
+                      Urgente
+                    </span>
+                  )}
+                </div>
+                <p className="text-[12.5px] text-zinc-300 font-medium leading-tight line-clamp-2 mt-0.5">
+                  {item.message}
+                </p>
+              </>
+            ) : (
+              <div className="flex items-center gap-2">
+                <p className="text-[13px] text-zinc-100 font-medium leading-tight line-clamp-2">
+                  {item.message}
+                </p>
+                {item.priority === 'critical' && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase bg-rose-500 text-white tracking-wider shrink-0">
+                    Crítico
+                  </span>
+                )}
+                {item.priority === 'urgent' && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-extrabold uppercase bg-amber-500 text-white tracking-wider shrink-0">
+                    Urgente
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Acciones interactivas integradas */}
+            {hasActions && (
+              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/10 flex-wrap">
+                {item.actions!.map((act, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      act.onClick();
+                      onDismiss();
+                    }}
+                    className={`px-3 py-1 rounded-full text-xs font-bold transition active:scale-95 cursor-pointer ${
+                      act.variant === 'primary'
+                        ? 'bg-white text-black hover:bg-zinc-200 shadow-xs'
+                        : act.variant === 'danger'
+                        ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-xs'
+                        : 'bg-white/15 hover:bg-white/25 text-white'
+                    }`}
+                  >
+                    {act.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Indicador Derecho Apple: Ondas de Live Activity + Botón Cerrar */}
+          <div className="flex items-center gap-2 shrink-0 animate-dynamic-island-content">
+            <div
+              className="hidden sm:flex items-center gap-0.5 h-4 px-1"
+              title="Actividad en vivo"
+            >
+              <span
+                className={`w-0.5 rounded-full animate-island-wave-1 ${islandTheme.waveColor}`}
+              />
+              <span
+                className={`w-0.5 rounded-full animate-island-wave-2 ${islandTheme.waveColor}`}
+              />
+              <span
+                className={`w-0.5 rounded-full animate-island-wave-3 ${islandTheme.waveColor}`}
+              />
+            </div>
+
+            {isStackedMode && !isStackExpanded && total > 1 && index === 0 && (
+              <button
+                type="button"
+                onClick={onToggleExpand}
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                title="Desplegar todas las alertas agrupadas"
+              >
+                <Layers className="w-3 h-3" />
+                <span>+{total - 1}</span>
+                <ChevronDown className="w-2.5 h-2.5" />
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 text-zinc-400 hover:text-white flex items-center justify-center transition cursor-pointer"
+              aria-label="Cerrar notificación"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const icon =
+    item.type === 'success' ? (
+      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+    ) : item.type === 'error' ? (
+      <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
+    ) : item.type === 'warning' ? (
+      <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+    ) : (
+      <Info className="w-5 h-5 text-sky-400 shrink-0" />
+    );
+
+  let variantClass = '';
+  if (styleVariant === 'glass') {
+    variantClass =
+      'backdrop-blur-xl bg-slate-900/90 text-white border border-white/15 rounded-2xl shadow-2xl p-3.5';
+  } else if (styleVariant === 'minimal') {
+    variantClass =
+      'tenant-surface tenant-text border-l-4 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg p-3.5';
+  } else if (styleVariant === 'solid') {
+    variantClass =
+      item.type === 'error'
+        ? 'bg-rose-600 text-white rounded-xl shadow-xl p-3.5 font-medium'
+        : 'tenant-btn-primary text-white rounded-xl shadow-xl p-3.5 font-medium';
+  } else {
+    variantClass =
+      'backdrop-blur-md bg-slate-950/95 text-white border border-purple-500/40 rounded-3xl shadow-2xl p-3';
+  }
 
   return (
     <div
@@ -1429,12 +1609,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     >
       {children}
 
-      {/* CONTENEDOR GLOBAL DE TOASTS PERSONALIZABLES POR TENANT (SWIPE, PILA 3D, ACCIONES) */}
+      {/* CONTENEDOR GLOBAL DE TOASTS PERSONALIZABLES POR TENANT (SWIPE, PILA 3D, DYNAMIC ISLAND, ACCIONES) */}
       <div
-        className={`fixed z-50 flex flex-col gap-2.5 pointer-events-none max-w-sm w-full px-4 sm:px-0 ${toastPosClass}`}
+        className={`fixed z-50 flex flex-col gap-2.5 pointer-events-none max-w-sm sm:max-w-md w-full px-4 sm:px-0 ${toastPosClass} transition-all duration-300`}
       >
         {isStackExpanded && toasts.length > 1 && (
-          <div className="pointer-events-auto flex items-center justify-between px-3 py-1.5 rounded-xl backdrop-blur-md bg-slate-900/80 text-white text-xs font-bold border border-white/10 shadow-lg">
+          <div className="pointer-events-auto flex items-center justify-between px-3.5 py-1.5 rounded-full backdrop-blur-md bg-black/85 text-white text-xs font-bold border border-white/15 shadow-xl w-full max-w-xs">
             <span className="flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-indigo-400" />
               <span>{toasts.length} alertas en pila</span>
