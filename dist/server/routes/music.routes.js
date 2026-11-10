@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const auth_1 = require("../middleware/auth");
+const db_1 = require("../db");
 const router = (0, express_1.Router)();
 // Helper to extract 11-char video ID
 function extractVideoId(input) {
@@ -194,6 +196,39 @@ router.get('/metadata', async (req, res) => {
     }
     catch (err) {
         return res.status(500).json({ error: 'Error al obtener metadatos' });
+    }
+});
+// GET /api/music/library - Obtener playlists y favoritos del usuario autenticado en su tenant
+router.get('/library', auth_1.requireAuth, async (req, res) => {
+    try {
+        const tenantId = req.auth?.tenant?.id;
+        const userId = req.auth?.user?.id;
+        if (!tenantId || !userId) {
+            return res.status(400).json({ error: 'Tenant o usuario no identificado' });
+        }
+        const data = await db_1.db.getUserMusicData(tenantId, userId);
+        return res.json({ success: true, ...data });
+    }
+    catch (error) {
+        console.error('Error fetching user music library:', error);
+        return res.status(500).json({ error: error.message || 'Error al obtener biblioteca de música' });
+    }
+});
+// POST /api/music/library - Guardar playlists y/o favoritos del usuario autenticado en su tenant
+router.post('/library', auth_1.requireAuth, async (req, res) => {
+    try {
+        const tenantId = req.auth?.tenant?.id;
+        const userId = req.auth?.user?.id;
+        if (!tenantId || !userId) {
+            return res.status(400).json({ error: 'Tenant o usuario no identificado' });
+        }
+        const { playlists, favorites } = req.body || {};
+        await db_1.db.saveUserMusicData(tenantId, userId, { playlists, favorites });
+        return res.json({ success: true });
+    }
+    catch (error) {
+        console.error('Error saving user music library:', error);
+        return res.status(500).json({ error: error.message || 'Error al guardar biblioteca de música' });
     }
 });
 exports.default = router;

@@ -5,7 +5,8 @@ export interface EntityNavigationTarget {
   entityType: 'client' | 'quote' | 'payment_note' | 'service_order' | 'service';
   entityId: string;
   code?: string;
-  action?: 'edit' | 'view';
+  action?: 'edit' | 'view' | 'create_from_service';
+  serviceData?: any;
 }
 
 export function navigateToEntity(

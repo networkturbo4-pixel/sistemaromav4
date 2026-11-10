@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { Song, Playlist } from '../types/music';
+import { useApp } from './AppContext';
 import {
   getSavedPlaylists,
   savePlaylists,
@@ -9,6 +10,8 @@ import {
   saveLastPlayed,
   getPlayerSettings,
   savePlayerSettings,
+  fetchUserMusicLibrary,
+  saveUserMusicLibrary,
 } from '../services/musicService';
 import {
   updateMediaSessionMetadata,
@@ -68,16 +71,20 @@ interface MusicPlayerContextType {
 const MusicPlayerContext = createContext<MusicPlayerContextType | null>(null);
 
 export const MusicPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [playlists, setPlaylists] = useState<Playlist[]>(() => getSavedPlaylists());
-  const [favorites, setFavorites] = useState<Song[]>(() => getSavedFavorites());
-  const [currentSong, setCurrentSong] = useState<Song | null>(() => getSavedLastPlayed());
+  const { user, tenant, token } = useApp();
+  const tenantId = tenant?.id || user?.tenantId || 'global';
+  const userId = user?.id || 'guest';
+
+  const [playlists, setPlaylists] = useState<Playlist[]>(() => getSavedPlaylists(tenantId, userId));
+  const [favorites, setFavorites] = useState<Song[]>(() => getSavedFavorites(tenantId, userId));
+  const [currentSong, setCurrentSong] = useState<Song | null>(() => getSavedLastPlayed(tenantId, userId));
   const [queue, setQueue] = useState<Song[]>(() => {
-    const last = getSavedLastPlayed();
+    const last = getSavedLastPlayed(tenantId, userId);
     return last ? [last] : [];
   });
   const [queueIndex, setQueueIndex] = useState<number>(0);
 
-  const initialSettings = getPlayerSettings();
+  const initialSettings = getPlayerSettings(tenantId, userId);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
@@ -91,26 +98,108 @@ export const MusicPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [isWidgetExpanded, setWidgetExpanded] = useState<boolean>(false);
   const [isMusicSubmoduleOpen, setIsMusicSubmoduleOpen] = useState<boolean>(false);
 
-  // Sync playlists
-  useEffect(() => {
-    savePlaylists(playlists);
-  }, [playlists]);
+  // Active Scope tracking (tenant + user)
+  const currentScopeKey = `${tenantId}:::${userId}`;
+  const activeScopeRef = useRef<string>(currentScopeKey);
+  const isInitialServerSyncDone = useRef<Record<string, boolean>>({});
 
-  // Sync favorites
+  // When tenant or user changes: reload state for the new user/tenant
   useEffect(() => {
-    saveFavorites(favorites);
-  }, [favorites]);
+    if (activeScopeRef.current !== currentScopeKey) {
+      activeScopeRef.current = currentScopeKey;
+
+      const loadedPlaylists = getSavedPlaylists(tenantId, userId);
+      const loadedFavorites = getSavedFavorites(tenantId, userId);
+      const loadedLastPlayed = getSavedLastPlayed(tenantId, userId);
+      const loadedSettings = getPlayerSettings(tenantId, userId);
+
+      setPlaylists(loadedPlaylists);
+      setFavorites(loadedFavorites);
+      setVolumeState(loadedSettings.volume);
+      setRepeatMode(loadedSettings.repeatMode);
+      setIsShuffle(loadedSettings.isShuffle);
+
+      if (loadedLastPlayed) {
+        setCurrentSong(loadedLastPlayed);
+        setQueue((prevQueue) => (prevQueue.length > 0 ? prevQueue : [loadedLastPlayed]));
+      }
+    }
+  }, [currentScopeKey, tenantId, userId]);
+
+  // Synchronize with server if authenticated
+  useEffect(() => {
+    if (!token || !userId || userId === 'guest') return;
+
+    const scopeKey = currentScopeKey;
+    if (isInitialServerSyncDone.current[scopeKey]) return;
+
+    let isMounted = true;
+    fetchUserMusicLibrary(token).then((serverData) => {
+      if (!isMounted) return;
+      isInitialServerSyncDone.current[scopeKey] = true;
+
+      if (serverData) {
+        const serverPlaylists = serverData.playlists || [];
+        const serverFavorites = serverData.favorites || [];
+
+        if (serverPlaylists.length > 0) {
+          setPlaylists(serverPlaylists);
+          savePlaylists(serverPlaylists, tenantId, userId);
+        } else {
+          // If server had no playlists yet, seed server with current local playlists
+          const currentLocal = getSavedPlaylists(tenantId, userId);
+          if (currentLocal.length > 0) {
+            saveUserMusicLibrary(token, {
+              playlists: currentLocal,
+              favorites: getSavedFavorites(tenantId, userId),
+            });
+          }
+        }
+
+        if (serverFavorites.length > 0) {
+          setFavorites(serverFavorites);
+          saveFavorites(serverFavorites, tenantId, userId);
+        }
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [token, currentScopeKey, tenantId, userId]);
+
+  // Save playlists locally and debounce-sync to server
+  useEffect(() => {
+    savePlaylists(playlists, tenantId, userId);
+    if (token && userId && userId !== 'guest') {
+      const timer = setTimeout(() => {
+        saveUserMusicLibrary(token, { playlists });
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [playlists, tenantId, userId, token]);
+
+  // Save favorites locally and debounce-sync to server
+  useEffect(() => {
+    saveFavorites(favorites, tenantId, userId);
+    if (token && userId && userId !== 'guest') {
+      const timer = setTimeout(() => {
+        saveUserMusicLibrary(token, { favorites });
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [favorites, tenantId, userId, token]);
 
   // Sync settings
   useEffect(() => {
-    savePlayerSettings({ volume, repeatMode, isShuffle });
-  }, [volume, repeatMode, isShuffle]);
+    savePlayerSettings({ volume, repeatMode, isShuffle }, tenantId, userId);
+  }, [volume, repeatMode, isShuffle, tenantId, userId]);
 
   // Sync current song to last played
   useEffect(() => {
-    saveLastPlayed(currentSong);
+    saveLastPlayed(currentSong, tenantId, userId);
     updateMediaSessionMetadata(currentSong, 'Sistema Roma Music', isPlaying);
-  }, [currentSong]);
+  }, [currentSong, tenantId, userId, isPlaying]);
 
   // Update MediaSession state
   useEffect(() => {
@@ -181,7 +270,8 @@ export const MusicPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const playPrevious = useCallback(() => {
     if (queue.length === 0) return;
-    if (currentTime > 4) {
+
+    if (currentTime > 3) {
       setSeekRequested(0);
       return;
     }
@@ -191,22 +281,25 @@ export const MusicPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       setQueueIndex(prevIndex);
       setCurrentSong(queue[prevIndex]);
       setIsPlaying(true);
-    } else {
-      setSeekRequested(0);
+    } else if (repeatMode === 'all') {
+      const lastIdx = queue.length - 1;
+      setQueueIndex(lastIdx);
+      setCurrentSong(queue[lastIdx]);
+      setIsPlaying(true);
     }
-  }, [queue, queueIndex, currentTime]);
+  }, [queue, queueIndex, currentTime, repeatMode]);
 
   const seekTo = useCallback((seconds: number) => {
-    setSeekRequested(seconds);
     setCurrentTime(seconds);
+    setSeekRequested(seconds);
   }, []);
 
   const onSeekHandled = useCallback(() => {
     setSeekRequested(null);
   }, []);
 
-  const setVolume = useCallback((newVol: number) => {
-    const clamped = Math.max(0, Math.min(100, newVol));
+  const setVolume = useCallback((newVolume: number) => {
+    const clamped = Math.max(0, Math.min(100, newVolume));
     setVolumeState(clamped);
     if (clamped > 0 && isMuted) {
       setIsMuted(false);
@@ -218,7 +311,11 @@ export const MusicPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, []);
 
   const toggleRepeat = useCallback(() => {
-    setRepeatMode((prev) => (prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off'));
+    setRepeatMode((prev) => {
+      if (prev === 'off') return 'all';
+      if (prev === 'all') return 'one';
+      return 'off';
+    });
   }, []);
 
   const toggleShuffle = useCallback(() => {
@@ -226,58 +323,47 @@ export const MusicPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, []);
 
   const addToQueue = useCallback((song: Song) => {
-    setQueue((prev) => [...prev, song]);
-    if (!currentSong) {
-      setCurrentSong(song);
-      setQueueIndex(0);
-      setIsPlaying(true);
-    }
-  }, [currentSong]);
+    setQueue((prev) => {
+      const exists = prev.some((s) => s.videoId === song.videoId);
+      if (exists) return prev;
+      return [...prev, song];
+    });
+  }, []);
 
   const removeFromQueue = useCallback((index: number) => {
     setQueue((prev) => prev.filter((_, i) => i !== index));
-    if (index === queueIndex) {
-      playNext();
-    } else if (index < queueIndex) {
-      setQueueIndex((prev) => prev - 1);
-    }
-  }, [queueIndex, playNext]);
+    setQueueIndex((prev) => (index < prev ? prev - 1 : prev));
+  }, []);
 
   const clearQueue = useCallback(() => {
     setQueue([]);
     setQueueIndex(0);
-    setCurrentSong(null);
-    setIsPlaying(false);
   }, []);
 
   const createPlaylist = useCallback((name: string, description?: string): Playlist => {
-    const newPl: Playlist = {
+    const newPlaylist: Playlist = {
       id: `pl-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      name: name.trim() || 'Mi Playlist',
+      name: name.trim(),
       description: description?.trim() || '',
-      accentColor: '#3b82f6',
+      accentColor: ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'][Math.floor(Math.random() * 6)],
       createdAt: Date.now(),
       songs: [],
     };
-    setPlaylists((prev) => [...prev, newPl]);
-    return newPl;
+    setPlaylists((prev) => [newPlaylist, ...prev]);
+    return newPlaylist;
   }, []);
 
-  const updatePlaylist = useCallback(
-    (id: string, updates: Partial<Pick<Playlist, 'name' | 'description' | 'accentColor'>>) => {
-      setPlaylists((prev) =>
-        prev.map((p) => {
-          if (p.id !== id) return p;
-          return {
-            ...p,
-            ...updates,
-            name: updates.name !== undefined ? updates.name.trim() || p.name : p.name,
-          };
-        })
-      );
-    },
-    []
-  );
+  const updatePlaylist = useCallback((id: string, updates: Partial<Pick<Playlist, 'name' | 'description' | 'accentColor'>>) => {
+    setPlaylists((prev) =>
+      prev.map((p) => {
+        if (p.id !== id) return p;
+        return {
+          ...p,
+          ...updates,
+        };
+      })
+    );
+  }, []);
 
   const deletePlaylist = useCallback((id: string) => {
     setPlaylists((prev) => prev.filter((p) => p.id !== id));
@@ -287,7 +373,8 @@ export const MusicPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setPlaylists((prev) =>
       prev.map((p) => {
         if (p.id !== playlistId) return p;
-        if (p.songs.some((s) => s.videoId === song.videoId)) return p;
+        const exists = p.songs.some((s) => s.id === song.id || s.videoId === song.videoId);
+        if (exists) return p;
         return { ...p, songs: [...p.songs, song] };
       })
     );

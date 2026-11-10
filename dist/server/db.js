@@ -1356,6 +1356,27 @@ class DatabaseManager {
         this.saveLocalState();
         return user;
     }
+    async getUserMusicData(tenantId, userId) {
+        const user = this.localState.users.find((u) => u.id === userId && u.tenantId === tenantId);
+        return {
+            playlists: Array.isArray(user?.musicPlaylists) ? user.musicPlaylists : [],
+            favorites: Array.isArray(user?.musicFavorites) ? user.musicFavorites : [],
+        };
+    }
+    async saveUserMusicData(tenantId, userId, data) {
+        const user = this.localState.users.find((u) => u.id === userId && u.tenantId === tenantId);
+        if (!user)
+            return false;
+        if (data.playlists !== undefined) {
+            user.musicPlaylists = data.playlists;
+        }
+        if (data.favorites !== undefined) {
+            user.musicFavorites = data.favorites;
+        }
+        user.updatedAt = new Date().toISOString();
+        this.saveLocalState();
+        return true;
+    }
     async deleteUser(tenantId, id) {
         const before = this.localState.users.length;
         this.localState.users = this.localState.users.filter((u) => !(u.id === id && u.tenantId === tenantId));
@@ -1921,8 +1942,23 @@ class DatabaseManager {
     // ===========================================================================
     // SERVICIOS Y CATEGORIAS
     // ===========================================================================
+    enrichService(s) {
+        const cat = this.localState.serviceCategories.find((c) => c.id === s.categoryId && c.tenantId === s.tenantId);
+        const quotesCount = this.localState.quotes.filter((q) => q.tenantId === s.tenantId &&
+            q.items?.some((it) => it.title?.toLowerCase().includes(s.title.toLowerCase()) ||
+                (s.code && it.title?.toLowerCase().includes(s.code.toLowerCase())))).length;
+        return {
+            ...s,
+            categoryName: cat?.name || s.categoryName || 'General',
+            viewsCount: Number(s.viewsCount) || 0,
+            whatsappClicksCount: Number(s.whatsappClicksCount) || 0,
+            quotesCount: Math.max(Number(s.quotesCount) || 0, quotesCount),
+        };
+    }
     async getServices(tenantId, filters) {
-        let list = this.localState.services.filter((s) => s.tenantId === tenantId);
+        let list = this.localState.services
+            .filter((s) => s.tenantId === tenantId)
+            .map((s) => this.enrichService(s));
         if (!filters)
             return list;
         if (filters.search) {
@@ -1941,13 +1977,16 @@ class DatabaseManager {
         return list;
     }
     async getServiceById(id, tenantId) {
-        return this.localState.services.find((s) => s.id === id && s.tenantId === tenantId) || null;
+        const found = this.localState.services.find((s) => s.id === id && s.tenantId === tenantId);
+        return found ? this.enrichService(found) : null;
     }
     async getPublicServices(slug, categorySlug) {
         const tenant = this.localState.tenants.find((t) => t.slug === slug || t.id === slug);
         if (!tenant)
             return null;
-        let services = this.localState.services.filter((s) => s.tenantId === tenant.id && s.visibility === 'public');
+        let services = this.localState.services
+            .filter((s) => s.tenantId === tenant.id && s.visibility === 'public' && s.status === 'active')
+            .map((s) => this.enrichService(s));
         const categories = this.localState.serviceCategories.filter((c) => c.tenantId === tenant.id);
         if (categorySlug && categorySlug !== 'all') {
             const cat = categories.find((c) => c.slug === categorySlug);
@@ -1961,27 +2000,65 @@ class DatabaseManager {
         const tenant = this.localState.tenants.find((t) => t.slug === slug || t.id === slug);
         if (!tenant)
             return null;
-        const service = this.localState.services.find((s) => s.tenantId === tenant.id &&
+        const idx = this.localState.services.findIndex((s) => s.tenantId === tenant.id &&
             (s.seo?.slug === slugOrId || s.slug === slugOrId || s.id === slugOrId));
-        if (!service)
+        if (idx === -1)
             return null;
-        const related = this.localState.services
-            .filter((s) => s.tenantId === tenant.id && s.categoryId === service.categoryId && s.id !== service.id)
-            .slice(0, 3);
+        // Incrementar contador de vistas públicas
+        this.localState.services[idx].viewsCount = (Number(this.localState.services[idx].viewsCount) || 0) + 1;
+        this.saveLocalState();
+        const service = this.enrichService(this.localState.services[idx]);
+        const explicitIds = Array.isArray(service.relatedServiceIds) ? service.relatedServiceIds : [];
+        let related = [];
+        if (explicitIds.length > 0) {
+            related = this.localState.services
+                .filter((s) => s.tenantId === tenant.id && explicitIds.includes(s.id) && s.id !== service.id)
+                .map((s) => this.enrichService(s));
+        }
+        if (related.length < 3) {
+            const fallback = this.localState.services
+                .filter((s) => s.tenantId === tenant.id &&
+                s.categoryId === service.categoryId &&
+                s.id !== service.id &&
+                !related.some((r) => r.id === s.id))
+                .slice(0, 3 - related.length)
+                .map((s) => this.enrichService(s));
+            related = [...related, ...fallback];
+        }
         return { service, tenant, relatedServices: related };
+    }
+    async incrementServiceMetric(slug, slugOrId, metric) {
+        const tenant = this.localState.tenants.find((t) => t.slug === slug || t.id === slug);
+        const idx = this.localState.services.findIndex((s) => (!tenant || s.tenantId === tenant.id) &&
+            (s.seo?.slug === slugOrId || s.slug === slugOrId || s.id === slugOrId));
+        if (idx === -1)
+            return false;
+        if (metric === 'views') {
+            this.localState.services[idx].viewsCount = (Number(this.localState.services[idx].viewsCount) || 0) + 1;
+        }
+        else if (metric === 'whatsapp') {
+            this.localState.services[idx].whatsappClicksCount =
+                (Number(this.localState.services[idx].whatsappClicksCount) || 0) + 1;
+        }
+        else if (metric === 'quotes') {
+            this.localState.services[idx].quotesCount = (Number(this.localState.services[idx].quotesCount) || 0) + 1;
+        }
+        this.saveLocalState();
+        return true;
     }
     async createService(tenantId, data) {
         const now = new Date().toISOString();
+        const cat = this.localState.serviceCategories.find((c) => c.id === data.categoryId && c.tenantId === tenantId);
         const newService = {
             id: data.id || `svc-${Date.now()}`,
             tenantId,
             code: data.code || `SRV-${Date.now().toString().slice(-4)}`,
             title: data.title || data.name || 'Nuevo Servicio',
             categoryId: data.categoryId || '',
-            categoryName: data.categoryName || '',
+            categoryName: cat?.name || data.categoryName || '',
             coverImage: data.coverImage || '',
             status: data.status || 'active',
-            icon: data.icon || 'Briefcase',
+            icon: data.icon || 'Sparkles',
             pricingType: data.pricingType || 'fixed',
             currency: data.currency || 'PEN',
             currencySymbol: data.currencySymbol || 'S/',
@@ -1991,8 +2068,8 @@ class DatabaseManager {
             deliveryTime: data.deliveryTime || '3-5 días',
             inventory: data.inventory ?? null,
             inventoryUnlimited: data.inventoryUnlimited !== undefined ? !!data.inventoryUnlimited : true,
-            urgency: data.urgency || 'none',
-            video: data.video || { url: '', enabled: false },
+            urgency: data.urgency || { enabled: false, endDate: '', badgeText: '' },
+            video: data.video || { url: '', enabled: false, platform: 'unknown' },
             briefDescription: data.briefDescription || data.tagline || '',
             fullDescription: data.fullDescription || data.description || '',
             packages: Array.isArray(data.packages) ? data.packages : [],
@@ -2006,26 +2083,33 @@ class DatabaseManager {
                 slug: data.slug || `servicio-${Date.now()}`,
                 metaTitle: data.title || data.name || '',
                 metaDescription: data.briefDescription || data.description || '',
+                ogImageUrl: data.coverImage || '',
             },
             relatedServiceIds: Array.isArray(data.relatedServiceIds) ? data.relatedServiceIds : [],
+            viewsCount: Number(data.viewsCount) || 0,
+            whatsappClicksCount: Number(data.whatsappClicksCount) || 0,
+            quotesCount: Number(data.quotesCount) || 0,
             createdAt: now,
             updatedAt: now,
         };
         this.localState.services.push(newService);
         this.saveLocalState();
-        return newService;
+        return this.enrichService(newService);
     }
     async updateService(id, tenantId, data) {
         const idx = this.localState.services.findIndex((s) => s.id === id && s.tenantId === tenantId);
         if (idx === -1)
             return null;
+        const targetCategoryId = data.categoryId ?? this.localState.services[idx].categoryId;
+        const cat = this.localState.serviceCategories.find((c) => c.id === targetCategoryId && c.tenantId === tenantId);
         this.localState.services[idx] = {
             ...this.localState.services[idx],
             ...data,
+            categoryName: cat?.name || data.categoryName || this.localState.services[idx].categoryName || '',
             updatedAt: new Date().toISOString(),
         };
         this.saveLocalState();
-        return this.localState.services[idx];
+        return this.enrichService(this.localState.services[idx]);
     }
     async deleteService(id, tenantId) {
         const before = this.localState.services.length;

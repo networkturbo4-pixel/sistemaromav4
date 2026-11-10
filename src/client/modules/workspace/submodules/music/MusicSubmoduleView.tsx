@@ -26,6 +26,7 @@ import {
   Pencil,
 } from 'lucide-react';
 import { useMusicPlayer } from '../../../../context/MusicPlayerContext';
+import { useApp } from '../../../../context/AppContext';
 import { Song, Playlist } from '../../../../types/music';
 import { searchMusic } from '../../../../services/musicService';
 
@@ -34,6 +35,7 @@ interface MusicSubmoduleViewProps {
 }
 
 export const MusicSubmoduleView: React.FC<MusicSubmoduleViewProps> = ({ onBackToHub }) => {
+  const { user, tenant } = useApp();
   const {
     currentSong,
     isPlaying,
@@ -192,7 +194,7 @@ export const MusicSubmoduleView: React.FC<MusicSubmoduleViewProps> = ({ onBackTo
       {/* 1. CABECERA PRINCIPAL CON BOTÓN RETORNO AL HUB */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-7 rounded-3xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             {onBackToHub && (
               <button
                 type="button"
@@ -206,6 +208,11 @@ export const MusicSubmoduleView: React.FC<MusicSubmoduleViewProps> = ({ onBackTo
             <span className="px-3 py-1 rounded-full text-[11px] font-black tracking-wider uppercase bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 inline-flex items-center gap-1.5">
               <Headphones className="w-3.5 h-3.5" /> Workspace Music & Soundify
             </span>
+            {user && (
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 inline-flex items-center gap-1.5">
+                Biblioteca personal de <strong className="text-slate-800 dark:text-slate-100">{user.name}</strong>
+              </span>
+            )}
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
             Música para el Equipo

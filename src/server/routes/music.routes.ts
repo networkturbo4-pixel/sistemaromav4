@@ -1,4 +1,6 @@
 import { Router, Request, Response } from 'express';
+import { requireAuth, AuthenticatedRequest } from '../middleware/auth';
+import { db } from '../db';
 
 const router = Router();
 
@@ -203,6 +205,39 @@ router.get('/metadata', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     return res.status(500).json({ error: 'Error al obtener metadatos' });
+  }
+});
+
+// GET /api/music/library - Obtener playlists y favoritos del usuario autenticado en su tenant
+router.get('/library', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = req.auth?.tenant?.id;
+    const userId = req.auth?.user?.id;
+    if (!tenantId || !userId) {
+      return res.status(400).json({ error: 'Tenant o usuario no identificado' });
+    }
+    const data = await db.getUserMusicData(tenantId, userId);
+    return res.json({ success: true, ...data });
+  } catch (error: any) {
+    console.error('Error fetching user music library:', error);
+    return res.status(500).json({ error: error.message || 'Error al obtener biblioteca de música' });
+  }
+});
+
+// POST /api/music/library - Guardar playlists y/o favoritos del usuario autenticado en su tenant
+router.post('/library', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = req.auth?.tenant?.id;
+    const userId = req.auth?.user?.id;
+    if (!tenantId || !userId) {
+      return res.status(400).json({ error: 'Tenant o usuario no identificado' });
+    }
+    const { playlists, favorites } = req.body || {};
+    await db.saveUserMusicData(tenantId, userId, { playlists, favorites });
+    return res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error saving user music library:', error);
+    return res.status(500).json({ error: error.message || 'Error al guardar biblioteca de música' });
   }
 });
 

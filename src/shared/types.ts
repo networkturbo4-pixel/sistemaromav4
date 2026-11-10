@@ -190,6 +190,8 @@ export interface User {
   isActive: boolean;
   lastLoginAt: string | null;
   themePreference?: UserThemePreference;
+  musicPlaylists?: any[];
+  musicFavorites?: any[];
   createdAt: string;
   updatedAt: string;
 }
@@ -581,6 +583,9 @@ export interface Service {
   extras: ServiceExtraItem[];
   seo: ServiceSeo;
   relatedServiceIds: string[];
+  viewsCount?: number;
+  whatsappClicksCount?: number;
+  quotesCount?: number;
   createdAt: string;
   updatedAt: string;
 }
