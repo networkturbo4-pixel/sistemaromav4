@@ -7,6 +7,8 @@ import {
   MembershipMonthItem,
   MembershipSubInstallment,
   MembershipMonthStatus,
+  PaymentRecordItem,
+  PaymentRecordStatus,
   Client,
   ClientBrand,
   Quote,
@@ -143,6 +145,7 @@ export const PaymentNotesModule: React.FC = () => {
     membershipMonthsTotal?: number;
     membershipInstallments?: MembershipMonthItem[];
     extraItems?: PaymentNoteItem[];
+    paymentRecords?: PaymentRecordItem[];
     items: PaymentNoteItem[];
     subtotal: number;
     includeTax: boolean;
@@ -238,6 +241,7 @@ export const PaymentNotesModule: React.FC = () => {
       isMembership: formData.isMembership,
       membershipInstallments: formData.membershipInstallments,
       extraItems: formData.extraItems,
+      paymentRecords: formData.paymentRecords,
       items: formData.items,
       includeTax: formData.includeTax,
       taxRate: formData.taxRate,
@@ -245,16 +249,33 @@ export const PaymentNotesModule: React.FC = () => {
       manualPaidAmount: formData.paidAmount,
     });
 
+    const hasPaymentRecords = !formData.isMembership && formData.paymentRecords && formData.paymentRecords.length > 0;
+    const paidRecords = hasPaymentRecords
+      ? (formData.paymentRecords || []).filter((r) => r.status === 'paid')
+      : [];
+    const latestRecordDate = paidRecords.map((r) => r.paymentDate).filter(Boolean).pop();
+    const recordOps = paidRecords.map((r) => r.operationNumber).filter(Boolean).join(', ');
+
     setFormData((prev) => ({
       ...prev,
       subtotal: calc.subtotal,
       taxAmount: calc.taxAmount,
       total: calc.total,
-      ...(formData.isMembership ? { paidAmount: calc.paidAmount, status: calc.status } : {}),
+      ...(formData.isMembership
+        ? { paidAmount: calc.paidAmount, status: calc.status }
+        : hasPaymentRecords
+        ? {
+            paidAmount: calc.paidAmount,
+            status: prev.status === 'cancelled' ? 'cancelled' : calc.status,
+            ...(latestRecordDate ? { paymentDate: latestRecordDate } : {}),
+            ...(recordOps ? { operationNumber: recordOps } : {}),
+          }
+        : {}),
     }));
   }, [
     formData.items,
     formData.extraItems,
+    formData.paymentRecords,
     formData.isMembership,
     formData.membershipInstallments,
     formData.includeTax,
@@ -273,6 +294,7 @@ export const PaymentNotesModule: React.FC = () => {
         isMembership: n.isMembership,
         membershipInstallments: n.membershipInstallments,
         extraItems: n.extraItems,
+        paymentRecords: n.paymentRecords,
         items: n.items,
         includeTax: n.includeTax,
         taxRate: n.taxRate,
@@ -307,6 +329,7 @@ export const PaymentNotesModule: React.FC = () => {
         isMembership: n.isMembership,
         membershipInstallments: n.membershipInstallments,
         extraItems: n.extraItems,
+        paymentRecords: n.paymentRecords,
         items: n.items,
         includeTax: n.includeTax,
         taxRate: n.taxRate,
@@ -390,6 +413,7 @@ export const PaymentNotesModule: React.FC = () => {
       membershipMonthsTotal: 1,
       membershipInstallments: [],
       extraItems: [],
+      paymentRecords: [],
       items: initialItems,
       subtotal: initialSubtotal,
       includeTax: true,
@@ -786,6 +810,7 @@ export const PaymentNotesModule: React.FC = () => {
       membershipMonthsTotal: note.membershipMonthsTotal || note.membershipInstallments?.length || 1,
       membershipInstallments: note.membershipInstallments || [],
       extraItems: note.extraItems || [],
+      paymentRecords: note.paymentRecords || [],
       items: note.items || [],
       subtotal: Number(note.subtotal) || 0,
       includeTax: !!note.includeTax,
@@ -1121,7 +1146,7 @@ export const PaymentNotesModule: React.FC = () => {
   const runOcrOnImage = async (
     key: string,
     fileOrUrl: File | string,
-    onSuccess: (res: { operationNumber?: string; amount?: number; date?: string; notes?: string }) => void
+    onSuccess: (res: { operationNumber?: string; amount?: number; date?: string; bankDetected?: string; notes?: string }) => void
   ) => {
     setOcrProcessingKey(key);
     setOcrStatusText('Iniciando escaneo inteligente...');
@@ -1140,6 +1165,7 @@ export const PaymentNotesModule: React.FC = () => {
         operationNumber: res.operationNumber,
         amount: res.amount,
         date: res.date,
+        bankDetected: res.bankDetected,
         notes: extraNote || undefined,
       });
 
@@ -1416,6 +1442,218 @@ export const PaymentNotesModule: React.FC = () => {
     toast('Voucher del servicio extra eliminado.');
   };
 
+  // =========================================================================
+  // CARDS DE REGISTROS DE ABONO / COBRANZA (SECCIÓN 3) + OCR + CTRL+V
+  // =========================================================================
+  const handleAddPaymentRecord = (initialStatus: PaymentRecordStatus = 'pending') => {
+    setFormData((prev) => {
+      const list = [...(prev.paymentRecords || [])];
+      const nextNum = list.length + 1;
+      const currentPaid = list
+        .filter((r) => r.status === 'paid')
+        .reduce((acc, r) => acc + (Number(r.amount) || 0), 0);
+      const suggestedAmount = Math.max(0, Math.round(((prev.total || 0) - currentPaid) * 100) / 100);
+      const newRecord: PaymentRecordItem = {
+        id: `rec-${Date.now()}-${nextNum}`,
+        title: `Abono #${nextNum}`,
+        amount: list.length === 0 ? suggestedAmount : 0,
+        status: initialStatus,
+        paymentDate: initialStatus === 'paid' ? new Date().toISOString().split('T')[0] : '',
+        operationNumber: '',
+        paymentMethod: prev.paymentMethod || '',
+        notes: '',
+      };
+      return {
+        ...prev,
+        paymentRecords: [...list, newRecord],
+      };
+    });
+  };
+
+  const handleUpdatePaymentRecord = (idx: number, patch: Partial<PaymentRecordItem>) => {
+    setFormData((prev) => {
+      const list = [...(prev.paymentRecords || [])];
+      if (!list[idx]) return prev;
+      list[idx] = { ...list[idx], ...patch };
+      return {
+        ...prev,
+        paymentRecords: list,
+      };
+    });
+  };
+
+  const handleUpdatePaymentRecordById = (recordId: string, patch: Partial<PaymentRecordItem>) => {
+    setFormData((prev) => {
+      const list = (prev.paymentRecords || []).map((r) =>
+        r.id === recordId ? { ...r, ...patch } : r
+      );
+      return {
+        ...prev,
+        paymentRecords: list,
+      };
+    });
+  };
+
+  const handleDeletePaymentRecord = (idx: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      paymentRecords: (prev.paymentRecords || []).filter((_, i) => i !== idx),
+    }));
+    toast('Registro de abono eliminado.');
+  };
+
+  const handleUploadPaymentRecordVoucher = (idx: number, file: File | undefined) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast('El voucher no debe superar los 10MB.', 'warning');
+      return;
+    }
+    const targetRecord = formData.paymentRecords?.[idx];
+    if (!targetRecord) return;
+    const recordId = targetRecord.id;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const url = reader.result as string;
+      handleUpdatePaymentRecordById(recordId, {
+        voucherUrl: url,
+        voucherName: file.name,
+        status: 'paid',
+        paymentDate: targetRecord.paymentDate || new Date().toISOString().split('T')[0],
+      });
+      toast(`Voucher "${file.name}" adjuntado al registro.`);
+
+      if (file.type.startsWith('image/')) {
+        await runOcrOnImage(`record-${recordId}`, file, (ocrData) => {
+          const patch: Partial<PaymentRecordItem> = {};
+          if (ocrData.operationNumber) patch.operationNumber = ocrData.operationNumber;
+          if (ocrData.date) patch.paymentDate = ocrData.date;
+          if (ocrData.amount && ocrData.amount > 0) patch.amount = ocrData.amount;
+          if (ocrData.bankDetected) patch.paymentMethod = ocrData.bankDetected;
+          if (ocrData.notes && !targetRecord.notes) patch.notes = ocrData.notes;
+          handleUpdatePaymentRecordById(recordId, patch);
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePastePaymentRecordVoucher = async (idx: number) => {
+    try {
+      if (navigator.clipboard?.read) {
+        const clipboardItems = await navigator.clipboard.read();
+        for (const item of clipboardItems) {
+          const imageType = item.types.find((t) => t.startsWith('image/'));
+          if (imageType) {
+            const blob = await item.getType(imageType);
+            const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
+            const file = new File([blob], `Voucher_Pegado_${dateStr}.png`, { type: imageType });
+            handleUploadPaymentRecordVoucher(idx, file);
+            toast('¡Voucher pegado desde el portapapeles! Analizando con OCR...');
+            return;
+          }
+        }
+      }
+      toast('No se encontró imagen en el portapapeles. Copia la captura del voucher y presiona de nuevo.', 'warning');
+    } catch {
+      toast('Haz clic sobre la tarjeta y presiona Ctrl + V para pegar la captura.', 'info');
+    }
+  };
+
+  const handlePasteNewPaymentRecordFromClipboard = async () => {
+    try {
+      if (navigator.clipboard?.read) {
+        const clipboardItems = await navigator.clipboard.read();
+        for (const item of clipboardItems) {
+          const imageType = item.types.find((t) => t.startsWith('image/'));
+          if (imageType) {
+            const blob = await item.getType(imageType);
+            const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
+            const file = new File([blob], `Voucher_Pegado_${dateStr}.png`, { type: imageType });
+            const reader = new FileReader();
+            reader.onload = async () => {
+              const url = reader.result as string;
+              const newId = `rec-${Date.now()}`;
+              setFormData((prev) => {
+                const list = [...(prev.paymentRecords || [])];
+                const nextNum = list.length + 1;
+                const newRec: PaymentRecordItem = {
+                  id: newId,
+                  title: `Abono #${nextNum}`,
+                  amount: 0,
+                  status: 'paid',
+                  paymentDate: new Date().toISOString().split('T')[0],
+                  operationNumber: '',
+                  paymentMethod: prev.paymentMethod || '',
+                  voucherUrl: url,
+                  voucherName: file.name,
+                  notes: '',
+                };
+                return { ...prev, paymentRecords: [...list, newRec] };
+              });
+              toast('¡Voucher pegado! Creando card y analizando con OCR...');
+              await runOcrOnImage(`record-${newId}`, file, (ocrData) => {
+                const patch: Partial<PaymentRecordItem> = {};
+                if (ocrData.operationNumber) patch.operationNumber = ocrData.operationNumber;
+                if (ocrData.date) patch.paymentDate = ocrData.date;
+                if (ocrData.amount && ocrData.amount > 0) patch.amount = ocrData.amount;
+                if (ocrData.bankDetected) patch.paymentMethod = ocrData.bankDetected;
+                if (ocrData.notes) patch.notes = ocrData.notes;
+                handleUpdatePaymentRecordById(newId, patch);
+              });
+            };
+            reader.readAsDataURL(file);
+            return;
+          }
+        }
+      }
+      toast('No se encontró imagen en el portapapeles. Copia la captura del voucher y presiona de nuevo.', 'warning');
+    } catch {
+      toast('Agrega una card, haz clic sobre ella y presiona Ctrl + V para pegar la captura.', 'info');
+    }
+  };
+
+  const handleCardPaymentRecordPaste = (e: React.ClipboardEvent, idx: number) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
+          const renamed = new File([file], `Voucher_Pegado_${dateStr}.png`, { type: file.type });
+          handleUploadPaymentRecordVoucher(idx, renamed);
+          toast('¡Voucher capturado con Ctrl + V! Analizando con OCR...');
+          break;
+        }
+      }
+    }
+  };
+
+  const handleReRunOcrPaymentRecord = (idx: number) => {
+    const rec = formData.paymentRecords?.[idx];
+    if (!rec?.voucherUrl) return;
+    const recordId = rec.id;
+    runOcrOnImage(`record-${recordId}`, rec.voucherUrl, (ocrData) => {
+      const patch: Partial<PaymentRecordItem> = {};
+      if (ocrData.operationNumber) patch.operationNumber = ocrData.operationNumber;
+      if (ocrData.date) patch.paymentDate = ocrData.date;
+      if (ocrData.amount && ocrData.amount > 0) patch.amount = ocrData.amount;
+      if (ocrData.bankDetected) patch.paymentMethod = ocrData.bankDetected;
+      if (ocrData.notes && !rec.notes) patch.notes = ocrData.notes;
+      handleUpdatePaymentRecordById(recordId, patch);
+    });
+  };
+
+  const handleRemovePaymentRecordVoucher = (idx: number) => {
+    handleUpdatePaymentRecord(idx, {
+      voucherUrl: undefined,
+      voucherName: undefined,
+    });
+    toast('Voucher del registro eliminado.');
+  };
+
   // Pegar imagen del voucher directamente desde el portapapeles (Botón o Ctrl + V)
   const handlePasteFromClipboard = async (idx: number, isExtra = false) => {
     try {
@@ -1650,6 +1888,7 @@ export const PaymentNotesModule: React.FC = () => {
         isMembership: formData.isMembership,
         membershipInstallments: formData.membershipInstallments,
         extraItems: formData.extraItems,
+        paymentRecords: formData.paymentRecords,
         items: formData.items,
         includeTax: formData.includeTax,
         taxRate: formData.taxRate,
@@ -1657,13 +1896,18 @@ export const PaymentNotesModule: React.FC = () => {
         manualPaidAmount: formData.paidAmount,
       });
 
+      const hasRecords = !formData.isMembership && formData.paymentRecords && formData.paymentRecords.length > 0;
       const payloadToSave = {
         ...formData,
         subtotal: calc.subtotal,
         taxAmount: calc.taxAmount,
         total: calc.total,
-        paidAmount: formData.isMembership ? calc.paidAmount : formData.paidAmount,
-        status: formData.isMembership ? calc.status : (formData.status || calc.status),
+        paidAmount: formData.isMembership || hasRecords ? calc.paidAmount : formData.paidAmount,
+        status: formData.isMembership
+          ? calc.status
+          : hasRecords
+          ? (formData.status === 'cancelled' ? 'cancelled' : calc.status)
+          : (formData.status || calc.status),
         bankAccounts: globalBankAccounts,
       };
       if (editingNote) {
@@ -3471,78 +3715,317 @@ export const PaymentNotesModule: React.FC = () => {
 
           {/* SECCIÓN 3: ESTADO DEL PAGO & COBRO */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-4">
-            <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>3. Estado de Cobranza & Registro de Abono</span>
-            </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>3. Estado de Cobranza & Registro de Abono</span>
+                {!formData.isMembership && formData.paymentRecords && formData.paymentRecords.length > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                    {formData.paymentRecords.length} {formData.paymentRecords.length === 1 ? 'Card' : 'Cards'}
+                  </span>
+                )}
+              </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-500 mb-1">
-                  Estado del Comprobante
-                </label>
-                <select
-                  value={formData.status || 'pending'}
-                  onChange={(e) => {
-                    const st = e.target.value as PaymentNoteStatus;
-                    setFormData({
-                      ...formData,
-                      status: st,
-                      paidAmount: st === 'paid' ? formData.total : formData.paidAmount,
-                      paymentDate:
-                        st === 'paid' && !formData.paymentDate
-                          ? new Date().toISOString().split('T')[0]
-                          : formData.paymentDate,
-                    });
-                  }}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold bg-slate-50 dark:bg-slate-950"
-                >
-                  <option value="pending">Pendiente de Cobro</option>
-                  <option value="paid">Pagado Totalmente</option>
-                  <option value="partial">Abono Parcial</option>
-                  <option value="cancelled">Anulado</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-500 mb-1">
-                  Monto Cobrado / Abonado ({formData.currencySymbol})
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.paidAmount ?? 0}
-                  onChange={(e) => setFormData({ ...formData, paidAmount: Number(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold bg-slate-50 dark:bg-slate-950 text-emerald-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-500 mb-1">
-                  Fecha de Abono
-                </label>
-                <input
-                  type="date"
-                  value={formData.paymentDate || ''}
-                  onChange={(e) => setFormData({ ...formData, paymentDate: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold bg-slate-50 dark:bg-slate-950"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-500 mb-1">
-                  N° de Operación / Referencia
-                </label>
-                <input
-                  type="text"
-                  value={formData.operationNumber || ''}
-                  onChange={(e) => setFormData({ ...formData, operationNumber: e.target.value })}
-                  placeholder="Ej. OP-7829410"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold bg-slate-50 dark:bg-slate-950"
-                />
-              </div>
+              {!formData.isMembership && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={handlePasteNewPaymentRecordFromClipboard}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-900/50 transition cursor-pointer"
+                    title="Pega una captura del voucher desde el portapapeles para crear una card y autorellenar con OCR"
+                  >
+                    <ClipboardPaste className="w-3.5 h-3.5" />
+                    <span>Pegar Voucher (OCR)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddPaymentRecord('pending')}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Agregar Card</span>
+                  </button>
+                </div>
+              )}
             </div>
+
+            {/* CARDS DE REGISTROS / ESTADOS DE ABONO */}
+            {!formData.isMembership ? (
+              formData.paymentRecords && formData.paymentRecords.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Cards de Registros & Estados de Abono ({formData.paymentRecords.length})
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      Tip: Haz clic en cualquier card y presiona <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono font-bold text-slate-600 dark:text-slate-300">Ctrl + V</kbd> para pegar imagen y autorellenar con OCR
+                    </span>
+                  </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {formData.paymentRecords.map((rec, rIdx) => {
+                    const isOcrBusy = ocrProcessingKey === `record-${rec.id}`;
+                    return (
+                      <div
+                        key={rec.id || rIdx}
+                        tabIndex={0}
+                        onPaste={(e) => handleCardPaymentRecordPaste(e, rIdx)}
+                        className={`rounded-2xl border p-4 space-y-3 transition focus:outline-none focus:ring-2 focus:ring-purple-500/40 ${
+                          rec.status === 'paid'
+                            ? 'bg-emerald-50/40 dark:bg-emerald-950/15 border-emerald-200/80 dark:border-emerald-900/60'
+                            : rec.status === 'in_process'
+                            ? 'bg-amber-50/40 dark:bg-amber-950/15 border-amber-200/80 dark:border-amber-900/60'
+                            : rec.status === 'overdue'
+                            ? 'bg-rose-50/40 dark:bg-rose-950/15 border-rose-200/80 dark:border-rose-900/60'
+                            : 'bg-slate-50/70 dark:bg-slate-950/60 border-slate-200/80 dark:border-slate-800'
+                        }`}
+                      >
+                        {/* Header de la Card */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span className="w-6 h-6 rounded-lg bg-slate-900 dark:bg-slate-800 text-white text-[10px] font-black flex items-center justify-center shrink-0">
+                              {rIdx + 1}
+                            </span>
+                            <input
+                              type="text"
+                              value={rec.title}
+                              onChange={(e) => handleUpdatePaymentRecord(rIdx, { title: e.target.value })}
+                              placeholder={`Abono #${rIdx + 1}`}
+                              className="w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-emerald-500 focus:outline-none text-xs font-black text-slate-900 dark:text-slate-100 py-0.5"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePaymentRecord(rIdx)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer shrink-0"
+                            title="Eliminar card de abono"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Selector de Estado */}
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleUpdatePaymentRecord(rIdx, {
+                                status: 'paid',
+                                paymentDate: rec.paymentDate || new Date().toISOString().split('T')[0],
+                              })
+                            }
+                            className={`px-2 py-1 rounded-lg text-[10px] font-extrabold flex items-center gap-1 cursor-pointer transition ${
+                              rec.status === 'paid'
+                                ? 'bg-emerald-600 text-white shadow-xs'
+                                : 'bg-white dark:bg-slate-900 text-slate-500 border border-slate-200 dark:border-slate-800 opacity-75 hover:opacity-100'
+                            }`}
+                          >
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Pagado</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdatePaymentRecord(rIdx, { status: 'in_process' })}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-extrabold flex items-center gap-1 cursor-pointer transition ${
+                              rec.status === 'in_process'
+                                ? 'bg-amber-500 text-white shadow-xs'
+                                : 'bg-white dark:bg-slate-900 text-slate-500 border border-slate-200 dark:border-slate-800 opacity-75 hover:opacity-100'
+                            }`}
+                          >
+                            <Clock className="w-3 h-3" />
+                            <span>En Proceso</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdatePaymentRecord(rIdx, { status: 'pending' })}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-extrabold flex items-center gap-1 cursor-pointer transition ${
+                              rec.status === 'pending'
+                                ? 'bg-blue-600 text-white shadow-xs'
+                                : 'bg-white dark:bg-slate-900 text-slate-500 border border-slate-200 dark:border-slate-800 opacity-75 hover:opacity-100'
+                            }`}
+                          >
+                            <Clock className="w-3 h-3" />
+                            <span>Pendiente</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdatePaymentRecord(rIdx, { status: 'overdue' })}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-extrabold flex items-center gap-1 cursor-pointer transition ${
+                              rec.status === 'overdue'
+                                ? 'bg-rose-600 text-white shadow-xs'
+                                : 'bg-white dark:bg-slate-900 text-slate-500 border border-slate-200 dark:border-slate-800 opacity-75 hover:opacity-100'
+                            }`}
+                          >
+                            <AlertCircle className="w-3 h-3" />
+                            <span>Retrasado</span>
+                          </button>
+                        </div>
+
+                        {/* Campos del Registro */}
+                        <div className="grid grid-cols-2 gap-2.5">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 mb-0.5">
+                              Monto ({formData.currencySymbol})
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={rec.amount ?? 0}
+                              onChange={(e) => handleUpdatePaymentRecord(rIdx, { amount: Number(e.target.value) || 0 })}
+                              className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold bg-white dark:bg-slate-900 text-emerald-600"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 mb-0.5">
+                              Fecha de Abono
+                            </label>
+                            <input
+                              type="date"
+                              value={rec.paymentDate || ''}
+                              onChange={(e) => handleUpdatePaymentRecord(rIdx, { paymentDate: e.target.value })}
+                              className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold bg-white dark:bg-slate-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 mb-0.5">
+                              N° de Operación
+                            </label>
+                            <input
+                              type="text"
+                              value={rec.operationNumber || ''}
+                              onChange={(e) => handleUpdatePaymentRecord(rIdx, { operationNumber: e.target.value })}
+                              placeholder="Ej. 0019283"
+                              className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold bg-white dark:bg-slate-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 mb-0.5">
+                              Banco / Método
+                            </label>
+                            <input
+                              type="text"
+                              value={rec.paymentMethod || ''}
+                              onChange={(e) => handleUpdatePaymentRecord(rIdx, { paymentMethod: e.target.value })}
+                              placeholder="Yape, BCP, Plin..."
+                              className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold bg-white dark:bg-slate-900"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-0.5">
+                            Nota / Observación
+                          </label>
+                          <input
+                            type="text"
+                            value={rec.notes || ''}
+                            onChange={(e) => handleUpdatePaymentRecord(rIdx, { notes: e.target.value })}
+                            placeholder="Ej. Adelanto 50% o detalle del abono..."
+                            className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs bg-white dark:bg-slate-900"
+                          />
+                        </div>
+
+                        {/* Área de Voucher + Pegar Imagen + Auto-OCR */}
+                        <div className="pt-2 border-t border-slate-200/70 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
+                          {rec.voucherUrl ? (
+                            <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl px-2.5 py-1 max-w-full">
+                              <Paperclip className="w-3 h-3 text-emerald-600 shrink-0" />
+                              <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 truncate max-w-[140px]">
+                                {rec.voucherName || `Voucher_${rIdx + 1}`}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setViewingVoucher({
+                                    url: rec.voucherUrl!,
+                                    name: rec.voucherName || `Voucher_${rIdx + 1}`,
+                                  })
+                                }
+                                className="p-0.5 rounded hover:bg-emerald-200/60 text-emerald-800 dark:text-emerald-300 cursor-pointer"
+                                title="Ver comprobante"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleReRunOcrPaymentRecord(rIdx)}
+                                disabled={isOcrBusy}
+                                className="p-0.5 rounded hover:bg-purple-100 text-purple-600 cursor-pointer disabled:opacity-50"
+                                title="Re-escanear OCR"
+                              >
+                                {isOcrBusy ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-600" />
+                                ) : (
+                                  <Sparkles className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePaymentRecordVoucher(rIdx)}
+                                className="p-0.5 rounded hover:bg-rose-100 text-rose-500 cursor-pointer"
+                                title="Eliminar voucher"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <label className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-purple-500 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 text-[10px] font-bold cursor-pointer transition hover:text-purple-600">
+                                <UploadCloud className="w-3.5 h-3.5 text-purple-600" />
+                                <span>Adjuntar (Auto-OCR)</span>
+                                <input
+                                  type="file"
+                                  accept="image/*,application/pdf"
+                                  className="hidden"
+                                  onChange={(e) => handleUploadPaymentRecordVoucher(rIdx, e.target.files?.[0])}
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => handlePastePaymentRecordVoucher(rIdx)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 text-[10px] font-bold cursor-pointer hover:bg-purple-100 transition"
+                                title="Pegar captura del voucher (o presiona Ctrl + V en esta card)"
+                              >
+                                <ClipboardPaste className="w-3.5 h-3.5" />
+                                <span>Pegar (Ctrl+V)</span>
+                              </button>
+                            </div>
+                          )}
+
+                          {isOcrBusy && (
+                            <span className="text-[10px] font-bold text-purple-600 flex items-center gap-1 animate-pulse">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <span>{ocrStatusText || 'Analizando OCR...'}</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              ) : (
+                <div className="p-6 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 text-center space-y-2">
+                  <p className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                    No hay cards de abono registradas aún.
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Agrega una card para registrar pagos o pega directamente una captura del voucher con{' '}
+                    <span className="font-bold text-purple-600 dark:text-purple-400">Pegar Voucher (OCR)</span>.
+                  </p>
+                </div>
+              )
+            ) : (
+              <div className="p-3.5 rounded-2xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-900/50 flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-600 dark:text-slate-300">
+                  Cobranza gestionada por cuotas mensuales en la Sección 2 (Membresía).
+                </span>
+                <span className="font-mono font-black text-emerald-600 dark:text-emerald-400">
+                  Abonado: {formData.currencySymbol} {(formData.paidAmount || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* SECCIÓN 4: CUENTAS BANCARIAS GLOBALES (REGLA DE EMPRESA) */}
@@ -4027,6 +4510,7 @@ export const PaymentNotesModule: React.FC = () => {
               isMembership: note.isMembership,
               membershipInstallments: note.membershipInstallments,
               extraItems: note.extraItems,
+              paymentRecords: note.paymentRecords,
               items: note.items,
               includeTax: note.includeTax,
               taxRate: note.taxRate,

@@ -1,4 +1,4 @@
-import { MembershipMonthStatus, MembershipMonthItem, MembershipSubInstallment, PaymentNoteItem } from '../../shared/types';
+import { MembershipMonthStatus, MembershipMonthItem, MembershipSubInstallment, PaymentNoteItem, PaymentRecordItem } from '../../shared/types';
 
 export interface ComputedStatusResult {
   status: 'paid' | 'in_process' | 'delayed' | 'inactive';
@@ -121,6 +121,7 @@ export function calculatePaymentNoteActiveTotals(params: {
   isMembership?: boolean;
   membershipInstallments?: MembershipMonthItem[];
   extraItems?: PaymentNoteItem[];
+  paymentRecords?: PaymentRecordItem[];
   items?: PaymentNoteItem[];
   includeTax: boolean;
   taxRate: number;
@@ -171,7 +172,13 @@ export function calculatePaymentNoteActiveTotals(params: {
     // Conceptos estándar
     const itemsList = params.items || [];
     subtotal = itemsList.reduce((acc, it) => acc + (Number(it.total) || 0), 0);
-    paidAmount = Number(params.manualPaidAmount) || 0;
+    if (params.paymentRecords && params.paymentRecords.length > 0) {
+      paidAmount = params.paymentRecords
+        .filter((r) => r.status === 'paid')
+        .reduce((acc, r) => acc + (Number(r.amount) || 0), 0);
+    } else {
+      paidAmount = Number(params.manualPaidAmount) || 0;
+    }
   }
 
   subtotal = Math.round(subtotal * 100) / 100;

@@ -121,6 +121,7 @@ export const PublicPaymentNoteView: React.FC<PublicPaymentNoteViewProps> = ({ to
       isMembership: paymentNote.isMembership,
       membershipInstallments: paymentNote.membershipInstallments,
       extraItems: paymentNote.extraItems,
+      paymentRecords: paymentNote.paymentRecords,
       items: paymentNote.items,
       includeTax: paymentNote.includeTax,
       taxRate: paymentNote.taxRate || 18,

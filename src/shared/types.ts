@@ -644,6 +644,21 @@ export interface PaymentNoteItem {
   linkedMonthId?: string;
 }
 
+export type PaymentRecordStatus = 'paid' | 'in_process' | 'pending' | 'overdue';
+
+export interface PaymentRecordItem {
+  id: string;
+  title: string;
+  amount: number;
+  status: PaymentRecordStatus;
+  paymentDate?: string;
+  operationNumber?: string;
+  paymentMethod?: string;
+  voucherUrl?: string;
+  voucherName?: string;
+  notes?: string;
+}
+
 export interface PaymentNote {
   id: string;
   tenantId: string;
@@ -671,6 +686,7 @@ export interface PaymentNote {
   membershipMonthsTotal?: number;
   membershipInstallments?: MembershipMonthItem[];
   extraItems?: PaymentNoteItem[];
+  paymentRecords?: PaymentRecordItem[];
   items: PaymentNoteItem[];
   subtotal: number;
   includeTax: boolean;

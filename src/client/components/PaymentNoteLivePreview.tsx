@@ -3,6 +3,7 @@ import {
   PaymentNoteItem,
   PaymentNoteStatus,
   MembershipMonthItem,
+  PaymentRecordItem,
   QuotePaymentMethod,
   Tenant,
 } from '../../shared/types';
@@ -56,6 +57,7 @@ export interface PaymentNoteFormData {
   membershipMonthsTotal?: number;
   membershipInstallments?: MembershipMonthItem[];
   extraItems?: PaymentNoteItem[];
+  paymentRecords?: PaymentRecordItem[];
   items: PaymentNoteItem[];
   subtotal: number;
   includeTax: boolean;
@@ -121,6 +123,7 @@ export const PaymentNoteLivePreview: React.FC<PaymentNoteLivePreviewProps> = ({
       isMembership: formData.isMembership,
       membershipInstallments: formData.membershipInstallments,
       extraItems: formData.extraItems,
+      paymentRecords: formData.paymentRecords,
       items: formData.items,
       includeTax: formData.includeTax,
       taxRate: formData.taxRate || 18,
@@ -131,6 +134,7 @@ export const PaymentNoteLivePreview: React.FC<PaymentNoteLivePreviewProps> = ({
     formData.isMembership,
     formData.membershipInstallments,
     formData.extraItems,
+    formData.paymentRecords,
     formData.items,
     formData.includeTax,
     formData.taxRate,
@@ -691,6 +695,65 @@ export const PaymentNoteLivePreview: React.FC<PaymentNoteLivePreviewProps> = ({
             </div>
           )}
         </div>
+
+        {/* Registros de Abonos / Pagos */}
+        {!formData.isMembership && formData.paymentRecords && formData.paymentRecords.length > 0 && (
+          <div className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2 bg-white dark:bg-slate-950">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              Registros de Abonos ({formData.paymentRecords.length})
+            </span>
+            <div className="space-y-1.5">
+              {formData.paymentRecords.map((rec, rIdx) => (
+                <div
+                  key={rec.id || rIdx}
+                  className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 truncate">
+                        {rec.title || `Abono ${rIdx + 1}`}
+                      </span>
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase ${
+                          rec.status === 'paid'
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400'
+                            : rec.status === 'in_process'
+                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400'
+                            : rec.status === 'overdue'
+                            ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400'
+                            : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                        }`}
+                      >
+                        {rec.status === 'paid'
+                          ? 'Pagado'
+                          : rec.status === 'in_process'
+                          ? 'En Proceso'
+                          : rec.status === 'overdue'
+                          ? 'Retrasado'
+                          : 'Pendiente'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5 flex-wrap">
+                      {rec.paymentDate && <span>{formatDueDate(rec.paymentDate)}</span>}
+                      {rec.paymentMethod && <span>• {rec.paymentMethod}</span>}
+                      {rec.operationNumber && <span className="font-mono">• Op: {rec.operationNumber}</span>}
+                      {rec.voucherName && (
+                        <span className="text-emerald-600 font-semibold flex items-center gap-0.5">
+                          <Paperclip className="w-2.5 h-2.5" />
+                          Voucher
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <span className="font-mono font-black text-xs text-slate-900 dark:text-slate-100 shrink-0">
+                    {formData.currencySymbol} {(Number(rec.amount) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Cuentas Bancarias Globales */}
         {accountsToDisplay.length > 0 && (
