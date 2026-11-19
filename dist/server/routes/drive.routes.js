@@ -24,9 +24,8 @@ let cachedStatus = null;
 let lastStatusFetchTime = 0;
 let lastFullSyncTime = 0;
 let activeSyncPromise = null;
-async function ensureDriveConfig(req) {
+async function ensureDriveConfigForTenant(tenantId) {
     try {
-        const tenantId = req.auth?.tenant?.id;
         if (tenantId) {
             const tenant = await db_1.db.getTenantById(tenantId);
             const cfg = tenant?.driveConfig;
@@ -44,6 +43,9 @@ async function ensureDriveConfig(req) {
     catch (err) {
         // Continuar y dejar que cada ruta maneje su respuesta
     }
+}
+async function ensureDriveConfig(req) {
+    return ensureDriveConfigForTenant(req.auth?.tenant?.id);
 }
 async function getCachedStatus(req, force = false) {
     const now = Date.now();
@@ -1190,6 +1192,66 @@ router.post('/batch', auth_1.requireAuth, (0, auth_1.requirePermission)('drive.u
     }
 });
 // STREAMING MULTIMEDIA NATIVO (HTTP Range 206 para Video, Audio y PDF)
+async function streamDriveFileResponse(req, res, file) {
+    if (!googleDriveService_1.googleDriveService.isReady()) {
+        res.status(503).json({ error: 'Google Drive no configurado.' });
+        return;
+    }
+    const rangeHeader = req.headers.range;
+    const driveRes = await googleDriveService_1.googleDriveService.streamFileMedia(file.googleFileId, rangeHeader);
+    res.status(driveRes.status);
+    driveRes.headers.forEach((value, key) => {
+        // Evitar re-enviar transfer-encoding chunked conflictivo
+        if (key.toLowerCase() !== 'transfer-encoding') {
+            res.setHeader(key, value);
+        }
+    });
+    if (file.mimeType && !res.getHeader('content-type')) {
+        res.setHeader('content-type', file.mimeType);
+    }
+    res.setHeader('accept-ranges', 'bytes');
+    if (!res.getHeader('cache-control')) {
+        res.setHeader('cache-control', 'public, max-age=3600');
+    }
+    if (!driveRes.body) {
+        res.end();
+        return;
+    }
+    // Pipe WebStream to Node response stream
+    const reader = driveRes.body.getReader();
+    const pump = async () => {
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done)
+                    break;
+                res.write(value);
+            }
+            res.end();
+        }
+        catch (streamErr) {
+            res.destroy();
+        }
+    };
+    pump();
+}
+router.get('/stream/:id', async (req, res) => {
+    try {
+        const id = req.params.id;
+        const file = await db_1.db.getDriveFileByIdAnyTenant(id);
+        if (!file) {
+            res.status(404).json({ error: 'Archivo no encontrado.' });
+            return;
+        }
+        await ensureDriveConfigForTenant(file.tenantId);
+        await streamDriveFileResponse(req, res, file);
+    }
+    catch (err) {
+        if (!res.headersSent) {
+            res.status(500).json({ error: err.message });
+        }
+    }
+});
 router.get('/files/:id/stream', auth_1.requireAuth, async (req, res) => {
     try {
         const tenantId = req.auth.tenant.id;
@@ -1200,44 +1262,7 @@ router.get('/files/:id/stream', auth_1.requireAuth, async (req, res) => {
             res.status(404).json({ error: 'Archivo no encontrado.' });
             return;
         }
-        if (!googleDriveService_1.googleDriveService.isReady()) {
-            res.status(503).json({ error: 'Google Drive no configurado.' });
-            return;
-        }
-        const rangeHeader = req.headers.range;
-        const driveRes = await googleDriveService_1.googleDriveService.streamFileMedia(file.googleFileId, rangeHeader);
-        res.status(driveRes.status);
-        driveRes.headers.forEach((value, key) => {
-            // Evitar re-enviar transfer-encoding chunked conflictivo
-            if (key.toLowerCase() !== 'transfer-encoding') {
-                res.setHeader(key, value);
-            }
-        });
-        if (file.mimeType && !res.getHeader('content-type')) {
-            res.setHeader('content-type', file.mimeType);
-        }
-        res.setHeader('accept-ranges', 'bytes');
-        if (!driveRes.body) {
-            res.end();
-            return;
-        }
-        // Pipe WebStream to Node response stream
-        const reader = driveRes.body.getReader();
-        const pump = async () => {
-            try {
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done)
-                        break;
-                    res.write(value);
-                }
-                res.end();
-            }
-            catch (streamErr) {
-                res.destroy();
-            }
-        };
-        pump();
+        await streamDriveFileResponse(req, res, file);
     }
     catch (err) {
         if (!res.headersSent) {

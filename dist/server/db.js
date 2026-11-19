@@ -2842,6 +2842,9 @@ class DatabaseManager {
     async getDriveFileById(id, tenantId) {
         return this.localState.driveFiles.find((f) => (f.id === id || f.googleFileId === id) && f.tenantId === tenantId) || null;
     }
+    async getDriveFileByIdAnyTenant(id) {
+        return this.localState.driveFiles.find((f) => f.id === id || f.googleFileId === id) || null;
+    }
     async createDriveFile(data) {
         const now = new Date().toISOString();
         const newFile = {
