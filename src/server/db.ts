@@ -3147,6 +3147,10 @@ export class DatabaseManager {
     return this.localState.driveFiles.find((f) => (f.id === id || f.googleFileId === id) && f.tenantId === tenantId) || null;
   }
 
+  public async getDriveFileByIdAnyTenant(id: string): Promise<DriveFile | null> {
+    return this.localState.driveFiles.find((f) => f.id === id || f.googleFileId === id) || null;
+  }
+
   public async createDriveFile(
     data: Omit<DriveFile, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
   ): Promise<DriveFile> {
