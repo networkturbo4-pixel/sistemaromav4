@@ -121,6 +121,7 @@ export const WorkspaceModule: React.FC = () => {
   const [meetings, setMeetings] = useState<WorkspaceMeeting[]>([]);
   const [whiteboardsCount, setWhiteboardsCount] = useState<number>(0);
   const [softwareProjectsCount, setSoftwareProjectsCount] = useState<number>(0);
+  const [softwareProjects, setSoftwareProjects] = useState<any[]>([]);
   const [initialSoftwareProjectId, setInitialSoftwareProjectId] = useState<string | null>(null);
 
   // Nivel 1: Fases de Redes Sociales
@@ -251,6 +252,7 @@ export const WorkspaceModule: React.FC = () => {
       setForms(formsRes.forms || []);
       setMeetings(meetingsRes.meetings || []);
       setWhiteboardsCount(whiteboardsRes.whiteboards?.length || 0);
+      setSoftwareProjects(softwareRes.projects || []);
       setSoftwareProjectsCount(softwareRes.projects?.length || 0);
     } catch {
       toast('Error al sincronizar datos del Workspace', 'error');
@@ -1340,6 +1342,7 @@ export const WorkspaceModule: React.FC = () => {
       {currentView === 'software' && canAccessSoftware && (
         <div className="space-y-4 animate-fadeIn">
           <SoftwareSubmoduleView
+            initialProjects={softwareProjects}
             clients={clients}
             serviceOrders={serviceOrders}
             teamUsers={teamUsers}
@@ -1347,7 +1350,6 @@ export const WorkspaceModule: React.FC = () => {
             onBackToHub={() => {
               setInitialSoftwareProjectId(null);
               setCurrentView('hub');
-              loadInitialData();
             }}
           />
         </div>

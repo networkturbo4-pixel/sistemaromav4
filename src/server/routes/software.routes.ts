@@ -439,7 +439,22 @@ router.get(
         projectType: req.query.projectType as string | undefined,
         clientId: req.query.clientId as string | undefined,
       });
-      return res.json({ success: true, projects });
+      // En el listado, omitir dataUrl pesados de capturas/videos para respuesta instantánea
+      const leanProjects = projects.map((p) => ({
+        ...p,
+        workItems: (p.workItems || []).map((w) =>
+          w.bugMedia && w.bugMedia.length > 0
+            ? {
+                ...w,
+                bugMedia: w.bugMedia.map((m) => ({
+                  ...m,
+                  dataUrl: m.dataUrl?.length > 10000 ? '' : m.dataUrl,
+                })),
+              }
+            : w
+        ),
+      }));
+      return res.json({ success: true, projects: leanProjects });
     } catch (err: any) {
       return res.status(500).json({ error: err.message || 'Error al obtener proyectos de software' });
     }

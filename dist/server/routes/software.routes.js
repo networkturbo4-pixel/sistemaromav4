@@ -377,7 +377,20 @@ router.get('/', auth_1.requireAuth, (0, auth_1.requirePermission)('workspace.sof
             projectType: req.query.projectType,
             clientId: req.query.clientId,
         });
-        return res.json({ success: true, projects });
+        // En el listado, omitir dataUrl pesados de capturas/videos para respuesta instantánea
+        const leanProjects = projects.map((p) => ({
+            ...p,
+            workItems: (p.workItems || []).map((w) => w.bugMedia && w.bugMedia.length > 0
+                ? {
+                    ...w,
+                    bugMedia: w.bugMedia.map((m) => ({
+                        ...m,
+                        dataUrl: m.dataUrl?.length > 10000 ? '' : m.dataUrl,
+                    })),
+                }
+                : w),
+        }));
+        return res.json({ success: true, projects: leanProjects });
     }
     catch (err) {
         return res.status(500).json({ error: err.message || 'Error al obtener proyectos de software' });

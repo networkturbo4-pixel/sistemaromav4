@@ -26,6 +26,7 @@ import { DriveFolderPickerModal } from '../../../../components/DriveFolderPicker
 
 interface SoftwareSubmoduleViewProps {
   onBackToHub: () => void;
+  initialProjects?: SoftwareProject[];
   clients?: Client[];
   serviceOrders?: ServiceOrder[];
   teamUsers?: User[];
@@ -34,12 +35,13 @@ interface SoftwareSubmoduleViewProps {
 
 export const SoftwareSubmoduleView: React.FC<SoftwareSubmoduleViewProps> = ({
   onBackToHub,
+  initialProjects,
   clients: propClients,
   serviceOrders: propServiceOrders,
   teamUsers: propTeamUsers,
   initialProjectId = null,
 }) => {
-  const { apiFetch, toast, confirmAction, can, user, role } = useApp();
+  const { apiFetch, toast, confirmAction, can, user, role, tenant } = useApp();
   const isAdm =
     user?.role === 'superadmin' ||
     user?.role === 'admin' ||
@@ -47,15 +49,27 @@ export const SoftwareSubmoduleView: React.FC<SoftwareSubmoduleViewProps> = ({
     role?.permissions?.includes('*');
   const canManage = isAdm || can('workspace.software.manage');
 
-  const [projects, setProjects] = useState<SoftwareProject[]>([]);
+  const [projects, setProjects] = useState<SoftwareProject[]>(initialProjects || []);
   const [customTemplates, setCustomTemplates] = useState<SoftwareCustomTemplate[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialProjectId);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(!(initialProjects && initialProjects.length > 0));
   const [isSaving, setIsSaving] = useState(false);
 
   const [clients, setClients] = useState<Client[]>(propClients || []);
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>(propServiceOrders || []);
   const [teamUsers, setTeamUsers] = useState<User[]>(propTeamUsers || []);
+
+  useEffect(() => {
+    if (propClients) setClients(propClients);
+  }, [propClients]);
+
+  useEffect(() => {
+    if (propServiceOrders) setServiceOrders(propServiceOrders);
+  }, [propServiceOrders]);
+
+  useEffect(() => {
+    if (propTeamUsers) setTeamUsers(propTeamUsers);
+  }, [propTeamUsers]);
 
   // Modales
   const [projectModalOpen, setProjectModalOpen] = useState(false);
@@ -73,42 +87,83 @@ export const SoftwareSubmoduleView: React.FC<SoftwareSubmoduleViewProps> = ({
   } | null>(null);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [projRes, tplRes, cliRes, osRes, usrRes] = await Promise.all([
-        apiFetch<{ projects: SoftwareProject[] }>('/api/workspace/software'),
-        apiFetch<{ templates: SoftwareCustomTemplate[] }>('/api/workspace/software/templates').catch(() => ({
-          templates: [],
-        })),
-        propClients && propClients.length > 0
-          ? Promise.resolve({ clients: propClients })
-          : apiFetch<{ clients: Client[] }>('/api/clients').catch(() => ({ clients: [] })),
-        propServiceOrders && propServiceOrders.length > 0
-          ? Promise.resolve({ serviceOrders: propServiceOrders, orders: propServiceOrders })
-          : apiFetch<{ serviceOrders?: ServiceOrder[]; orders?: ServiceOrder[] }>('/api/service-orders').catch(
-              () => ({ serviceOrders: [], orders: [] })
-            ),
-        propTeamUsers && propTeamUsers.length > 0
-          ? Promise.resolve({ users: propTeamUsers })
-          : apiFetch<{ users: User[] }>('/api/settings/users').catch(() => ({ users: [] })),
-      ]);
-      setProjects(projRes.projects || []);
-      setCustomTemplates(tplRes.templates || []);
-      setClients(cliRes.clients || []);
-      setServiceOrders(osRes.serviceOrders || osRes.orders || []);
-      setTeamUsers(usrRes.users || []);
-    } catch (err: any) {
-      toast(err.message || 'Error al cargar proyectos de software', 'error');
-    } finally {
-      setLoading(false);
+    let mounted = true;
+    // 1. Cargar proyectos primero y mostrar inmediatamente (sin esperar catálogos auxiliares)
+    apiFetch<{ projects: SoftwareProject[] }>('/api/workspace/software')
+      .then((projRes) => {
+        if (!mounted) return;
+        setProjects(projRes.projects || []);
+      })
+      .catch((err: any) => {
+        if (!mounted) return;
+        toast(err.message || 'Error al cargar proyectos de software', 'error');
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+
+    // 2. Cargar plantillas y catálogos faltantes en segundo plano (no bloquean el render)
+    apiFetch<{ templates: SoftwareCustomTemplate[] }>('/api/workspace/software/templates')
+      .then((tplRes) => {
+        if (mounted) setCustomTemplates(tplRes.templates || []);
+      })
+      .catch(() => {});
+
+    if (propClients === undefined) {
+      apiFetch<{ clients: Client[] }>('/api/clients')
+        .then((cliRes) => {
+          if (mounted) setClients(cliRes.clients || []);
+        })
+        .catch(() => {});
     }
-  }, [apiFetch, toast, propClients, propServiceOrders, propTeamUsers]);
+    if (propServiceOrders === undefined) {
+      apiFetch<{ serviceOrders?: ServiceOrder[]; orders?: ServiceOrder[] }>('/api/service-orders')
+        .then((osRes) => {
+          if (mounted) setServiceOrders(osRes.serviceOrders || osRes.orders || []);
+        })
+        .catch(() => {});
+    }
+    if (propTeamUsers === undefined) {
+      apiFetch<{ users: User[] }>('/api/settings/users')
+        .then((usrRes) => {
+          if (mounted) setTeamUsers(usrRes.users || []);
+        })
+        .catch(() => {});
+    }
+
+    return () => {
+      mounted = false;
+    };
+  }, [apiFetch, toast, tenant?.id]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    setSelectedProjectId(initialProjectId || null);
+    let cleanup: (() => void) | undefined;
+    loadData().then((fn) => {
+      cleanup = fn;
+    });
+    return () => {
+      cleanup?.();
+    };
+  }, [loadData, initialProjectId]);
 
   const activeProject = projects.find((p) => p.id === selectedProjectId) || null;
+
+  // Hidratar detalle completo (incluyendo media pesada) al abrir un proyecto
+  useEffect(() => {
+    if (!selectedProjectId) return;
+    let cancelled = false;
+    apiFetch<{ project: SoftwareProject }>(`/api/workspace/software/${selectedProjectId}`)
+      .then((res) => {
+        if (!cancelled && res.project) {
+          setProjects((prev) => prev.map((p) => (p.id === res.project.id ? res.project : p)));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProjectId, apiFetch]);
 
   const replaceProjectInState = (updated: SoftwareProject) => {
     setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
