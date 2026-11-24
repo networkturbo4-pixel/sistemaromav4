@@ -456,6 +456,42 @@ CREATE TABLE IF NOT EXISTS brand_guidelines (
 CREATE INDEX IF NOT EXISTS idx_brand_guidelines_tenant ON brand_guidelines(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_brand_guidelines_token ON brand_guidelines(public_token);
 
+-- =============================================================================
+-- 29. TABLA DE PROYECTOS DE DESARROLLO DE SOFTWARE (HITOS, KANBAN, QA & GANTT)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS software_projects (
+    id VARCHAR(64) PRIMARY KEY,
+    tenant_id VARCHAR(64) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    code VARCHAR(40) NOT NULL DEFAULT '',
+    name VARCHAR(240) NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    project_type VARCHAR(40) NOT NULL DEFAULT 'custom_saas',
+    status VARCHAR(40) NOT NULL DEFAULT 'planning',
+    client_id VARCHAR(64),
+    client_name VARCHAR(200) NOT NULL DEFAULT '',
+    brand_id VARCHAR(64),
+    brand_name VARCHAR(200) NOT NULL DEFAULT '',
+    service_order_id VARCHAR(64),
+    quote_id VARCHAR(64),
+    start_date VARCHAR(20) NOT NULL DEFAULT '',
+    target_end_date VARCHAR(20) NOT NULL DEFAULT '',
+    total_progress INTEGER NOT NULL DEFAULT 0,
+    public_token VARCHAR(120) NOT NULL UNIQUE,
+    require_pin BOOLEAN NOT NULL DEFAULT FALSE,
+    public_pin VARCHAR(20) NOT NULL DEFAULT '',
+    environments JSONB NOT NULL DEFAULT '{}'::jsonb,
+    milestones JSONB NOT NULL DEFAULT '[]'::jsonb,
+    work_items JSONB NOT NULL DEFAULT '[]'::jsonb,
+    data JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_software_projects_tenant ON software_projects(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_software_projects_client ON software_projects(tenant_id, client_id);
+CREATE INDEX IF NOT EXISTS idx_software_projects_token ON software_projects(public_token);
+
+
 
 
 

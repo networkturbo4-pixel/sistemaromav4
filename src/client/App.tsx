@@ -13,6 +13,7 @@ import { ServiceOrdersModule } from './modules/ServiceOrdersModule';
 import { DriveModule } from './modules/DriveModule';
 import { SettingsModule, SettingsTab } from './modules/SettingsModule';
 import { AdministrationModule } from './modules/AdministrationModule';
+import { ClientPortal } from './modules/ClientPortal';
 import { DriveUploadProvider } from './context/DriveUploadContext';
 import { PublicQuoteView } from './components/PublicQuoteView';
 import { PublicServicesCatalogView } from './components/PublicServicesCatalogView';
@@ -24,6 +25,7 @@ import { PublicBiolinkView } from './components/PublicBiolinkView';
 import { PublicEmployeePaymentsView } from './components/PublicEmployeePaymentsView';
 import { PublicFormView } from './components/PublicFormView';
 import { PublicBrandGuidelineView } from './components/PublicBrandGuidelineView';
+import { PublicSoftwareProjectView } from './components/PublicSoftwareProjectView';
 import { AttendanceGateModal } from './components/AttendanceGateModal';
 import { MusicPlayerProvider } from './context/MusicPlayerContext';
 import { YouTubeAudioEngine } from './components/music/YouTubeAudioEngine';
@@ -103,7 +105,13 @@ const MainRouter: React.FC = () => {
       const pMatch = window.location.pathname.match(/^\/p\/([^/?#]+)/i);
       if (pMatch && pMatch[1]) {
         const candidate = decodeURIComponent(pMatch[1]).toLowerCase();
-        if (candidate !== 'servicios' && candidate !== 'servicio' && !candidate.startsWith('pago') && !candidate.startsWith('nota')) {
+        if (
+          candidate !== 'servicios' &&
+          candidate !== 'servicio' &&
+          candidate !== 'dev' &&
+          !candidate.startsWith('pago') &&
+          !candidate.startsWith('nota')
+        ) {
           return decodeURIComponent(pMatch[1]);
         }
       }
@@ -216,6 +224,22 @@ const MainRouter: React.FC = () => {
 
       const path = window.location.pathname;
       const match = path.match(/^\/(?:brand|deck|guidelines|p\/brand|p\/deck)\/([^/?#]+)/i);
+      if (match && match[1]) {
+        return decodeURIComponent(match[1]);
+      }
+    } catch {}
+    return null;
+  });
+
+  // 11. Detección de enlace público de Proyecto de Desarrollo de Software (/dev/:token o /p/dev/:token o ?dev=:token)
+  const [publicSoftwareToken] = useState<string | null>(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const d = urlParams.get('dev') || urlParams.get('software');
+      if (d) return d;
+
+      const path = window.location.pathname;
+      const match = path.match(/^\/(?:dev|p\/dev)\/([^/?#]+)/i);
       if (match && match[1]) {
         return decodeURIComponent(match[1]);
       }
@@ -379,6 +403,11 @@ const MainRouter: React.FC = () => {
     return <PublicBrandGuidelineView token={publicBrandToken} />;
   }
 
+  // 11. Vista pública de Proyecto de Desarrollo de Software (/dev/:token)
+  if (publicSoftwareToken) {
+    return <PublicSoftwareProjectView token={publicSoftwareToken} />;
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-dvh tenant-bg tenant-text flex flex-col items-center justify-center gap-3">
@@ -394,6 +423,13 @@ const MainRouter: React.FC = () => {
 
   if (!user) {
     return <PinLoginScreen />;
+  }
+
+  const isClientPortalUser =
+    user.id.startsWith('client-user-') || !!role?.id?.startsWith('role-cliente-');
+
+  if (isClientPortalUser) {
+    return <ClientPortal />;
   }
 
   const isAdmin =

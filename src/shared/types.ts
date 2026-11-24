@@ -2022,3 +2022,400 @@ export interface WorkspaceEmailMessage {
   createdAt: string;
 }
 
+// =============================================================================
+// SUBMÓDULO DE WORKSPACE: DESARROLLO DE SOFTWARE (PROYECTOS, HITOS, KANBAN, QA & GANTT)
+// =============================================================================
+
+export type SoftwareProjectType =
+  | 'landing_web'
+  | 'corporate_web'
+  | 'ecommerce'
+  | 'custom_saas'
+  | 'mobile_app'
+  | 'api_integration';
+
+export type SoftwareProjectStatus =
+  | 'planning'
+  | 'in_development'
+  | 'qa_testing'
+  | 'uat_review'
+  | 'deployed'
+  | 'maintenance'
+  | 'paused';
+
+export type SoftwareMilestoneStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'qa'
+  | 'client_review'
+  | 'approved'
+  | 'blocked';
+
+export type SoftwareWorkItemType = 'feature' | 'task' | 'bug' | 'improvement' | 'qa_check';
+export type SoftwareWorkItemStatus = 'backlog' | 'todo' | 'in_progress' | 'code_review' | 'qa_testing' | 'done';
+export type SoftwareBugSeverity = 'critical' | 'major' | 'minor' | 'cosmetic';
+
+export interface SoftwareMilestoneComment {
+  id: string;
+  authorName: string;
+  authorRole: 'team' | 'client';
+  authorAvatar?: string;
+  text: string;
+  attachmentUrl?: string;
+  createdAt: string;
+}
+
+export interface SoftwareMilestoneAttachment {
+  id: string;
+  name: string;
+  url: string;
+  type?: string;
+}
+
+export interface SoftwareMilestoneApproval {
+  status: 'pending' | 'approved' | 'changes_requested';
+  decidedBy?: string;
+  decidedAt?: string;
+  notes?: string;
+}
+
+export interface SoftwareDeliverableItem {
+  id: string;
+  title: string;
+  completed: boolean;
+  completedAt?: string;
+}
+
+export interface SoftwareMilestoneDateChange {
+  id: string;
+  previousStartDate: string;
+  previousDueDate: string;
+  newStartDate: string;
+  newDueDate: string;
+  reason: string;
+  changedBy: string;
+  changedAt: string;
+}
+
+export type SoftwareChangeRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface SoftwareChangeRequest {
+  id: string;
+  code: string; // ej: "CR-01"
+  title: string;
+  description: string;
+  milestoneId?: string;
+  impactDays: number;
+  additionalCost: number;
+  currency: 'PEN' | 'USD';
+  status: SoftwareChangeRequestStatus;
+  requestedBy: string;
+  decidedBy?: string;
+  decidedAt?: string;
+  createdAt: string;
+}
+
+export interface SoftwareCustomTemplate {
+  id: string;
+  tenantId: string;
+  name: string;
+  description: string;
+  projectType: SoftwareProjectType;
+  defaultStack: string[];
+  milestones: Array<{
+    title: string;
+    description: string;
+    deliverables: string[];
+    weightPercent: number;
+    durationDays: number;
+    phaseTag?: string;
+    phaseColor?: string;
+    isRecurringSla?: boolean;
+    slaMonthlyHours?: number;
+  }>;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface SoftwareMilestone {
+  id: string;
+  orderIndex: number;
+  code: string; // ej: "H1", "H2"
+  title: string;
+  description: string;
+  deliverables: string[];
+  deliverableItems?: SoftwareDeliverableItem[];
+  startDate: string; // YYYY-MM-DD
+  dueDate: string; // YYYY-MM-DD
+  baselineStartDate?: string;
+  baselineDueDate?: string;
+  dateHistory?: SoftwareMilestoneDateChange[];
+  dependsOnMilestoneIds?: string[];
+  phaseTag?: string;
+  phaseColor?: string;
+  isRecurringSla?: boolean;
+  slaMonthlyHours?: number;
+  slaUsedHours?: number;
+  slaPeriodLabel?: string;
+  weightPercent: number; // Peso relativo en el avance total del proyecto
+  progress: number; // 0 - 100
+  autoCalculateProgress: boolean;
+  status: SoftwareMilestoneStatus;
+  demoUrl?: string;
+  attachments?: SoftwareMilestoneAttachment[];
+  isVisibleToClient: boolean;
+  clientApproval?: SoftwareMilestoneApproval;
+  comments: SoftwareMilestoneComment[];
+  completedAt?: string;
+}
+
+export interface SoftwareAcceptanceCriterion {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
+export type SoftwareSprintStatus = 'planned' | 'active' | 'completed';
+
+export interface SoftwareSprint {
+  id: string;
+  name: string; // ej: "Sprint 1"
+  goal: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  status: SoftwareSprintStatus;
+  completedPoints?: number;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export type SoftwareQaVerificationStatus = 'open' | 'dev_resolved' | 'qa_verified' | 'reopened';
+
+export interface SoftwareBugEnvironment {
+  browser?: string;
+  os?: string;
+  device?: string;
+  resolution?: string;
+  buildVersion?: string;
+}
+
+export interface SoftwareBugMedia {
+  id: string;
+  type: 'image' | 'video';
+  name: string;
+  dataUrl: string;
+  createdAt: string;
+}
+
+export interface SoftwareTestCase {
+  id: string;
+  code: string; // ej: "TC-01"
+  milestoneId: string;
+  title: string;
+  steps: string;
+  expectedResult: string;
+  status: 'pending' | 'pass' | 'fail';
+  executedBy?: string;
+  executedAt?: string;
+  linkedBugId?: string;
+}
+
+export interface SoftwareGoLiveItem {
+  id: string;
+  category: 'seo' | 'security' | 'infra' | 'performance' | 'ux' | 'analytics';
+  label: string;
+  completed: boolean;
+  notes?: string;
+  checkedBy?: string;
+  checkedAt?: string;
+}
+
+export interface SoftwareWorkItem {
+  id: string;
+  milestoneId: string;
+  sprintId?: string;
+  code: string; // ej: "DEV-01" o "BUG-01"
+  type: SoftwareWorkItemType;
+  title: string;
+  description: string;
+  status: SoftwareWorkItemStatus;
+  priority: TaskPriority;
+  severity?: SoftwareBugSeverity;
+  qaVerificationStatus?: SoftwareQaVerificationStatus;
+  reopenCount?: number;
+  resolvedAt?: string;
+  bugEnvironment?: SoftwareBugEnvironment;
+  bugMedia?: SoftwareBugMedia[];
+  consoleLogs?: string;
+  storyPoints?: number;
+  tags?: string[];
+  isBlocked?: boolean;
+  blockedReason?: string;
+  activeTimerStartedAt?: string;
+  stepsToReproduce?: string;
+  expectedBehavior?: string;
+  actualBehavior?: string;
+  acceptanceCriteria: SoftwareAcceptanceCriterion[];
+  assignedUserId?: string;
+  assignedUserName?: string;
+  assignedUserAvatar?: string;
+  estimatedHours?: number;
+  loggedHours?: number;
+  dueDate?: string;
+  evidenceUrl?: string;
+  reportedByClient?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SoftwareRelease {
+  id: string;
+  version: string; // ej: "v1.0.0"
+  environment: 'staging' | 'production';
+  notes: string;
+  workItemIds: string[];
+  deployedBy: string;
+  deployedAt: string;
+}
+
+export interface SoftwareHealthCheckResult {
+  url: string;
+  ok: boolean;
+  statusCode?: number;
+  latencyMs?: number;
+  checkedAt: string;
+  error?: string;
+}
+
+export interface SoftwareVaultCredential {
+  id: string;
+  label: string;
+  category: 'server' | 'database' | 'cpanel' | 'api_key' | 'test_account' | 'other';
+  hostOrUrl?: string;
+  username?: string;
+  encryptedSecret: string; // AES-256-GCM iv:tag:cipher
+  notes?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface SoftwareInfraItem {
+  id: string;
+  category: 'hosting' | 'dns' | 'database' | 'cicd' | 'runtime' | 'storage' | 'other';
+  provider: string;
+  versionOrPlan: string;
+  regionOrUrl?: string;
+  notes?: string;
+}
+
+export interface SoftwarePostMortem {
+  id: string;
+  title: string;
+  severity: 'sev1' | 'sev2' | 'sev3';
+  occurredAt: string;
+  resolvedAt?: string;
+  rootCause: string;
+  preventiveActions: string;
+  authorName: string;
+  createdAt: string;
+}
+
+export interface SoftwareExternalIntegration {
+  id: string;
+  name: string; // ej: "Stripe", "SMTP Resend", "Webhook WhatsApp"
+  category: 'payment' | 'smtp' | 'webhook' | 'api' | 'auth' | 'other';
+  mode: 'sandbox' | 'production' | 'pending';
+  envVars: string; // nombres de variables ej: STRIPE_KEY, STRIPE_WEBHOOK_SECRET
+  notes?: string;
+}
+
+export interface SoftwarePrChecklistItem {
+  id: string;
+  label: string;
+  completed: boolean;
+}
+
+export interface SoftwareAuditEntry {
+  id: string;
+  action: string;
+  summary: string;
+  actorName: string;
+  createdAt: string;
+}
+
+export type SoftwareProjectMemberRole = 'tech_lead' | 'developer' | 'qa_tester' | 'viewer';
+
+export interface SoftwareProjectRoleAssignment {
+  userId: string;
+  userName: string;
+  projectRole: SoftwareProjectMemberRole;
+}
+
+export interface SoftwareProjectEnvironments {
+  figmaUrl?: string;
+  stagingUrl?: string;
+  productionUrl?: string;
+  repoUrl?: string;
+  docsUrl?: string;
+}
+
+export interface SoftwareProject {
+  id: string;
+  tenantId: string;
+  code: string; // ej: "SW-2026-001"
+  name: string;
+  description: string;
+  projectType: SoftwareProjectType;
+  status: SoftwareProjectStatus;
+  clientId?: string | null;
+  clientName: string;
+  brandId?: string | null;
+  brandName?: string;
+  serviceOrderId?: string | null;
+  serviceOrderCode?: string;
+  quoteId?: string | null;
+  techLeadId?: string;
+  techLeadName?: string;
+  assignedUsers: Array<{ id: string; name: string; role?: string; avatarUrl?: string }>;
+  techStack: string[];
+  environments: SoftwareProjectEnvironments;
+  driveFolderId?: string;
+  driveFolderName?: string;
+  driveFolderLink?: string;
+  startDate: string; // YYYY-MM-DD
+  targetEndDate: string; // YYYY-MM-DD
+  totalProgress: number; // 0 - 100 ponderado por hitos
+  milestones: SoftwareMilestone[];
+  workItems: SoftwareWorkItem[];
+  sprints?: SoftwareSprint[];
+  wipLimits?: Partial<Record<SoftwareWorkItemStatus, number>>;
+  testCases?: SoftwareTestCase[];
+  goLiveChecklist?: SoftwareGoLiveItem[];
+  changeRequests?: SoftwareChangeRequest[];
+  blockMilestoneCloseOnCriticalBugs?: boolean;
+  // Fase 5: DevOps, Git, Releases, Bóveda, Infra, Post-mortems, Integraciones
+  gitWebhookSecret?: string;
+  gitEvents?: Array<{ id: string; provider: string; ref: string; message: string; author: string; matchedCodes: string[]; receivedAt: string }>;
+  releases?: SoftwareRelease[];
+  healthChecks?: { staging?: SoftwareHealthCheckResult; production?: SoftwareHealthCheckResult };
+  vaultCredentials?: SoftwareVaultCredential[];
+  infrastructureInventory?: SoftwareInfraItem[];
+  postMortems?: SoftwarePostMortem[];
+  externalIntegrations?: SoftwareExternalIntegration[];
+  prChecklist?: SoftwarePrChecklistItem[];
+  driveSubfolders?: Array<{ id: string; name: string; webViewLink?: string }>;
+  // Fase 6: Auditoría y Permisos Granulares
+  auditLog?: SoftwareAuditEntry[];
+  projectRoles?: SoftwareProjectRoleAssignment[];
+  publicToken: string;
+  requirePin: boolean;
+  publicPin?: string;
+  allowClientComments: boolean;
+  allowClientBugReport: boolean;
+  viewsCount: number;
+  lastViewedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+

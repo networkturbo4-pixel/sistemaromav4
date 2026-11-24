@@ -50,7 +50,29 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
 }) => {
   const { apiFetch } = useApp();
   const [internalUsers, setInternalUsers] = useState<any[]>(teamUsers || []);
+  const [internalClients, setInternalClients] = useState<Client[]>(clients || []);
   const [userSearch, setUserSearch] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
+
+  useEffect(() => {
+    if (clients && clients.length > 0) {
+      setInternalClients(clients);
+    } else if (isOpen) {
+      apiFetch<{ clients: Client[] }>('/api/clients')
+        .then((res) => {
+          if (Array.isArray(res.clients)) setInternalClients(res.clients);
+        })
+        .catch(() => {});
+    }
+  }, [clients, isOpen, apiFetch]);
+
+  useEffect(() => {
+    if (isOpen && editingProject) {
+      setClientSearch(editingProject.clientName || '');
+      setShowClientDropdown(false);
+    }
+  }, [isOpen, editingProject?.id, editingProject?.serviceOrderId]);
 
   useEffect(() => {
     if (teamUsers && teamUsers.length > 0) {
@@ -74,6 +96,37 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
     const job = (u.jobTitle || '').toLowerCase();
     return name.includes(term) || email.includes(term) || job.includes(term);
   });
+
+  const selectedClient = internalClients.find(
+    (c) =>
+      (editingProject.clientId && c.id === editingProject.clientId) ||
+      (editingProject.clientName &&
+        c.name.trim().toLowerCase() === editingProject.clientName.trim().toLowerCase())
+  );
+
+  const filteredClients = internalClients.filter((c) => {
+    const term = clientSearch.trim().toLowerCase();
+    if (!term) return true;
+    return (
+      c.name.toLowerCase().includes(term) ||
+      (c.documentNumber || '').toLowerCase().includes(term) ||
+      (c.brands || []).some((b) => b.name.toLowerCase().includes(term))
+    );
+  });
+
+  const handleSelectRegisteredClient = (client: Client) => {
+    const firstBrand = client.brands?.[0];
+    setEditingProject({
+      ...editingProject,
+      clientId: client.id,
+      clientName: client.name,
+      companyName: client.name,
+      brandId: firstBrand?.id || '',
+      brandName: firstBrand?.name || '',
+    });
+    setClientSearch(client.name);
+    setShowClientDropdown(false);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fadeIn">
@@ -135,31 +188,108 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
             />
           </div>
 
-          {/* Cliente y Marca */}
+          {/* Cliente y Marca (Buscador de cliente registrado + selector de marca) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                Cliente / Razón Social
-              </label>
-              <input
-                type="text"
-                readOnly
-                value={editingProject.clientName || ''}
-                className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold"
-              />
+            <div className="relative">
+              <div className="flex items-center justify-between mb-1">
+                <label className="font-bold text-slate-700 dark:text-slate-300">
+                  Cliente / Razón Social
+                </label>
+                {editingProject.clientId && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    Registrado
+                  </span>
+                )}
+              </div>
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Buscar cliente por nombre, DNI/RUC o marca..."
+                  value={clientSearch}
+                  onFocus={() => setShowClientDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowClientDropdown(false), 180)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setClientSearch(val);
+                    setShowClientDropdown(true);
+                    setEditingProject({
+                      ...editingProject,
+                      clientName: val,
+                      clientId: '',
+                    });
+                  }}
+                  className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              {showClientDropdown && filteredClients.length > 0 && (
+                <div className="absolute z-30 mt-1 w-full max-h-52 overflow-y-auto rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xl divide-y divide-slate-100 dark:divide-slate-800">
+                  {filteredClients.slice(0, 12).map((client) => (
+                    <button
+                      key={client.id}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleSelectRegisteredClient(client);
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition flex items-center justify-between gap-2 cursor-pointer"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
+                          {client.name}
+                        </p>
+                        <p className="text-[10px] text-slate-400 truncate">
+                          {client.documentType}: {client.documentNumber}
+                          {client.brands?.length
+                            ? ` · ${client.brands.map((b) => b.name).join(', ')}`
+                            : ''}
+                        </p>
+                      </div>
+                      {editingProject.clientId === client.id && (
+                        <Check className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>
               <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
                 Marca Asignada
               </label>
-              <input
-                type="text"
-                value={editingProject.brandName || ''}
-                onChange={(e) => setEditingProject({ ...editingProject, brandName: e.target.value })}
-                placeholder="Ej: Inka Gourmet"
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold"
-              />
+              {selectedClient && selectedClient.brands && selectedClient.brands.length > 0 ? (
+                <select
+                  value={editingProject.brandId || ''}
+                  onChange={(e) => {
+                    const chosen = selectedClient.brands.find((b) => b.id === e.target.value);
+                    setEditingProject({
+                      ...editingProject,
+                      clientId: selectedClient.id,
+                      clientName: selectedClient.name,
+                      brandId: chosen?.id || '',
+                      brandName: chosen?.name || '',
+                    });
+                  }}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                >
+                  <option value="">-- Seleccionar marca --</option>
+                  {selectedClient.brands.map((brand) => (
+                    <option key={brand.id} value={brand.id}>
+                      {brand.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={editingProject.brandName || ''}
+                  onChange={(e) => setEditingProject({ ...editingProject, brandName: e.target.value })}
+                  placeholder="Ej: Inka Gourmet"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold"
+                />
+              )}
             </div>
           </div>
 
@@ -302,7 +432,38 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
               {(['instagram', 'facebook', 'tiktok', 'linkedin', 'youtube', 'x'] as SocialPostPlatform[]).map(
                 (plat) => {
                   const isSelected = editingProject.platforms?.includes(plat);
-                  return (
+                  const selectedClient = internalClients.find(
+    (c) =>
+      (editingProject.clientId && c.id === editingProject.clientId) ||
+      (editingProject.clientName &&
+        c.name.trim().toLowerCase() === editingProject.clientName.trim().toLowerCase())
+  );
+
+  const filteredClients = internalClients.filter((c) => {
+    const term = clientSearch.trim().toLowerCase();
+    if (!term) return true;
+    return (
+      c.name.toLowerCase().includes(term) ||
+      (c.documentNumber || '').toLowerCase().includes(term) ||
+      (c.brands || []).some((b) => b.name.toLowerCase().includes(term))
+    );
+  });
+
+  const handleSelectRegisteredClient = (client: Client) => {
+    const firstBrand = client.brands?.[0];
+    setEditingProject({
+      ...editingProject,
+      clientId: client.id,
+      clientName: client.name,
+      companyName: client.name,
+      brandId: firstBrand?.id || '',
+      brandName: firstBrand?.name || '',
+    });
+    setClientSearch(client.name);
+    setShowClientDropdown(false);
+  };
+
+  return (
                     <button
                       key={plat}
                       type="button"
@@ -370,7 +531,38 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
                   );
                   const displayName = u.fullName || u.name || u.email || 'Usuario';
                   const job = u.jobTitle || 'Miembro del equipo';
-                  return (
+                  const selectedClient = internalClients.find(
+    (c) =>
+      (editingProject.clientId && c.id === editingProject.clientId) ||
+      (editingProject.clientName &&
+        c.name.trim().toLowerCase() === editingProject.clientName.trim().toLowerCase())
+  );
+
+  const filteredClients = internalClients.filter((c) => {
+    const term = clientSearch.trim().toLowerCase();
+    if (!term) return true;
+    return (
+      c.name.toLowerCase().includes(term) ||
+      (c.documentNumber || '').toLowerCase().includes(term) ||
+      (c.brands || []).some((b) => b.name.toLowerCase().includes(term))
+    );
+  });
+
+  const handleSelectRegisteredClient = (client: Client) => {
+    const firstBrand = client.brands?.[0];
+    setEditingProject({
+      ...editingProject,
+      clientId: client.id,
+      clientName: client.name,
+      companyName: client.name,
+      brandId: firstBrand?.id || '',
+      brandName: firstBrand?.name || '',
+    });
+    setClientSearch(client.name);
+    setShowClientDropdown(false);
+  };
+
+  return (
                     <button
                       key={u.id}
                       type="button"

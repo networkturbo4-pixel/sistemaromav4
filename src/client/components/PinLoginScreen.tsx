@@ -62,7 +62,7 @@ export const PinLoginScreen: React.FC = () => {
   const clientLoginTitle = loginSettings?.clientTitle || 'Portal de Clientes';
   const clientLoginSubtitle =
     loginSettings?.clientSubtitle ||
-    'Ingresa con tu PIN o código de acceso de 8 dígitos para consultar tus marcas y proyectos.';
+    'Ingresa con tu DNI de 8 dígitos registrado para consultar tus marcas, entregables, cotizaciones y pagos.';
 
   const slides: LoginSlide[] = useMemo(() => {
     if (loginSettings?.slides && loginSettings.slides.length > 0) {
@@ -429,7 +429,7 @@ export const PinLoginScreen: React.FC = () => {
           <div className="space-y-2 select-none">
             <div className="flex items-center justify-between px-1">
               <span className="text-[11px] font-semibold text-zinc-400">
-                {loginMode === 'personal' ? 'Código PIN de Personal' : 'PIN o Acceso de Cliente'} ({filledCount} de 8)
+                {loginMode === 'personal' ? 'Código PIN de Personal' : 'DNI del Cliente'} ({filledCount} de 8)
               </span>
 
               <button

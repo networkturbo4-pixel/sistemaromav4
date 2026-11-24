@@ -1,5 +1,5 @@
 import React from 'react';
-import { Share2, ListTodo, HardDrive, ArrowRight, Sparkles, Wrench, FileText, Video, Bot, Mail, ShieldAlert, Headphones } from 'lucide-react';
+import { Share2, ListTodo, HardDrive, ArrowRight, Sparkles, Wrench, FileText, Video, Bot, Mail, ShieldAlert, Headphones, Code2 } from 'lucide-react';
 import { WorkspaceProject, WorkspaceTask } from '../../../../shared/types';
 import { useApp } from '../../../../context/AppContext';
 
@@ -9,7 +9,8 @@ interface WorkspaceHubViewProps {
   formsCount?: number;
   meetingsCount?: number;
   whiteboardsCount?: number;
-  onSelectSubmodule: (view: 'social' | 'tasks' | 'drive' | 'tools' | 'forms' | 'meetings' | 'whiteboards' | 'brand-guidelines' | 'romita' | 'emails' | 'music') => void;
+  softwareProjectsCount?: number;
+  onSelectSubmodule: (view: 'social' | 'tasks' | 'drive' | 'tools' | 'forms' | 'meetings' | 'whiteboards' | 'brand-guidelines' | 'romita' | 'emails' | 'music' | 'software') => void;
 }
 
 export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
@@ -18,6 +19,7 @@ export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
   formsCount = 0,
   meetingsCount = 0,
   whiteboardsCount = 0,
+  softwareProjectsCount = 0,
   onSelectSubmodule,
 }) => {
   const { can, user, role } = useApp();
@@ -33,6 +35,7 @@ export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
   const canAccessBrandGuidelines = isAdm || can('workspace.brand_guidelines.view') || can('workspace.brand_guidelines.manage');
   const canAccessRomita = isAdm || can('workspace.romita.view') || can('workspace.romita.manage');
   const canAccessEmails = isAdm || can('workspace.emails.view') || can('workspace.emails.manage');
+  const canAccessSoftware = isAdm || can('workspace.software.view') || can('workspace.software.manage');
 
   const anyAccess =
     canAccessSocial ||
@@ -44,7 +47,8 @@ export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
     canAccessWhiteboards ||
     canAccessBrandGuidelines ||
     canAccessRomita ||
-    canAccessEmails;
+    canAccessEmails ||
+    canAccessSoftware;
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fadeIn">
@@ -398,6 +402,40 @@ export const WorkspaceHubView: React.FC<WorkspaceHubViewProps> = ({
             </div>
 
             <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] sm:text-xs font-bold text-blue-600 dark:text-blue-400">
+              <span>Ingresar</span>
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </button>
+        )}
+
+        {/* SUBMÓDULO 12: DESARROLLO DE SOFTWARE (PROYECTOS, HITOS, KANBAN, QA & GANTT) */}
+        {canAccessSoftware && (
+          <button
+            type="button"
+            onClick={() => onSelectSubmodule('software')}
+            className="group bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 text-left shadow-xs hover:shadow-md hover:border-cyan-500 dark:hover:border-cyan-500 hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between cursor-pointer"
+          >
+            <div>
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-cyan-50 dark:bg-cyan-950/50 border border-cyan-200 dark:border-cyan-800 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0 mb-2.5 sm:mb-3 group-hover:bg-cyan-600 group-hover:text-white transition-colors duration-200">
+                <Code2 className="w-5 h-5 sm:w-6 sm:h-6" />
+              </div>
+
+              <div className="flex items-center gap-1.5 mb-0.5 sm:mb-1">
+                <span className="text-[10px] sm:text-xs font-bold text-slate-400">
+                  {softwareProjectsCount} {softwareProjectsCount === 1 ? 'proyecto' : 'proyectos'}
+                </span>
+              </div>
+
+              <h3 className="text-xs sm:text-base font-extrabold text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors line-clamp-1">
+                Desarrollo de Software
+              </h3>
+
+              <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-tight sm:leading-relaxed">
+                Proyectos con hitos dinámicos, Kanban técnico, QA/Bugs, cronograma Gantt y aprobaciones de cliente.
+              </p>
+            </div>
+
+            <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] sm:text-xs font-bold text-cyan-600 dark:text-cyan-400">
               <span>Ingresar</span>
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>

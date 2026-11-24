@@ -72,6 +72,8 @@ const brand_guidelines_routes_1 = __importDefault(require("./routes/brand-guidel
 const romita_routes_1 = __importDefault(require("./routes/romita.routes"));
 const emails_routes_1 = __importDefault(require("./routes/emails.routes"));
 const music_routes_1 = __importDefault(require("./routes/music.routes"));
+const portal_routes_1 = __importDefault(require("./routes/portal.routes"));
+const software_routes_1 = __importDefault(require("./routes/software.routes"));
 const googleDriveService_1 = require("./services/googleDriveService");
 const totp_1 = require("./utils/totp");
 const notificationService_1 = require("./services/notificationService");
@@ -104,6 +106,10 @@ app.use('/api/romita', romita_routes_1.default);
 app.use('/api/workspace/emails', emails_routes_1.default);
 // Módulo de Música / Soundify Widget
 app.use('/api/music', music_routes_1.default);
+// Portal de Clientes (acceso aislado por DNI)
+app.use('/api/portal', portal_routes_1.default);
+// Submódulo de Workspace: Desarrollo de Software (Proyectos, Hitos, Kanban, QA & Gantt)
+app.use('/api/workspace/software', software_routes_1.default);
 // =============================================================================
 // 1. ENDPOINTS PÚBLICOS Y AUTENTICACIÓN POR PIN DE 8 DÍGITOS
 // =============================================================================
@@ -281,7 +287,7 @@ app.post('/api/auth/login-pin', async (req, res) => {
             }
             res.status(401).json({
                 error: mode === 'cliente'
-                    ? 'Código de acceso o PIN de cliente no encontrado. Verifica tu código de 8 dígitos o consulta con la agencia.'
+                    ? 'DNI de cliente no encontrado o cuenta inactiva. Verifica tu DNI de 8 dígitos o consulta con la agencia.'
                     : 'PIN de 8 dígitos incorrecto o usuario inactivo. Verifica tu código de acceso.',
             });
             return;
@@ -325,6 +331,7 @@ app.post('/api/auth/login-pin', async (req, res) => {
         if (currentMins > limitMins) {
             isOutsideTolerance = true;
         }
+        const isClientPortalUser = match.user.id.startsWith('client-user-') || match.role.id.startsWith('role-cliente-');
         const isAdmin = match.role.permissions?.includes('*') || (0, permissions_1.hasPermission)(match.role.permissions, 'administration.hr.manage');
         res.json({
             token,
@@ -343,7 +350,7 @@ app.post('/api/auth/login-pin', async (req, res) => {
             },
             attendanceCheck: {
                 alreadyCheckedInToday,
-                requiresAttendanceCheckIn: !alreadyCheckedInToday && !isAdmin,
+                requiresAttendanceCheckIn: !isClientPortalUser && !alreadyCheckedInToday && !isAdmin,
                 isOutsideTolerance,
                 strictTardinessLock: !!hrSettings.strictTardinessLock,
                 hasAuthenticatorConfigured: !!hrSettings.authenticatorSecret,
@@ -373,6 +380,7 @@ app.get('/api/auth/me', auth_1.requireAuth, async (req, res) => {
     if (currentMins > limitMins) {
         isOutsideTolerance = true;
     }
+    const isClientPortalUser = user.id.startsWith('client-user-') || !!role?.id?.startsWith('role-cliente-');
     const isAdmin = role?.permissions?.includes('*') || (0, permissions_1.hasPermission)(role?.permissions, 'administration.hr.manage');
     res.json({
         user,
@@ -382,7 +390,7 @@ app.get('/api/auth/me', auth_1.requireAuth, async (req, res) => {
         engineInfo: db_1.db.getEngineInfo(),
         attendanceCheck: {
             alreadyCheckedInToday,
-            requiresAttendanceCheckIn: !alreadyCheckedInToday && !isAdmin,
+            requiresAttendanceCheckIn: !isClientPortalUser && !alreadyCheckedInToday && !isAdmin,
             isOutsideTolerance,
             strictTardinessLock: !!hrSettings.strictTardinessLock,
             hasAuthenticatorConfigured: !!hrSettings.authenticatorSecret,
@@ -3960,6 +3968,24 @@ async function serveHtmlWithMetadata(req, res) {
         let faviconUrl = `/api/public/tenant-icon?tenant=${encodeURIComponent(tenantSlug)}`;
         let themeColor = '#0055ff';
         const pathname = req.path;
+        // 0. Proyectos de Desarrollo de Software públicos (/dev/:token, /p/dev/:token)
+        const devMatch = pathname.match(/^\/(?:dev|p\/dev)\/([^/?#]+)/i);
+        if (devMatch && devMatch[1]) {
+            const devToken = decodeURIComponent(devMatch[1]);
+            const swProj = await db_1.db.getSoftwareProjectByPublicToken(devToken);
+            if (swProj) {
+                const t = await db_1.db.getTenantById(swProj.tenantId);
+                const brandLabel = t?.companyInfo?.commercialName || t?.name || 'ROMA SaaS';
+                pageTitle = `${swProj.name} — Avance de Desarrollo (${swProj.totalProgress}%) | ${brandLabel}`;
+                ogTitle = `💻 ${swProj.name} (${swProj.totalProgress}% de avance)`;
+                ogDescription = `Roadmap interactivo de hitos y entregas para ${swProj.clientName}. Revisa demos en vivo, comenta y aprueba cada hito.`;
+                if (t?.slug) {
+                    tenantSlug = t.slug;
+                    ogImage = `${origin}/api/public/tenant-og-image.png?tenant=${encodeURIComponent(t.slug)}`;
+                    faviconUrl = `/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
+                }
+            }
+        }
         // 1. Notas de Pago / Comprobantes públicos (/p/pago/:token, /p/nota/:token, /np/:token, /pago/:token, /nota/:token)
         const noteMatch = pathname.match(/^\/(?:np|pago|nota|nota-pago|p\/pago|p\/nota)\/([^/?#]+)/i);
         if (noteMatch && noteMatch[1]) {
@@ -4185,6 +4211,8 @@ app.get([
     '/s/:slug',
     '/servicio/:slug',
     '/p/servicio/:slug',
+    '/dev/:token',
+    '/p/dev/:token',
 ], serveHtmlWithMetadata);
 // Servir archivos multimedia subidos (imágenes, referencias, logos, comprobantes)
 // Soporta múltiples rutas del hosting (cPanel Passenger, public_html o sistema anterior)

@@ -59,6 +59,8 @@ export type PermissionKey =
   | 'workspace.romita.manage'
   | 'workspace.emails.view'
   | 'workspace.emails.manage'
+  | 'workspace.software.view'
+  | 'workspace.software.manage'
   // Módulo: Orden de Servicio (OS)
   | 'service_orders.view'
   | 'service_orders.create'
@@ -428,6 +430,20 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     module: 'workspace',
     moduleLabel: 'Workspace Operativo',
   },
+  {
+    key: 'workspace.software.view',
+    label: 'Ver Desarrollo de Software',
+    description: 'Consultar proyectos de software, hitos dinámicos, tablero Kanban técnico, QA/Bugs y cronograma Gantt.',
+    module: 'workspace',
+    moduleLabel: 'Workspace Operativo',
+  },
+  {
+    key: 'workspace.software.manage',
+    label: 'Gestionar Proyectos de Desarrollo de Software',
+    description: 'Crear y editar proyectos de software, hitos dinámicos, tareas técnicas, bugs/QA y enlaces públicos para clientes.',
+    module: 'workspace',
+    moduleLabel: 'Workspace Operativo',
+  },
 
   // ÓRDENES DE SERVICIO (OS)
   {
@@ -721,6 +737,11 @@ export function hasPermission(
   if (
     requiredPermission === 'workspace.emails.view' &&
     grantedPermissions.includes('workspace.emails.manage')
+  )
+    return true;
+  if (
+    requiredPermission === 'workspace.software.view' &&
+    grantedPermissions.includes('workspace.software.manage')
   )
     return true;
 

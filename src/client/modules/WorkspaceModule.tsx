@@ -43,6 +43,7 @@ import { BrandGuidelinesSubmoduleView } from './workspace/submodules/brand-guide
 import { RomitaWorkspaceView } from './workspace/submodules/romita/RomitaWorkspaceView';
 import { EmailsSubmoduleView } from './workspace/submodules/emails/EmailsSubmoduleView';
 import { MusicSubmoduleView } from './workspace/submodules/music/MusicSubmoduleView';
+import { SoftwareSubmoduleView } from './workspace/submodules/software/SoftwareSubmoduleView';
 
 // Modales
 import { ProjectModal } from './workspace/modals/ProjectModal';
@@ -106,14 +107,21 @@ export const WorkspaceModule: React.FC = () => {
     can('workspace.emails.view') ||
     can('workspace.emails.manage');
 
+  const canAccessSoftware =
+    isSuperAdmin ||
+    can('workspace.software.view') ||
+    can('workspace.software.manage');
+
   const canViewClients = isSuperAdmin || can('clients.view') || can('workspace.view');
   const canViewServiceOrders = isSuperAdmin || can('service_orders.view') || can('workspace.view');
 
-  // Nivel 0: Navegación de Submódulos ('hub', 'social', 'tasks', 'drive', 'tools', 'forms', 'meetings', 'whiteboards', 'brand-guidelines', 'romita')
-  const [currentView, setCurrentView] = useState<'hub' | 'social' | 'tasks' | 'drive' | 'tools' | 'forms' | 'meetings' | 'whiteboards' | 'brand-guidelines' | 'romita' | 'emails' | 'music'>('hub');
+  // Nivel 0: Navegación de Submódulos
+  const [currentView, setCurrentView] = useState<'hub' | 'social' | 'tasks' | 'drive' | 'tools' | 'forms' | 'meetings' | 'whiteboards' | 'brand-guidelines' | 'romita' | 'emails' | 'music' | 'software'>('hub');
   const [forms, setForms] = useState<WorkspaceForm[]>([]);
   const [meetings, setMeetings] = useState<WorkspaceMeeting[]>([]);
   const [whiteboardsCount, setWhiteboardsCount] = useState<number>(0);
+  const [softwareProjectsCount, setSoftwareProjectsCount] = useState<number>(0);
+  const [initialSoftwareProjectId, setInitialSoftwareProjectId] = useState<string | null>(null);
 
   // Nivel 1: Fases de Redes Sociales
   // 1 = Proyectos de Redes Sociales
@@ -199,6 +207,7 @@ export const WorkspaceModule: React.FC = () => {
         formsRes,
         meetingsRes,
         whiteboardsRes,
+        softwareRes,
       ] = await Promise.all([
         canViewClients
           ? apiFetch<{ clients: Client[] }>('/api/clients').catch(() => ({ clients: [] }))
@@ -228,6 +237,9 @@ export const WorkspaceModule: React.FC = () => {
         canAccessWhiteboards
           ? apiFetch<{ whiteboards: Whiteboard[] }>('/api/workspace/whiteboards').catch(() => ({ whiteboards: [] }))
           : Promise.resolve({ whiteboards: [] }),
+        canAccessSoftware
+          ? apiFetch<{ projects: any[] }>('/api/workspace/software').catch(() => ({ projects: [] }))
+          : Promise.resolve({ projects: [] }),
       ]);
       setClients(clientsRes.clients || []);
       setTeamUsers(usersRes.users || []);
@@ -239,6 +251,7 @@ export const WorkspaceModule: React.FC = () => {
       setForms(formsRes.forms || []);
       setMeetings(meetingsRes.meetings || []);
       setWhiteboardsCount(whiteboardsRes.whiteboards?.length || 0);
+      setSoftwareProjectsCount(softwareRes.projects?.length || 0);
     } catch {
       toast('Error al sincronizar datos del Workspace', 'error');
     } finally {
@@ -249,6 +262,18 @@ export const WorkspaceModule: React.FC = () => {
   useEffect(() => {
     loadInitialData();
   }, []);
+
+  useEffect(() => {
+    const handleOpenSoftware = (e: Event) => {
+      const detail = (e as CustomEvent<{ projectId?: string }>).detail;
+      if (canAccessSoftware) {
+        setInitialSoftwareProjectId(detail?.projectId || null);
+        setCurrentView('software');
+      }
+    };
+    window.addEventListener('roma-open-workspace-software', handleOpenSoftware);
+    return () => window.removeEventListener('roma-open-workspace-software', handleOpenSoftware);
+  }, [canAccessSoftware]);
 
   // Redirigir a 'hub' si el usuario no tiene permiso para el submódulo actual
   useEffect(() => {
@@ -1082,9 +1107,11 @@ export const WorkspaceModule: React.FC = () => {
           formsCount={forms.length}
           meetingsCount={meetings.length}
           whiteboardsCount={whiteboardsCount}
+          softwareProjectsCount={softwareProjectsCount}
           onSelectSubmodule={(view) => {
             setCurrentView(view);
             if (view === 'social') setSocialPhase(1);
+            if (view !== 'software') setInitialSoftwareProjectId(null);
           }}
         />
       )}
@@ -1304,6 +1331,25 @@ export const WorkspaceModule: React.FC = () => {
       {currentView === 'music' && (
         <div className="space-y-4 animate-fadeIn">
           <MusicSubmoduleView onBackToHub={() => setCurrentView('hub')} />
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* SUBMÓDULO: DESARROLLO DE SOFTWARE (PROYECTOS, HITOS, KANBAN, QA & GANTT) */}
+      {/* ===================================================================== */}
+      {currentView === 'software' && canAccessSoftware && (
+        <div className="space-y-4 animate-fadeIn">
+          <SoftwareSubmoduleView
+            clients={clients}
+            serviceOrders={serviceOrders}
+            teamUsers={teamUsers}
+            initialProjectId={initialSoftwareProjectId}
+            onBackToHub={() => {
+              setInitialSoftwareProjectId(null);
+              setCurrentView('hub');
+              loadInitialData();
+            }}
+          />
         </div>
       )}
 

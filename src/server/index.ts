@@ -43,6 +43,8 @@ import brandGuidelinesRouter from './routes/brand-guidelines.routes';
 import romitaRouter from './routes/romita.routes';
 import emailsRouter from './routes/emails.routes';
 import musicRouter from './routes/music.routes';
+import portalRouter from './routes/portal.routes';
+import softwareRouter from './routes/software.routes';
 import { googleDriveService } from './services/googleDriveService';
 import { generateTotpSecret, generateTotpCode, verifyTotpCode, buildOtpAuthUri } from './utils/totp';
 import { notificationService, notifyEvent } from './services/notificationService';
@@ -88,6 +90,12 @@ app.use('/api/workspace/emails', emailsRouter);
 
 // Módulo de Música / Soundify Widget
 app.use('/api/music', musicRouter);
+
+// Portal de Clientes (acceso aislado por DNI)
+app.use('/api/portal', portalRouter);
+
+// Submódulo de Workspace: Desarrollo de Software (Proyectos, Hitos, Kanban, QA & Gantt)
+app.use('/api/workspace/software', softwareRouter);
 
 // =============================================================================
 // 1. ENDPOINTS PÚBLICOS Y AUTENTICACIÓN POR PIN DE 8 DÍGITOS
@@ -269,7 +277,7 @@ app.post('/api/auth/login-pin', async (req: Request, res: Response) => {
       res.status(401).json({
         error:
           mode === 'cliente'
-            ? 'Código de acceso o PIN de cliente no encontrado. Verifica tu código de 8 dígitos o consulta con la agencia.'
+            ? 'DNI de cliente no encontrado o cuenta inactiva. Verifica tu DNI de 8 dígitos o consulta con la agencia.'
             : 'PIN de 8 dígitos incorrecto o usuario inactivo. Verifica tu código de acceso.',
       });
       return;
@@ -322,6 +330,7 @@ app.post('/api/auth/login-pin', async (req: Request, res: Response) => {
       isOutsideTolerance = true;
     }
 
+    const isClientPortalUser = match.user.id.startsWith('client-user-') || match.role.id.startsWith('role-cliente-');
     const isAdmin = (match.role.permissions as any)?.includes('*') || hasPermission(match.role.permissions, 'administration.hr.manage');
 
     res.json({
@@ -341,7 +350,7 @@ app.post('/api/auth/login-pin', async (req: Request, res: Response) => {
       },
       attendanceCheck: {
         alreadyCheckedInToday,
-        requiresAttendanceCheckIn: !alreadyCheckedInToday && !isAdmin,
+        requiresAttendanceCheckIn: !isClientPortalUser && !alreadyCheckedInToday && !isAdmin,
         isOutsideTolerance,
         strictTardinessLock: !!hrSettings.strictTardinessLock,
         hasAuthenticatorConfigured: !!hrSettings.authenticatorSecret,
@@ -374,6 +383,7 @@ app.get('/api/auth/me', requireAuth, async (req: AuthenticatedRequest, res: Resp
     isOutsideTolerance = true;
   }
 
+  const isClientPortalUser = user.id.startsWith('client-user-') || !!role?.id?.startsWith('role-cliente-');
   const isAdmin = (role?.permissions as any)?.includes('*') || hasPermission(role?.permissions, 'administration.hr.manage');
 
   res.json({
@@ -384,7 +394,7 @@ app.get('/api/auth/me', requireAuth, async (req: AuthenticatedRequest, res: Resp
     engineInfo: db.getEngineInfo(),
     attendanceCheck: {
       alreadyCheckedInToday,
-      requiresAttendanceCheckIn: !alreadyCheckedInToday && !isAdmin,
+      requiresAttendanceCheckIn: !isClientPortalUser && !alreadyCheckedInToday && !isAdmin,
       isOutsideTolerance,
       strictTardinessLock: !!hrSettings.strictTardinessLock,
       hasAuthenticatorConfigured: !!hrSettings.authenticatorSecret,
@@ -4962,6 +4972,25 @@ async function serveHtmlWithMetadata(req: Request, res: Response) {
 
     const pathname = req.path;
 
+    // 0. Proyectos de Desarrollo de Software públicos (/dev/:token, /p/dev/:token)
+    const devMatch = pathname.match(/^\/(?:dev|p\/dev)\/([^/?#]+)/i);
+    if (devMatch && devMatch[1]) {
+      const devToken = decodeURIComponent(devMatch[1]);
+      const swProj = await db.getSoftwareProjectByPublicToken(devToken);
+      if (swProj) {
+        const t = await db.getTenantById(swProj.tenantId);
+        const brandLabel = t?.companyInfo?.commercialName || t?.name || 'ROMA SaaS';
+        pageTitle = `${swProj.name} — Avance de Desarrollo (${swProj.totalProgress}%) | ${brandLabel}`;
+        ogTitle = `💻 ${swProj.name} (${swProj.totalProgress}% de avance)`;
+        ogDescription = `Roadmap interactivo de hitos y entregas para ${swProj.clientName}. Revisa demos en vivo, comenta y aprueba cada hito.`;
+        if (t?.slug) {
+          tenantSlug = t.slug;
+          ogImage = `${origin}/api/public/tenant-og-image.png?tenant=${encodeURIComponent(t.slug)}`;
+          faviconUrl = `/api/public/tenant-icon?tenant=${encodeURIComponent(t.slug)}`;
+        }
+      }
+    }
+
     // 1. Notas de Pago / Comprobantes públicos (/p/pago/:token, /p/nota/:token, /np/:token, /pago/:token, /nota/:token)
     const noteMatch = pathname.match(/^\/(?:np|pago|nota|nota-pago|p\/pago|p\/nota)\/([^/?#]+)/i);
     if (noteMatch && noteMatch[1]) {
@@ -5196,6 +5225,8 @@ app.get(
     '/s/:slug',
     '/servicio/:slug',
     '/p/servicio/:slug',
+    '/dev/:token',
+    '/p/dev/:token',
   ],
   serveHtmlWithMetadata
 );

@@ -31,6 +31,7 @@ import {
   Sparkles,
   ArrowRight,
   Filter,
+  Code2,
 } from 'lucide-react';
 
 export type CommandPaletteFilter =
@@ -611,6 +612,23 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         perform: () => {
           onClose();
           onSelectModule('workspace');
+        },
+      },
+      {
+        id: 'mod-workspace-software',
+        type: 'action',
+        title: 'Desarrollo de Software (Proyectos & Hitos)',
+        subtitle: 'Roadmap de hitos dinámicos, Kanban técnico, QA/Bugs y cronograma Gantt',
+        category: 'modules',
+        categoryLabel: 'Módulos',
+        icon: <Code2 className="w-4 h-4 text-cyan-500" />,
+        keywords: ['software', 'desarrollo', 'proyectos', 'hitos', 'bugs', 'qa', 'gantt', 'kanban', 'codigo'],
+        perform: () => {
+          onClose();
+          onSelectModule('workspace');
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('roma-open-workspace-software'));
+          }, 80);
         },
       },
       {

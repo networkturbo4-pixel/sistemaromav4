@@ -76,6 +76,11 @@ import {
   WorkspaceEmailMessage,
   EmailFolder,
   UserSession,
+  SoftwareProject,
+  SoftwareMilestone,
+  SoftwareWorkItem,
+  SoftwareCustomTemplate,
+  SoftwareDeliverableItem,
 } from '../shared/types';
 import { ALL_PERMISSION_KEYS, PermissionKey } from '../shared/permissions';
 
@@ -119,6 +124,8 @@ export interface DatabaseState {
   workspaceEmailAccounts: WorkspaceEmailAccount[];
   workspaceEmailMessages: WorkspaceEmailMessage[];
   userSessions: UserSession[];
+  softwareProjects: SoftwareProject[];
+  softwareTemplates: SoftwareCustomTemplate[];
 }
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -363,6 +370,8 @@ export class DatabaseManager {
         if (!Array.isArray(parsed.workspaceEmailAccounts)) parsed.workspaceEmailAccounts = [];
         if (!Array.isArray(parsed.workspaceEmailMessages)) parsed.workspaceEmailMessages = [];
         if (!Array.isArray(parsed.userSessions)) parsed.userSessions = [];
+        if (!Array.isArray(parsed.softwareProjects)) parsed.softwareProjects = [];
+        if (!Array.isArray(parsed.softwareTemplates)) parsed.softwareTemplates = [];
 
         // Limpieza automática de artefactos HTML y de IA en copys y briefs existentes
         let dirtyPostsCleaned = 0;
@@ -515,6 +524,8 @@ export class DatabaseManager {
       workspaceEmailAccounts: [],
       workspaceEmailMessages: [],
       userSessions: [],
+      softwareProjects: [],
+      softwareTemplates: [],
     };
     return defaultState;
   }
@@ -1069,40 +1080,51 @@ export class DatabaseManager {
   }
 
   public async findUserByPin(pin: string, tenantSlug?: string, mode: 'personal' | 'cliente' = 'personal'): Promise<{ user: User; tenant: Tenant; role: Role } | null> {
-    let users = this.localState.users.filter((u) => u.pin === pin);
-    if (tenantSlug) {
-      const tenant = this.localState.tenants.find((t) => t.slug === tenantSlug);
-      if (tenant) {
-        users = users.filter((u) => u.tenantId === tenant.id);
-      }
-    }
-    let user = users[0];
-    if ((!user || mode === 'cliente') && this.localState.clients?.length) {
-      const tenant = tenantSlug
-        ? this.localState.tenants.find((t) => t.slug === tenantSlug)
-        : (user ? this.localState.tenants.find((t) => t.id === user.tenantId) : this.localState.tenants[0]);
-      if (tenant) {
-        const clientMatch = this.localState.clients.find(
-          (c) => c.tenantId === tenant.id && (c.documentNumber === pin || c.documentNumber?.replace(/\D/g, '') === pin)
-        );
-        if (clientMatch) {
-          user = {
-            id: `client-user-${clientMatch.id}`,
-            tenantId: tenant.id,
-            roleId: `role-cliente-${tenant.id}`,
-            name: clientMatch.name,
-            jobTitle: 'Cliente / Cuenta Asociada',
-            email: clientMatch.email || `${clientMatch.documentNumber}@cliente.roma`,
-            whatsapp: clientMatch.whatsapp || '',
-            pin: pin,
-            avatarUrl: clientMatch.brands?.[0]?.logoUrl || '',
-            isActive: clientMatch.status === 'active',
-            lastLoginAt: new Date().toISOString(),
-            createdAt: clientMatch.createdAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
+    let user: User | undefined;
+
+    if (mode === 'cliente') {
+      if (this.localState.clients?.length) {
+        const tenant = tenantSlug
+          ? this.localState.tenants.find((t) => t.slug === tenantSlug)
+          : this.localState.tenants[0];
+        if (tenant) {
+          const cleanPin = pin.replace(/\D/g, '');
+          const matchingClients = this.localState.clients.filter(
+            (c) =>
+              c.tenantId === tenant.id &&
+              c.status === 'active' &&
+              (c.documentNumber?.trim() === pin || c.documentNumber?.replace(/\D/g, '') === cleanPin)
+          );
+          const clientMatch =
+            matchingClients.find((c) => c.documentType === 'DNI') || matchingClients[0];
+          if (clientMatch) {
+            user = {
+              id: `client-user-${clientMatch.id}`,
+              tenantId: tenant.id,
+              roleId: `role-cliente-${tenant.id}`,
+              name: clientMatch.name,
+              jobTitle: 'Cliente / Cuenta Asociada',
+              email: clientMatch.email || `${clientMatch.documentNumber}@cliente.roma`,
+              whatsapp: clientMatch.whatsapp || '',
+              pin: pin,
+              avatarUrl: clientMatch.brands?.[0]?.logoUrl || '',
+              isActive: clientMatch.status === 'active',
+              lastLoginAt: new Date().toISOString(),
+              createdAt: clientMatch.createdAt || new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+          }
         }
       }
+    } else {
+      let users = this.localState.users.filter((u) => u.pin === pin && u.isActive !== false);
+      if (tenantSlug) {
+        const tenant = this.localState.tenants.find((t) => t.slug === tenantSlug);
+        if (tenant) {
+          users = users.filter((u) => u.tenantId === tenant.id);
+        }
+      }
+      user = users[0];
     }
     if (!user) return null;
     const tenant = this.localState.tenants.find((t) => t.id === user.tenantId);
@@ -5632,6 +5654,259 @@ export class DatabaseManager {
     this.localState.workspaceEmailMessages.splice(idx, 1);
     this.saveLocalState();
     return true;
+  }
+
+  // ===========================================================================
+  // SUBMÓDULO DE WORKSPACE: DESARROLLO DE SOFTWARE (PROYECTOS, HITOS, QA, GANTT)
+  // ===========================================================================
+
+  public recalculateSoftwareProject(project: SoftwareProject): SoftwareProject {
+    const workItems: SoftwareWorkItem[] = Array.isArray(project.workItems) ? project.workItems : [];
+    const milestones: SoftwareMilestone[] = Array.isArray(project.milestones)
+      ? [...project.milestones]
+          .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
+          .map((m, idx) => {
+            const mItems = workItems.filter((w) => w.milestoneId === m.id);
+            let progress = Number.isFinite(Number(m.progress)) ? Math.max(0, Math.min(100, Math.round(Number(m.progress)))) : 0;
+            const autoCalc = m.autoCalculateProgress !== false;
+            if (autoCalc && mItems.length > 0) {
+              const doneCount = mItems.filter((w) => w.status === 'done').length;
+              progress = Math.round((doneCount / mItems.length) * 100);
+            } else if (m.status === 'approved' && mItems.length === 0) {
+              progress = 100;
+            }
+            const rawDeliverables = Array.isArray(m.deliverables) ? m.deliverables : [];
+            const deliverableItems: SoftwareDeliverableItem[] = Array.isArray(m.deliverableItems)
+              ? m.deliverableItems
+              : rawDeliverables.map((title, dIdx) => ({
+                  id: `del_${m.id}_${dIdx}`,
+                  title,
+                  completed: m.status === 'approved',
+                }));
+            const syncedDeliverables = deliverableItems.map((d) => d.title);
+
+            return {
+              ...m,
+              orderIndex: idx,
+              code: m.code || `H${idx + 1}`,
+              progress,
+              autoCalculateProgress: autoCalc,
+              deliverables: syncedDeliverables,
+              deliverableItems,
+              baselineStartDate: m.baselineStartDate || m.startDate,
+              baselineDueDate: m.baselineDueDate || m.dueDate,
+              dateHistory: Array.isArray(m.dateHistory) ? m.dateHistory : [],
+              dependsOnMilestoneIds: Array.isArray(m.dependsOnMilestoneIds) ? m.dependsOnMilestoneIds : [],
+              comments: Array.isArray(m.comments) ? m.comments : [],
+              attachments: Array.isArray(m.attachments) ? m.attachments : [],
+              isVisibleToClient: m.isVisibleToClient !== false,
+            };
+          })
+      : [];
+
+    let totalProgress = 0;
+    if (milestones.length > 0) {
+      const totalWeight = milestones.reduce((acc, m) => acc + (Number(m.weightPercent) > 0 ? Number(m.weightPercent) : 0), 0);
+      if (totalWeight > 0) {
+        const weightedSum = milestones.reduce(
+          (acc, m) => acc + m.progress * (Number(m.weightPercent) > 0 ? Number(m.weightPercent) : 0),
+          0
+        );
+        totalProgress = Math.round(weightedSum / totalWeight);
+      } else {
+        totalProgress = Math.round(milestones.reduce((acc, m) => acc + m.progress, 0) / milestones.length);
+      }
+    }
+
+    return {
+      ...project,
+      milestones,
+      workItems,
+      sprints: Array.isArray(project.sprints) ? project.sprints : [],
+      wipLimits: project.wipLimits || {},
+      testCases: Array.isArray(project.testCases) ? project.testCases : [],
+      goLiveChecklist: Array.isArray(project.goLiveChecklist) ? project.goLiveChecklist : [],
+      changeRequests: Array.isArray(project.changeRequests) ? project.changeRequests : [],
+      totalProgress: Math.max(0, Math.min(100, totalProgress)),
+    };
+  }
+
+  public async getSoftwareProjects(
+    tenantId: string,
+    filters?: { search?: string; status?: string; projectType?: string; clientId?: string }
+  ): Promise<SoftwareProject[]> {
+    if (!Array.isArray(this.localState.softwareProjects)) {
+      this.localState.softwareProjects = [];
+    }
+    let list = this.localState.softwareProjects
+      .filter((p) => p.tenantId === tenantId)
+      .map((p) => this.recalculateSoftwareProject(p));
+
+    if (filters?.clientId) {
+      list = list.filter((p) => p.clientId === filters.clientId);
+    }
+    if (filters?.status && filters.status !== 'all') {
+      list = list.filter((p) => p.status === filters.status);
+    }
+    if (filters?.projectType && filters.projectType !== 'all') {
+      list = list.filter((p) => p.projectType === filters.projectType);
+    }
+    if (filters?.search) {
+      const q = filters.search.toLowerCase().trim();
+      list = list.filter(
+        (p) =>
+          p.name?.toLowerCase().includes(q) ||
+          p.code?.toLowerCase().includes(q) ||
+          p.clientName?.toLowerCase().includes(q) ||
+          p.brandName?.toLowerCase().includes(q) ||
+          p.techStack?.some((t) => t.toLowerCase().includes(q))
+      );
+    }
+    return list.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }
+
+  public async getSoftwareProjectById(id: string, tenantId?: string): Promise<SoftwareProject | null> {
+    if (!Array.isArray(this.localState.softwareProjects)) return null;
+    const found = this.localState.softwareProjects.find(
+      (p) => p.id === id && (!tenantId || p.tenantId === tenantId)
+    );
+    return found ? this.recalculateSoftwareProject(found) : null;
+  }
+
+  public async getSoftwareProjectByPublicToken(token: string): Promise<SoftwareProject | null> {
+    if (!Array.isArray(this.localState.softwareProjects)) return null;
+    const clean = token.trim();
+    const found = this.localState.softwareProjects.find(
+      (p) => p.publicToken === clean || p.id === clean
+    );
+    return found ? this.recalculateSoftwareProject(found) : null;
+  }
+
+  public async createSoftwareProject(
+    data: Partial<SoftwareProject> & { tenantId: string }
+  ): Promise<SoftwareProject> {
+    if (!Array.isArray(this.localState.softwareProjects)) {
+      this.localState.softwareProjects = [];
+    }
+    const now = new Date().toISOString();
+    const today = now.slice(0, 10);
+    const year = new Date().getFullYear();
+    const tenantCount = this.localState.softwareProjects.filter((p) => p.tenantId === data.tenantId).length;
+    const code = data.code || `SW-${year}-${String(tenantCount + 1).padStart(3, '0')}`;
+
+    const rawProject: SoftwareProject = {
+      id: data.id || `swp_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
+      tenantId: data.tenantId,
+      code,
+      name: data.name?.trim() || 'Nuevo Proyecto de Software',
+      description: data.description || '',
+      projectType: data.projectType || 'custom_saas',
+      status: data.status || 'planning',
+      clientId: data.clientId || null,
+      clientName: data.clientName?.trim() || 'Cliente Interno',
+      brandId: data.brandId || null,
+      brandName: data.brandName?.trim() || '',
+      serviceOrderId: data.serviceOrderId || null,
+      serviceOrderCode: data.serviceOrderCode || '',
+      quoteId: data.quoteId || null,
+      techLeadId: data.techLeadId || '',
+      techLeadName: data.techLeadName || '',
+      assignedUsers: Array.isArray(data.assignedUsers) ? data.assignedUsers : [],
+      techStack: Array.isArray(data.techStack) ? data.techStack : [],
+      environments: data.environments || {},
+      driveFolderId: data.driveFolderId || '',
+      driveFolderName: data.driveFolderName || '',
+      driveFolderLink: data.driveFolderLink || '',
+      startDate: data.startDate || today,
+      targetEndDate: data.targetEndDate || today,
+      totalProgress: 0,
+      milestones: Array.isArray(data.milestones) ? data.milestones : [],
+      workItems: Array.isArray(data.workItems) ? data.workItems : [],
+      publicToken: data.publicToken || generateToken(16),
+      requirePin: Boolean(data.requirePin),
+      publicPin: data.publicPin || '',
+      allowClientComments: data.allowClientComments !== false,
+      allowClientBugReport: data.allowClientBugReport !== false,
+      viewsCount: data.viewsCount || 0,
+      lastViewedAt: data.lastViewedAt || '',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const project = this.recalculateSoftwareProject(rawProject);
+    this.localState.softwareProjects.unshift(project);
+    this.saveLocalState();
+    return project;
+  }
+
+  public async updateSoftwareProject(
+    id: string,
+    tenantId: string,
+    updates: Partial<SoftwareProject>
+  ): Promise<SoftwareProject | null> {
+    if (!Array.isArray(this.localState.softwareProjects)) return null;
+    const idx = this.localState.softwareProjects.findIndex(
+      (p) => p.id === id && p.tenantId === tenantId
+    );
+    if (idx === -1) return null;
+
+    const existing = this.localState.softwareProjects[idx];
+    const merged: SoftwareProject = {
+      ...existing,
+      ...updates,
+      id: existing.id,
+      tenantId: existing.tenantId,
+      publicToken: existing.publicToken,
+      environments: updates.environments
+        ? { ...(existing.environments || {}), ...updates.environments }
+        : existing.environments || {},
+      updatedAt: new Date().toISOString(),
+    };
+
+    const recalculated = this.recalculateSoftwareProject(merged);
+    this.localState.softwareProjects[idx] = recalculated;
+    this.saveLocalState();
+    return recalculated;
+  }
+
+  public async deleteSoftwareProject(id: string, tenantId: string): Promise<boolean> {
+    if (!Array.isArray(this.localState.softwareProjects)) return false;
+    const initial = this.localState.softwareProjects.length;
+    this.localState.softwareProjects = this.localState.softwareProjects.filter(
+      (p) => !(p.id === id && p.tenantId === tenantId)
+    );
+    const deleted = this.localState.softwareProjects.length < initial;
+    if (deleted) this.saveLocalState();
+    return deleted;
+  }
+
+  public async getSoftwareTemplates(tenantId: string): Promise<SoftwareCustomTemplate[]> {
+    if (!Array.isArray(this.localState.softwareTemplates)) {
+      this.localState.softwareTemplates = [];
+    }
+    return this.localState.softwareTemplates
+      .filter((t) => t.tenantId === tenantId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  public async createSoftwareTemplate(template: SoftwareCustomTemplate): Promise<SoftwareCustomTemplate> {
+    if (!Array.isArray(this.localState.softwareTemplates)) {
+      this.localState.softwareTemplates = [];
+    }
+    this.localState.softwareTemplates.unshift(template);
+    this.saveLocalState();
+    return template;
+  }
+
+  public async deleteSoftwareTemplate(id: string, tenantId: string): Promise<boolean> {
+    if (!Array.isArray(this.localState.softwareTemplates)) return false;
+    const initial = this.localState.softwareTemplates.length;
+    this.localState.softwareTemplates = this.localState.softwareTemplates.filter(
+      (t) => !(t.id === id && t.tenantId === tenantId)
+    );
+    const deleted = this.localState.softwareTemplates.length < initial;
+    if (deleted) this.saveLocalState();
+    return deleted;
   }
 
 }

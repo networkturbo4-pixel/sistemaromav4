@@ -2108,10 +2108,16 @@ export const ClientsModule: React.FC = () => {
                         setClientForm({ ...clientForm, documentNumber: e.target.value })
                       }
                       placeholder={clientForm.documentType === 'RUC' ? '20601234567' : '71234567'}
+                      maxLength={clientForm.documentType === 'DNI' ? 8 : undefined}
                       className="w-full bg-transparent font-mono-pin text-xs font-bold outline-none tracking-wider"
                       style={{ color: 'var(--app-text)' }}
                     />
                   </div>
+                  {clientForm.documentType === 'DNI' && (
+                    <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium mt-1">
+                      Este DNI (8 dígitos) será la llave de acceso del cliente a su Portal de Clientes.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
