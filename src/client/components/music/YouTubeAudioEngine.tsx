@@ -25,6 +25,7 @@ export const YouTubeAudioEngine: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<any>(null);
   const isApiLoadedRef = useRef<boolean>(false);
+  const isApiLoadingRef = useRef<boolean>(false);
   const silentAudioRef = useRef<HTMLAudioElement | null>(null);
   const isPlayingRef = useRef<boolean>(isPlaying);
 
@@ -50,18 +51,26 @@ export const YouTubeAudioEngine: React.FC = () => {
     };
   }, []);
 
-  // Load YouTube IFrame API
+  // Load YouTube IFrame API lazily only when a song is selected
   useEffect(() => {
+    if (!currentSong?.videoId) return;
+
     if (window.YT && window.YT.Player) {
       isApiLoadedRef.current = true;
       initPlayer();
       return;
     }
 
-    const tag = document.createElement('script');
-    tag.src = 'https://www.youtube.com/iframe_api';
-    const firstScriptTag = document.getElementsByTagName('script')[0];
-    firstScriptTag?.parentNode?.insertBefore(tag, firstScriptTag);
+    if (isApiLoadingRef.current) return;
+    isApiLoadingRef.current = true;
+
+    const existingScript = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+    if (!existingScript) {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag?.parentNode?.insertBefore(tag, firstScriptTag);
+    }
 
     const prevOnReady = window.onYouTubeIframeAPIReady;
     window.onYouTubeIframeAPIReady = () => {
@@ -69,10 +78,10 @@ export const YouTubeAudioEngine: React.FC = () => {
       isApiLoadedRef.current = true;
       initPlayer();
     };
-  }, []);
+  }, [currentSong?.videoId]);
 
   const initPlayer = () => {
-    if (playerRef.current || !containerRef.current || !window.YT) return;
+    if (playerRef.current || !containerRef.current || !window.YT || !currentSong?.videoId) return;
 
     try {
       playerRef.current = new window.YT.Player('roma-yt-audio-player-iframe', {

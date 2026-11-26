@@ -13,6 +13,7 @@ import {
 import { WorkspacePost } from '../../../../shared/types';
 import { POST_STATUS_MAP } from '../types';
 import { stripHtmlToCleanText } from '../../../utils/textFormat';
+import { UniversalMediaEmbed } from '../../../components/UniversalMediaEmbed';
 
 interface PostPublicPreviewModalProps {
   post: WorkspacePost | null;
@@ -97,11 +98,12 @@ export const PostPublicPreviewModal: React.FC<PostPublicPreviewModalProps> = ({
             <div className="md:col-span-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-3 border border-slate-200 dark:border-slate-700/60 flex flex-col items-center justify-center min-h-[300px]">
               {(post.finalArtMediaUrl || post.referenceMediaUrl || post.mediaUrl) && !mediaError ? (
                 <div className="w-full relative group">
-                  <img
-                    src={post.finalArtMediaUrl || post.referenceMediaUrl || post.mediaUrl}
+                  <UniversalMediaEmbed
+                    url={post.finalArtMediaUrl || post.referenceMediaUrl || post.mediaUrl}
+                    fileName={post.finalArtMediaName || post.referenceMediaName}
                     alt={post.title}
-                    onError={() => setMediaError(true)}
-                    className="w-full max-h-[420px] rounded-xl object-contain mx-auto shadow-sm"
+                    className="w-full max-h-[420px] bg-transparent!"
+                    mediaClassName="w-full max-h-[420px] rounded-xl object-contain mx-auto shadow-sm"
                   />
                   <button
                     type="button"

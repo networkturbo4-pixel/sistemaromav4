@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { WorkspacePost } from '../../../../../shared/types';
 import { stripHtmlToCleanText } from '../../../../utils/textFormat';
+import { UniversalMediaEmbed } from '../../../../components/UniversalMediaEmbed';
 
 interface SocialFeedMockupProps {
   post: Partial<WorkspacePost>;
@@ -126,12 +127,14 @@ export const SocialFeedMockup: React.FC<SocialFeedMockupProps> = ({
             {/* Media Container */}
             <div className="relative bg-slate-100 dark:bg-slate-900 aspect-square flex items-center justify-center overflow-hidden">
               {mediaUrl && !imgError ? (
-                <img
-                  src={mediaUrl}
+                <UniversalMediaEmbed
+                  url={mediaUrl}
+                  fileName={post.finalArtMediaName || post.referenceMediaName}
                   alt={post.title || 'Post Media'}
-                  onError={() => setImgError(true)}
+                  thumbnail
                   onClick={() => onOpenLightbox && onOpenLightbox(mediaUrl)}
-                  className="w-full h-full object-cover cursor-zoom-in hover:scale-[1.02] transition-transform"
+                  className="w-full h-full rounded-none"
+                  mediaClassName="w-full h-full object-cover cursor-zoom-in hover:scale-[1.02] transition-transform"
                 />
               ) : (
                 <div className="text-center p-6 space-y-2 text-slate-400">

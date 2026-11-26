@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { PublicPaymentNoteView } from '../components/PublicPaymentNoteView';
+import { UniversalMediaEmbed } from '../components/UniversalMediaEmbed';
 import { getPlatformIcon } from './workspace/types';
 import {
   ClientBrand,
@@ -1868,10 +1869,13 @@ export const ClientPortal: React.FC = () => {
           >
             <div className="md:col-span-7 bg-slate-950 flex items-center justify-center p-4 max-h-[55vh] md:max-h-[85vh]">
               {previewPost.mediaUrl ? (
-                <img
-                  src={previewPost.mediaUrl}
+                <UniversalMediaEmbed
+                  url={previewPost.mediaUrl}
+                  fileName={previewPost.finalArtMediaName || previewPost.referenceMediaName}
                   alt={previewPost.title}
-                  className="max-w-full max-h-full object-contain rounded-xl"
+                  autoplay
+                  className="w-full max-h-full bg-transparent!"
+                  mediaClassName="max-w-full max-h-full object-contain rounded-xl"
                 />
               ) : (
                 <Layers className="w-12 h-12 text-slate-600" />

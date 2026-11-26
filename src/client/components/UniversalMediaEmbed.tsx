@@ -1,20 +1,47 @@
-import React, { useState } from 'react';
-import { ExternalLink, Play, AlertCircle, FileVideo, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ExternalLink, FileVideo, Image as ImageIcon } from 'lucide-react';
 
 interface UniversalMediaEmbedProps {
   url?: string;
+  fileName?: string;
   className?: string;
+  mediaClassName?: string;
   alt?: string;
   autoplay?: boolean;
+  thumbnail?: boolean;
+  onClick?: () => void;
+}
+
+function getInitialMediaMode(url: string, fileName?: string): 'image' | 'video' | 'unknown' {
+  const trimmed = url.trim();
+  if (trimmed.startsWith('data:image/')) return 'image';
+  if (trimmed.startsWith('data:video/')) return 'video';
+  if (/\.(jpeg|jpg|gif|png|webp|svg|bmp|avif)($|\?)/i.test(trimmed)) return 'image';
+  if (/\.(mp4|webm|mov|ogg|m4v)($|\?)/i.test(trimmed)) return 'video';
+
+  if (fileName) {
+    if (/\.(jpeg|jpg|gif|png|webp|svg|bmp|avif)$/i.test(fileName)) return 'image';
+    if (/\.(mp4|webm|mov|ogg|m4v)$/i.test(fileName)) return 'video';
+  }
+
+  return 'unknown';
 }
 
 export const UniversalMediaEmbed: React.FC<UniversalMediaEmbedProps> = ({
   url,
+  fileName,
   className = '',
+  mediaClassName = '',
   alt = 'Media preview',
-  autoplay = false
+  autoplay = false,
+  thumbnail = false,
+  onClick,
 }) => {
-  const [loadError, setLoadError] = useState(false);
+  const [fallbackStep, setFallbackStep] = useState<'initial' | 'try_video' | 'error'>('initial');
+
+  useEffect(() => {
+    setFallbackStep('initial');
+  }, [url, fileName]);
 
   if (!url) {
     return (
@@ -26,35 +53,41 @@ export const UniversalMediaEmbed: React.FC<UniversalMediaEmbedProps> = ({
   }
 
   const trimmed = url.trim();
+  const initialMode = getInitialMediaMode(trimmed, fileName);
 
-  // 1. Direct Image check (Data URLs, blob, common image extensions)
-  const isDataUrl = trimmed.startsWith('data:image/');
-  const isImageFile = /\.(jpeg|jpg|gif|png|webp|svg)($|\?)/i.test(trimmed);
-  if (isDataUrl || isImageFile) {
+  // 1. Explicit Image check
+  if (initialMode === 'image' && fallbackStep !== 'error') {
     return (
-      <div className={`relative flex items-center justify-center overflow-hidden bg-slate-900/5 dark:bg-slate-950/40 rounded-xl ${className}`}>
+      <div
+        onClick={onClick}
+        className={`relative flex items-center justify-center overflow-hidden bg-slate-900/5 dark:bg-slate-950/40 rounded-xl ${className}`}
+      >
         <img
           src={trimmed}
           alt={alt}
-          onError={() => setLoadError(true)}
-          className="max-w-full max-h-full object-contain rounded-lg transition-transform hover:scale-[1.01]"
+          onError={() => setFallbackStep('error')}
+          className={mediaClassName || 'max-w-full max-h-full object-contain rounded-lg transition-transform hover:scale-[1.01]'}
         />
       </div>
     );
   }
 
-  // 2. Direct Video File (.mp4, .webm, .mov)
-  const isVideoFile = /\.(mp4|webm|mov|ogg)($|\?)/i.test(trimmed) || trimmed.includes('/stream');
-  if (isVideoFile) {
+  // 2. Explicit Video File (.mp4, .webm, .mov, .m4v, .ogg)
+  if (initialMode === 'video' && fallbackStep !== 'error') {
     return (
-      <div className={`relative flex items-center justify-center overflow-hidden bg-black rounded-xl ${className}`}>
+      <div
+        onClick={onClick}
+        className={`relative flex items-center justify-center overflow-hidden bg-black rounded-xl ${className}`}
+      >
         <video
           src={trimmed}
-          controls
+          controls={!thumbnail}
           autoPlay={autoplay}
+          muted={thumbnail}
           playsInline
-          className="max-w-full max-h-full rounded-lg"
-          onError={() => setLoadError(true)}
+          preload="metadata"
+          className={mediaClassName || 'max-w-full max-h-full rounded-lg'}
+          onError={() => setFallbackStep('error')}
         />
       </div>
     );
@@ -144,7 +177,23 @@ export const UniversalMediaEmbed: React.FC<UniversalMediaEmbedProps> = ({
     );
   }
 
-  // 8. Pinterest Embed
+  // 8. Loom Embed
+  const loomMatch = trimmed.match(/loom\.com\/(?:share|embed)\/([a-zA-Z0-9_-]+)/i);
+  if (loomMatch && loomMatch[1]) {
+    return (
+      <div className={`relative overflow-hidden aspect-video bg-black rounded-xl ${className}`}>
+        <iframe
+          src={`https://www.loom.com/embed/${loomMatch[1]}`}
+          title="Loom video"
+          allow="autoplay; fullscreen"
+          allowFullScreen
+          className="w-full h-full border-0 rounded-xl"
+        />
+      </div>
+    );
+  }
+
+  // 9. Pinterest Embed
   if (trimmed.includes('pinterest.com') || trimmed.includes('pin.it')) {
     return (
       <div className={`relative flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl ${className}`}>
@@ -162,15 +211,38 @@ export const UniversalMediaEmbed: React.FC<UniversalMediaEmbedProps> = ({
     );
   }
 
-  // Fallback: If it's a generic URL, try rendering img or fallback card
-  if (!loadError) {
+  // 10. Extensionless / stream URL (e.g. /api/drive/stream/:id): try image first, then video
+  if (fallbackStep === 'initial') {
     return (
-      <div className={`relative flex items-center justify-center overflow-hidden bg-slate-900/5 dark:bg-slate-950/40 rounded-xl ${className}`}>
+      <div
+        onClick={onClick}
+        className={`relative flex items-center justify-center overflow-hidden bg-slate-900/5 dark:bg-slate-950/40 rounded-xl ${className}`}
+      >
         <img
           src={trimmed}
           alt={alt}
-          onError={() => setLoadError(true)}
-          className="max-w-full max-h-full object-contain rounded-lg"
+          onError={() => setFallbackStep('try_video')}
+          className={mediaClassName || 'max-w-full max-h-full object-contain rounded-lg'}
+        />
+      </div>
+    );
+  }
+
+  if (fallbackStep === 'try_video') {
+    return (
+      <div
+        onClick={onClick}
+        className={`relative flex items-center justify-center overflow-hidden bg-black rounded-xl ${className}`}
+      >
+        <video
+          src={trimmed}
+          controls={!thumbnail}
+          autoPlay={autoplay}
+          muted={thumbnail}
+          playsInline
+          preload="metadata"
+          onError={() => setFallbackStep('error')}
+          className={mediaClassName || 'max-w-full max-h-full rounded-lg'}
         />
       </div>
     );

@@ -1496,11 +1496,15 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
           >
             <X className="w-6 h-6" />
           </button>
-          <img
-            src={zoomImageUrl || currentMediaUrl || ''}
-            alt="Zoom"
-            className="max-w-[95vw] max-h-[95vh] object-contain rounded-xl shadow-2xl"
-          />
+          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-5xl max-h-[90vh] flex items-center justify-center cursor-default">
+            <UniversalMediaEmbed
+              url={zoomImageUrl || currentMediaUrl || ''}
+              alt="Zoom"
+              autoplay
+              className="w-full max-h-[90vh] bg-transparent!"
+              mediaClassName="max-w-[95vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
+            />
+          </div>
         </div>
       )}
     </div>

@@ -19,6 +19,7 @@ import {
 import { DriveFolderPickerModal } from '../components/DriveFolderPickerModal';
 import { PaintCanvasModal } from '../components/PaintCanvasModal';
 import { WorkspacePresentationModal } from '../components/WorkspacePresentationModal';
+import { UniversalMediaEmbed } from '../components/UniversalMediaEmbed';
 import {
   POST_STATUS_MAP,
   TASK_STATUS_MAP,
@@ -1563,16 +1564,21 @@ export const WorkspaceModule: React.FC = () => {
           onClick={() => setLightboxPreviewUrl(null)}
           className="fixed inset-0 z-60 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn cursor-zoom-out"
         >
-          <div className="relative max-w-5xl max-h-[90vh]">
-            <img
-              src={lightboxPreviewUrl}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-5xl max-h-[90vh] flex items-center justify-center cursor-default"
+          >
+            <UniversalMediaEmbed
+              url={lightboxPreviewUrl}
               alt="Inspección"
-              className="max-h-[85vh] max-w-full rounded-2xl shadow-2xl object-contain"
+              autoplay
+              className="w-full max-h-[85vh] bg-transparent!"
+              mediaClassName="max-h-[85vh] max-w-full rounded-2xl shadow-2xl object-contain"
             />
             <button
               type="button"
               onClick={() => setLightboxPreviewUrl(null)}
-              className="absolute top-4 right-4 p-2.5 rounded-full bg-slate-900/80 text-white hover:bg-rose-600 transition shadow-lg cursor-pointer"
+              className="absolute top-4 right-4 z-10 p-2.5 rounded-full bg-slate-900/80 text-white hover:bg-rose-600 transition shadow-lg cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>

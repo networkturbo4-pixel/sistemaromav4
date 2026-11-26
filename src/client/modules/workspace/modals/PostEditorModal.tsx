@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../../context/AppContext';
+import { UniversalMediaEmbed } from '../../../components/UniversalMediaEmbed';
 import {
   LayoutGrid,
   Lightbulb,
@@ -1344,11 +1345,13 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
                             <div className="w-full space-y-2">
                               {!refImageError ? (
                                 <div className="relative mx-auto max-w-[200px] max-h-[160px] overflow-hidden rounded-xl border border-amber-300 dark:border-amber-800 shadow-xs">
-                                  <img
-                                    src={editingPost.referenceMediaUrl}
+                                  <UniversalMediaEmbed
+                                    url={editingPost.referenceMediaUrl}
+                                    fileName={editingPost.referenceMediaName}
                                     alt="Referencia"
-                                    onError={() => setRefImageError(true)}
-                                    className="w-full h-full object-cover"
+                                    thumbnail
+                                    className="w-full h-[140px] rounded-xl"
+                                    mediaClassName="w-full h-full object-cover"
                                   />
                                 </div>
                               ) : (
@@ -1611,11 +1614,13 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
                           <div className="w-full space-y-2">
                             {!finalArtImageError ? (
                               <div className="relative mx-auto max-w-[240px] max-h-[180px] overflow-hidden rounded-xl border border-indigo-300 dark:border-indigo-800 shadow-xs">
-                                <img
-                                  src={editingPost.finalArtMediaUrl}
+                                <UniversalMediaEmbed
+                                  url={editingPost.finalArtMediaUrl}
+                                  fileName={editingPost.finalArtMediaName}
                                   alt="Arte Final"
-                                  onError={() => setFinalArtImageError(true)}
-                                  className="w-full h-full object-cover"
+                                  thumbnail
+                                  className="w-full h-[160px] rounded-xl"
+                                  mediaClassName="w-full h-full object-cover"
                                 />
                               </div>
                             ) : (
@@ -2164,11 +2169,14 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
                                     key={attIdx}
                                     className="group relative aspect-square rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shadow-xs"
                                   >
-                                    <img
-                                      src={att.url}
+                                    <UniversalMediaEmbed
+                                      url={att.url}
+                                      fileName={att.name}
                                       alt={att.name}
+                                      thumbnail
                                       onClick={() => onOpenLightbox(att.url)}
-                                      className="w-full h-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform"
+                                      className="w-full h-full rounded-xl cursor-zoom-in"
+                                      mediaClassName="w-full h-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform"
                                     />
                                     <button
                                       type="button"
@@ -2282,17 +2290,20 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
                           previewTarget === 'final'
                             ? editingPost.finalArtMediaUrl
                             : editingPost.referenceMediaUrl;
+                        const mediaNameToShow =
+                          previewTarget === 'final'
+                            ? editingPost.finalArtMediaName
+                            : editingPost.referenceMediaName;
 
                         if (mediaToShow) {
                           return (
-                            <div className="relative max-h-[340px] max-w-full flex items-center justify-center">
-                              <img
-                                src={mediaToShow}
+                            <div className="relative w-full max-h-[340px] flex items-center justify-center">
+                              <UniversalMediaEmbed
+                                url={mediaToShow}
+                                fileName={mediaNameToShow}
                                 alt="Vista Previa"
-                                onError={(e) => {
-                                  (e.target as HTMLElement).style.display = 'none';
-                                }}
-                                className="max-h-[340px] max-w-full object-contain rounded-2xl shadow-xl"
+                                className="w-full max-h-[340px] bg-transparent!"
+                                mediaClassName="max-h-[340px] max-w-full object-contain rounded-2xl shadow-xl"
                               />
                               <button
                                 type="button"
