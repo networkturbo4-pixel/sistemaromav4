@@ -647,7 +647,11 @@ export class GoogleDriveService {
   /**
    * Obtiene respuesta de streaming directo (con soporte HTTP Range 206) para Video, Audio, PDF e Imágenes
    */
-  public async streamFileMedia(fileId: string, rangeHeader?: string): Promise<globalThis.Response> {
+  public async streamFileMedia(
+    fileId: string,
+    rangeHeader?: string,
+    signal?: AbortSignal
+  ): Promise<globalThis.Response> {
     if (!this.isReady()) {
       throw new Error('Google Drive no está configurado en el servidor.');
     }
@@ -664,6 +668,7 @@ export class GoogleDriveService {
     return fetch(url, {
       method: 'GET',
       headers,
+      signal,
     });
   }
 

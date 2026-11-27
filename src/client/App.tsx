@@ -1,34 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { PermissionKey } from '../shared/permissions';
 import { PinLoginScreen } from './components/PinLoginScreen';
 import { AppShell, ActiveModule } from './components/AppShell';
-import { DashboardModule } from './modules/DashboardModule';
-import { ClientsModule } from './modules/ClientsModule';
-import { QuotesModule } from './modules/QuotesModule';
-import { ServicesModule } from './modules/ServicesModule';
-import { PaymentNotesModule } from './modules/PaymentNotesModule';
-import { WorkspaceModule } from './modules/WorkspaceModule';
-import { ServiceOrdersModule } from './modules/ServiceOrdersModule';
-import { DriveModule } from './modules/DriveModule';
-import { SettingsModule, SettingsTab } from './modules/SettingsModule';
-import { AdministrationModule } from './modules/AdministrationModule';
-import { ClientPortal } from './modules/ClientPortal';
+import type { SettingsTab } from './modules/SettingsModule';
 import { DriveUploadProvider } from './context/DriveUploadContext';
-import { PublicQuoteView } from './components/PublicQuoteView';
-import { PublicServicesCatalogView } from './components/PublicServicesCatalogView';
-import { PublicServiceDetailView } from './components/PublicServiceDetailView';
-import { PublicPaymentNoteView } from './components/PublicPaymentNoteView';
-import { PublicServiceOrderView } from './components/PublicServiceOrderView';
-import { PublicWorkspaceMonthView } from './components/PublicWorkspaceMonthView';
-import { PublicBiolinkView } from './components/PublicBiolinkView';
-import { PublicEmployeePaymentsView } from './components/PublicEmployeePaymentsView';
-import { PublicFormView } from './components/PublicFormView';
-import { PublicBrandGuidelineView } from './components/PublicBrandGuidelineView';
-import { PublicSoftwareProjectView } from './components/PublicSoftwareProjectView';
 import { AttendanceGateModal } from './components/AttendanceGateModal';
 import { MusicPlayerProvider } from './context/MusicPlayerContext';
 import { YouTubeAudioEngine } from './components/music/YouTubeAudioEngine';
+
+// Code-splitting por módulo y vistas públicas para carga inicial ultrarrápida
+const DashboardModule = lazy(() => import('./modules/DashboardModule').then((m) => ({ default: m.DashboardModule })));
+const ClientsModule = lazy(() => import('./modules/ClientsModule').then((m) => ({ default: m.ClientsModule })));
+const QuotesModule = lazy(() => import('./modules/QuotesModule').then((m) => ({ default: m.QuotesModule })));
+const ServicesModule = lazy(() => import('./modules/ServicesModule').then((m) => ({ default: m.ServicesModule })));
+const PaymentNotesModule = lazy(() => import('./modules/PaymentNotesModule').then((m) => ({ default: m.PaymentNotesModule })));
+const WorkspaceModule = lazy(() => import('./modules/WorkspaceModule').then((m) => ({ default: m.WorkspaceModule })));
+const ServiceOrdersModule = lazy(() => import('./modules/ServiceOrdersModule').then((m) => ({ default: m.ServiceOrdersModule })));
+const DriveModule = lazy(() => import('./modules/DriveModule').then((m) => ({ default: m.DriveModule })));
+const SettingsModule = lazy(() => import('./modules/SettingsModule').then((m) => ({ default: m.SettingsModule })));
+const AdministrationModule = lazy(() => import('./modules/AdministrationModule').then((m) => ({ default: m.AdministrationModule })));
+const ClientPortal = lazy(() => import('./modules/ClientPortal').then((m) => ({ default: m.ClientPortal })));
+
+const PublicQuoteView = lazy(() => import('./components/PublicQuoteView').then((m) => ({ default: m.PublicQuoteView })));
+const PublicServicesCatalogView = lazy(() => import('./components/PublicServicesCatalogView').then((m) => ({ default: m.PublicServicesCatalogView })));
+const PublicServiceDetailView = lazy(() => import('./components/PublicServiceDetailView').then((m) => ({ default: m.PublicServiceDetailView })));
+const PublicPaymentNoteView = lazy(() => import('./components/PublicPaymentNoteView').then((m) => ({ default: m.PublicPaymentNoteView })));
+const PublicServiceOrderView = lazy(() => import('./components/PublicServiceOrderView').then((m) => ({ default: m.PublicServiceOrderView })));
+const PublicWorkspaceMonthView = lazy(() => import('./components/PublicWorkspaceMonthView').then((m) => ({ default: m.PublicWorkspaceMonthView })));
+const PublicBiolinkView = lazy(() => import('./components/PublicBiolinkView').then((m) => ({ default: m.PublicBiolinkView })));
+const PublicEmployeePaymentsView = lazy(() => import('./components/PublicEmployeePaymentsView').then((m) => ({ default: m.PublicEmployeePaymentsView })));
+const PublicFormView = lazy(() => import('./components/PublicFormView').then((m) => ({ default: m.PublicFormView })));
+const PublicBrandGuidelineView = lazy(() => import('./components/PublicBrandGuidelineView').then((m) => ({ default: m.PublicBrandGuidelineView })));
+const PublicSoftwareProjectView = lazy(() => import('./components/PublicSoftwareProjectView').then((m) => ({ default: m.PublicSoftwareProjectView })));
+
+const RouteFallback: React.FC = () => (
+  <div className="min-h-dvh tenant-bg tenant-text flex flex-col items-center justify-center gap-3">
+    <div className="w-10 h-10 rounded-2xl tenant-btn-primary animate-pulse flex items-center justify-center font-extrabold text-white text-lg shadow-lg">
+      R
+    </div>
+    <p className="text-xs font-semibold tenant-muted">Cargando módulo...</p>
+  </div>
+);
 
 const MainRouter: React.FC = () => {
   const { user, role, isLoading, can, logout, attendanceCheck, setAttendanceCheck } = useApp();
@@ -476,25 +489,35 @@ const MainRouter: React.FC = () => {
           setSettingsSubTab(tab);
         }}
       >
-        {activeModule === 'dashboard' && can('dashboard.view') && (
-          <DashboardModule onNavigate={handleNavigate} />
-        )}
-        {activeModule === 'clients' && can('clients.view') && <ClientsModule />}
-        {activeModule === 'quotes' && can('quotes.view') && <QuotesModule />}
-        {activeModule === 'services' && can('services.view') && (
-          <ServicesModule onNavigate={handleNavigate} />
-        )}
-        {activeModule === 'payments' && can('payments.view') && <PaymentNotesModule />}
-        {activeModule === 'service_orders' && can('service_orders.view') && <ServiceOrdersModule />}
-        {activeModule === 'workspace' && can('workspace.view') && <WorkspaceModule />}
-        {activeModule === 'administration' && can('administration.view') && <AdministrationModule />}
-        {activeModule === 'drive' && can('drive.view') && <DriveModule />}
-        {activeModule === 'settings' && can('settings.view') && (
-          <SettingsModule
-            initialTab={settingsSubTab}
-            onTabChange={(tab) => setSettingsSubTab(tab)}
-          />
-        )}
+        <Suspense
+          fallback={
+            <div className="flex-1 flex items-center justify-center py-24">
+              <div className="w-8 h-8 rounded-xl tenant-btn-primary animate-pulse flex items-center justify-center font-extrabold text-white text-sm shadow-md">
+                R
+              </div>
+            </div>
+          }
+        >
+          {activeModule === 'dashboard' && can('dashboard.view') && (
+            <DashboardModule onNavigate={handleNavigate} />
+          )}
+          {activeModule === 'clients' && can('clients.view') && <ClientsModule />}
+          {activeModule === 'quotes' && can('quotes.view') && <QuotesModule />}
+          {activeModule === 'services' && can('services.view') && (
+            <ServicesModule onNavigate={handleNavigate} />
+          )}
+          {activeModule === 'payments' && can('payments.view') && <PaymentNotesModule />}
+          {activeModule === 'service_orders' && can('service_orders.view') && <ServiceOrdersModule />}
+          {activeModule === 'workspace' && can('workspace.view') && <WorkspaceModule />}
+          {activeModule === 'administration' && can('administration.view') && <AdministrationModule />}
+          {activeModule === 'drive' && can('drive.view') && <DriveModule />}
+          {activeModule === 'settings' && can('settings.view') && (
+            <SettingsModule
+              initialTab={settingsSubTab}
+              onTabChange={(tab) => setSettingsSubTab(tab)}
+            />
+          )}
+        </Suspense>
       </AppShell>
       <YouTubeAudioEngine />
     </>
@@ -506,7 +529,9 @@ export const App: React.FC = () => {
     <AppProvider>
       <DriveUploadProvider>
         <MusicPlayerProvider>
-          <MainRouter />
+          <Suspense fallback={<RouteFallback />}>
+            <MainRouter />
+          </Suspense>
         </MusicPlayerProvider>
       </DriveUploadProvider>
     </AppProvider>

@@ -743,7 +743,7 @@ export const WorkspaceModule: React.FC = () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(editingPost),
         });
-        setPosts((prev) => [res.post, ...prev]);
+        setPosts((prev) => [...prev, res.post]);
         toast('Publicación creada exitosamente', 'success');
       }
       setIsPostModalOpen(false);
@@ -802,6 +802,39 @@ export const WorkspaceModule: React.FC = () => {
       );
     } catch (err: any) {
       toast(err.message || 'Error al actualizar estado de archivo', 'error');
+    }
+  };
+
+  const handleReorderPosts = async (orderedIds: string[]) => {
+    const orderMap = new Map<string, number>();
+    orderedIds.forEach((id, idx) => orderMap.set(id, idx));
+
+    setPosts((prev) => {
+      const updated = prev.map((p) =>
+        orderMap.has(p.id) ? { ...p, orderIndex: orderMap.get(p.id) } : p
+      );
+      return [...updated].sort((a, b) => {
+        const aHas = typeof a.orderIndex === 'number';
+        const bHas = typeof b.orderIndex === 'number';
+        if (aHas && bHas && a.orderIndex !== b.orderIndex) {
+          return (a.orderIndex as number) - (b.orderIndex as number);
+        }
+        if (aHas !== bHas) return aHas ? -1 : 1;
+        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return ta - tb;
+      });
+    });
+
+    try {
+      await apiFetch('/api/workspace/posts/reorder', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedIds }),
+      });
+      toast('Orden de publicaciones actualizado', 'success');
+    } catch (err: any) {
+      toast(err.message || 'No se pudo guardar el nuevo orden', 'error');
     }
   };
 
@@ -1210,6 +1243,7 @@ export const WorkspaceModule: React.FC = () => {
                   onOpenPresentation={() => setIsWorkspacePresentationOpen(true)}
                   onOpenShareMonth={() => setIsShareModalOpen(true)}
                   onOpenDriveUpload={() => setIsDriveFolderUploadModalOpen(true)}
+                  onReorderPosts={handleReorderPosts}
                 />
               ) : (
                 <SocialKanbanView

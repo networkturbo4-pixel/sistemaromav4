@@ -858,6 +858,7 @@ export interface WorkspacePost {
   clientApprovalStatus?: 'idea' | 'in_design' | 'client_approved' | 'published' | 'archived';
   // Comentarios
   comments?: PostComment[];
+  orderIndex?: number;
   createdAt: string;
   updatedAt: string;
 }

@@ -1264,6 +1264,62 @@ app.post('/api/public/workspace/months/:token/posts/:postId/comments', async (re
         res.status(500).json({ error: err.message });
     }
 });
+// Endpoint público ligero para polling de comentarios y estados (sin re-descargar todo el mes)
+app.get('/api/public/workspace/months/:token/comments', async (req, res) => {
+    try {
+        const token = req.params.token;
+        const monthData = await db_1.db.getWorkspaceMonthByPublicToken(token);
+        if (!monthData) {
+            return res.status(404).json({ error: 'Grilla no encontrada' });
+        }
+        res.json({
+            posts: monthData.posts.map((p) => ({
+                id: p.id,
+                status: p.status,
+                comments: p.comments || [],
+            })),
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Endpoint público para que el cliente apruebe o solicite cambios en una publicación con 1 clic
+app.post('/api/public/workspace/months/:token/posts/:postId/status', async (req, res) => {
+    try {
+        const token = req.params.token;
+        const postId = req.params.postId;
+        const { status } = req.body;
+        if (status !== 'approved' && status !== 'review') {
+            return res.status(400).json({ error: 'Estado público inválido. Usa "approved" o "review".' });
+        }
+        const monthData = await db_1.db.getWorkspaceMonthByPublicToken(token);
+        if (!monthData) {
+            return res.status(404).json({ error: 'Grilla no encontrada' });
+        }
+        const post = monthData.posts.find((p) => p.id === postId);
+        if (!post) {
+            return res.status(404).json({ error: 'Publicación no encontrada' });
+        }
+        const tenantId = post.tenantId || monthData.month.tenantId;
+        const updatedPost = await db_1.db.updateWorkspacePost(post.id, tenantId, { status });
+        notificationService_1.notificationService.notify({
+            tenantId,
+            module: 'workspace',
+            type: status === 'approved' ? 'success' : 'warning',
+            title: status === 'approved' ? 'Publicación aprobada por el cliente' : 'Cambios solicitados por el cliente',
+            message: `El cliente marcó "${post.title || 'Publicación'}" como ${status === 'approved' ? 'Aprobado' : 'En Revisión'}.`,
+            entityId: post.id,
+            action: status === 'approved' ? 'approve' : 'review',
+            link: '/?module=workspace',
+            actorUserName: 'Cliente',
+        }).catch(() => { });
+        res.json({ success: true, status, post: updatedPost || { ...post, status } });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 // =============================================================================
 // ENDPOINTS PÚBLICOS DE BIOLINKS (LINKTREE SAAS)
 // =============================================================================
@@ -1710,6 +1766,20 @@ app.post('/api/workspace/posts', auth_1.requireAuth, (0, auth_1.requirePermissio
             actorUserName: req.auth.user.name,
         }).catch(() => { });
         res.status(201).json({ post: created });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+// Reordenar publicaciones manualmente (Drag & Drop en grilla)
+app.put('/api/workspace/posts/reorder', auth_1.requireAuth, (0, auth_1.requirePermission)('workspace.social.manage'), async (req, res) => {
+    try {
+        const { orderedIds } = req.body;
+        if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+            return res.status(400).json({ error: 'Se requiere orderedIds como arreglo no vacío.' });
+        }
+        await db_1.db.reorderWorkspacePosts(req.auth.tenant.id, orderedIds);
+        res.json({ ok: true });
     }
     catch (err) {
         res.status(500).json({ error: err.message });

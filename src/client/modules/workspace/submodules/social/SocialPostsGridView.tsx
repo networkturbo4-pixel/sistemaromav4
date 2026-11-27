@@ -15,6 +15,7 @@ import {
   ListChecks,
   Calendar,
   Flag,
+  GripVertical,
 } from 'lucide-react';
 import { PermissionGate } from '../../../../context/AppContext';
 import {
@@ -31,16 +32,29 @@ import {
   formatMonthDateRange,
 } from '../../types';
 import { formatCopySnippet } from '../../../../utils/textFormat';
+import { extractDriveStreamId, isLikelyVideoMedia } from '../../../../components/UniversalMediaEmbed';
 
 interface PostGridCardImageProps {
   src?: string;
+  fileName?: string;
   alt: string;
   format: string;
   status: string;
 }
 
-const PostGridCardImage: React.FC<PostGridCardImageProps> = ({ src, alt, format, status }) => {
+const PostGridCardImage: React.FC<PostGridCardImageProps> = ({
+  src,
+  fileName,
+  alt,
+  format,
+  status,
+}) => {
   const [hasError, setHasError] = useState(false);
+  const [fallbackToThumb, setFallbackToThumb] = useState(false);
+
+  const driveId = extractDriveStreamId(src);
+  const isVideo = isLikelyVideoMedia(src, fileName, format);
+  const thumbUrl = driveId ? `/api/drive/thumbnail/${encodeURIComponent(driveId)}?size=640` : null;
 
   if (!src || hasError) {
     return (
@@ -58,11 +72,55 @@ const PostGridCardImage: React.FC<PostGridCardImageProps> = ({ src, alt, format,
     );
   }
 
+  // Para videos de Drive o imágenes que fallan porque en realidad son videos de Drive, usar miniatura rápida
+  if ((isVideo || fallbackToThumb) && thumbUrl) {
+    return (
+      <div className="relative w-full h-full bg-neutral-950">
+        <img
+          src={thumbUrl}
+          alt={alt}
+          onError={() => setHasError(true)}
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+        <div className="pointer-events-none absolute bottom-2.5 left-2.5 px-2 py-0.5 rounded-full bg-black/65 backdrop-blur-sm border border-white/15 text-white text-[10px] font-bold flex items-center gap-1">
+          <PlayCircle className="w-3 h-3" />
+          <span>Video</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Para videos directos (.mp4/.webm/.mov) sin Drive ID
+  if (isVideo && !driveId) {
+    return (
+      <div className="relative w-full h-full bg-neutral-950">
+        <video
+          src={src}
+          muted
+          playsInline
+          preload="metadata"
+          onError={() => setHasError(true)}
+          className="w-full h-full object-cover"
+        />
+        <div className="pointer-events-none absolute bottom-2.5 left-2.5 px-2 py-0.5 rounded-full bg-black/65 backdrop-blur-sm border border-white/15 text-white text-[10px] font-bold flex items-center gap-1">
+          <PlayCircle className="w-3 h-3" />
+          <span>Video</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <img
       src={src}
       alt={alt}
-      onError={() => setHasError(true)}
+      onError={() => {
+        if (thumbUrl && !fallbackToThumb) {
+          setFallbackToThumb(true);
+        } else {
+          setHasError(true);
+        }
+      }}
       className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
     />
   );
@@ -92,6 +150,7 @@ interface SocialPostsGridViewProps {
   onOpenPresentation: () => void;
   onOpenShareMonth: () => void;
   onOpenDriveUpload: () => void;
+  onReorderPosts?: (orderedIds: string[]) => void;
 }
 
 export const SocialPostsGridView: React.FC<SocialPostsGridViewProps> = ({
@@ -118,7 +177,32 @@ export const SocialPostsGridView: React.FC<SocialPostsGridViewProps> = ({
   onOpenPresentation,
   onOpenShareMonth,
   onOpenDriveUpload,
+  onReorderPosts,
 }) => {
+  const [draggedPostId, setDraggedPostId] = useState<string | null>(null);
+  const [dragOverPostId, setDragOverPostId] = useState<string | null>(null);
+
+  const handleDropOnCard = (targetId: string) => {
+    if (!draggedPostId || draggedPostId === targetId || !onReorderPosts) {
+      setDraggedPostId(null);
+      setDragOverPostId(null);
+      return;
+    }
+    const ids = posts.map((p) => p.id);
+    const fromIdx = ids.indexOf(draggedPostId);
+    const toIdx = ids.indexOf(targetId);
+    if (fromIdx === -1 || toIdx === -1) {
+      setDraggedPostId(null);
+      setDragOverPostId(null);
+      return;
+    }
+    const nextIds = [...ids];
+    const [moved] = nextIds.splice(fromIdx, 1);
+    nextIds.splice(toIdx, 0, moved);
+    setDraggedPostId(null);
+    setDragOverPostId(null);
+    onReorderPosts(nextIds);
+  };
   return (
     <div className="space-y-6">
       {/* Cabecera del Mes con Breadcrumb de retorno */}
@@ -302,6 +386,9 @@ export const SocialPostsGridView: React.FC<SocialPostsGridViewProps> = ({
             const postNum = String(idx + 1).padStart(2, '0');
             const displayImg =
               post.finalArtMediaUrl || post.mediaUrl || post.referenceMediaUrl;
+            const displayMediaName = post.finalArtMediaUrl
+              ? post.finalArtMediaName
+              : post.referenceMediaName;
             const qaCount = post.qaChecklist
               ? [
                   post.qaChecklist.spelling,
@@ -316,19 +403,57 @@ export const SocialPostsGridView: React.FC<SocialPostsGridViewProps> = ({
               post.deliveryDate || post.scheduledDate
             );
 
+            const isDragging = draggedPostId === post.id;
+            const isDragOver = dragOverPostId === post.id && draggedPostId !== post.id;
+
             return (
               <div
                 key={post.id}
+                draggable={Boolean(onReorderPosts)}
+                onDragStart={(e) => {
+                  if (!onReorderPosts) return;
+                  setDraggedPostId(post.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', post.id);
+                }}
+                onDragOver={(e) => {
+                  if (!onReorderPosts || !draggedPostId) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (dragOverPostId !== post.id) setDragOverPostId(post.id);
+                }}
+                onDragLeave={() => {
+                  if (dragOverPostId === post.id) setDragOverPostId(null);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  handleDropOnCard(post.id);
+                }}
+                onDragEnd={() => {
+                  setDraggedPostId(null);
+                  setDragOverPostId(null);
+                }}
                 onClick={() => onOpenEditPost(post)}
-                className={`rounded-[28px] border p-4 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between ${theme.outerBg} ${theme.outerBorder} group cursor-pointer`}
+                className={`rounded-3xl border bg-white dark:bg-slate-900 p-4 shadow-xs hover:shadow-md transition-[transform,box-shadow,border-color,opacity] duration-200 flex flex-col justify-between group cursor-pointer ${
+                  isDragOver
+                    ? 'border-indigo-500 ring-2 ring-indigo-500/30 scale-[1.01]'
+                    : 'border-slate-200/85 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                } ${isDragging ? 'opacity-50 scale-[0.98]' : ''}`}
               >
-                {/* 1. Cabecera de la Tarjeta: Post 01 | [✓ APROBADO] y Botones Circulares */}
+                {/* 1. Cabecera limpia: Handle + Post 01 | Estado único + Acciones */}
                 <div>
-                  <div className="flex items-center justify-between gap-2 pb-1.5">
-                    <div className="flex items-center gap-2 min-w-0 shrink-0">
-                      <span
-                        className={`font-black text-sm md:text-base tracking-tight whitespace-nowrap shrink-0 ${theme.postNumberColor}`}
-                      >
+                  <div className="flex items-center justify-between gap-2 pb-1">
+                    <div className="flex items-center gap-1.5 min-w-0 shrink-0">
+                      {onReorderPosts && (
+                        <span
+                          title="Arrastra para reordenar"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-slate-300 dark:text-slate-600 group-hover:text-slate-400 dark:group-hover:text-slate-400 cursor-grab active:cursor-grabbing transition-colors -ml-1"
+                        >
+                          <GripVertical className="w-3.5 h-3.5" />
+                        </span>
+                      )}
+                      <span className="font-semibold text-sm tracking-tight whitespace-nowrap shrink-0 text-slate-900 dark:text-white tabular-nums">
                         Post {postNum}
                       </span>
                       <button
@@ -338,10 +463,10 @@ export const SocialPostsGridView: React.FC<SocialPostsGridViewProps> = ({
                           onQuickChangePostStatus(post, st.next);
                         }}
                         title={`Cambiar estado: actual ${st.label}, clic para avanzar a ${POST_STATUS_MAP[st.next].label}`}
-                        className={`px-2.5 py-0.5 rounded-full font-black text-[10px] flex items-center gap-1 border whitespace-nowrap shrink-0 transition hover:scale-105 cursor-pointer shadow-2xs ${theme.headerBadgeBg} ${theme.headerBadgeText} ${theme.headerBadgeBorder}`}
+                        className={`px-2 py-0.5 rounded-full font-semibold text-[10px] flex items-center gap-1 border whitespace-nowrap shrink-0 transition-transform duration-150 hover:scale-[1.03] active:scale-95 cursor-pointer ${theme.headerBadgeBg} ${theme.headerBadgeText} ${theme.headerBadgeBorder}`}
                       >
-                        <Check className="w-3 h-3 stroke-[3]" />
-                        <span>{theme.label}</span>
+                        <span className={`w-1.5 h-1.5 rounded-full ${theme.imageOverlayBg}`} />
+                        <span>{theme.imageLabel}</span>
                       </button>
                     </div>
 
@@ -411,27 +536,20 @@ export const SocialPostsGridView: React.FC<SocialPostsGridViewProps> = ({
                     </div>
                   </div>
 
-                  {/* 2. Área de Imagen / Multimedia */}
-                  <div className="relative w-full h-44 rounded-2xl overflow-hidden bg-slate-900 border border-slate-200/60 dark:border-slate-800 shadow-xs my-3 flex items-center justify-center">
+                  {/* 2. Área de Imagen / Multimedia limpia (sin badge duplicado encima del arte) */}
+                  <div className="relative w-full h-44 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-950 border border-slate-200/70 dark:border-slate-800 my-3 flex items-center justify-center">
                     <PostGridCardImage
                       src={displayImg}
+                      fileName={displayMediaName}
                       alt={post.title}
                       format={post.format}
                       status={post.status}
                     />
-
-                    {/* Badge sobre la imagen en la esquina superior derecha */}
-                    <div
-                      className={`absolute top-2.5 right-2.5 px-3 py-1 rounded-full text-white font-extrabold text-[10px] flex items-center gap-1 shadow-md ${theme.imageOverlayBg}`}
-                    >
-                      <Check className="w-3 h-3 stroke-[3]" />
-                      <span>{theme.imageLabel}</span>
-                    </div>
                   </div>
                 </div>
 
-                {/* 3. Tarjeta Interior Blanca con Datos, Chips y Copy */}
-                <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-xs space-y-2.5 border border-slate-100 dark:border-slate-800/80">
+                {/* 3. Contenido inferior limpio sin doble tarjeta */}
+                <div className="pt-1 space-y-2.5">
                   {/* Fila de Chips */}
                   <div className="flex flex-wrap items-center gap-1.5">
                     {/* Chip Pilar */}

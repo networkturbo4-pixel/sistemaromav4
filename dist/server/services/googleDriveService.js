@@ -566,7 +566,7 @@ class GoogleDriveService {
     /**
      * Obtiene respuesta de streaming directo (con soporte HTTP Range 206) para Video, Audio, PDF e Imágenes
      */
-    async streamFileMedia(fileId, rangeHeader) {
+    async streamFileMedia(fileId, rangeHeader, signal) {
         if (!this.isReady()) {
             throw new Error('Google Drive no está configurado en el servidor.');
         }
@@ -581,6 +581,7 @@ class GoogleDriveService {
         return fetch(url, {
             method: 'GET',
             headers,
+            signal,
         });
     }
     /**

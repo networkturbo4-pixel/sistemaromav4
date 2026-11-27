@@ -1,15 +1,50 @@
 import React, { useState, useEffect } from 'react';
-import { ExternalLink, FileVideo, Image as ImageIcon } from 'lucide-react';
+import { ExternalLink, FileVideo, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { SystemVideoPlayer } from './SystemVideoPlayer';
 
 interface UniversalMediaEmbedProps {
   url?: string;
   fileName?: string;
+  formatHint?: string;
+  maxHeightPx?: number;
   className?: string;
   mediaClassName?: string;
   alt?: string;
   autoplay?: boolean;
   thumbnail?: boolean;
+  seekToSeconds?: { time: number; nonce: number } | null;
+  onTimestampComment?: (seconds: number, formatted: string) => void;
   onClick?: () => void;
+}
+
+interface DriveMediaMeta {
+  id: string;
+  name?: string;
+  mimeType?: string;
+  size?: number;
+  width?: number | null;
+  height?: number | null;
+  durationMillis?: number | null;
+  thumbnailUrl?: string;
+}
+
+const driveMetaCache = new Map<string, DriveMediaMeta | null>();
+
+export function extractDriveStreamId(url?: string): string | null {
+  if (!url) return null;
+  const match = url.trim().match(/\/api\/drive\/(?:stream\/|files\/)([^/?#]+)/i);
+  return match && match[1] ? decodeURIComponent(match[1]) : null;
+}
+
+export function isLikelyVideoMedia(url?: string, fileName?: string, formatHint?: string): boolean {
+  const trimmed = (url || '').trim();
+  if (trimmed.startsWith('data:video/')) return true;
+  if (/\.(mp4|webm|mov|ogg|m4v)($|\?)/i.test(trimmed)) return true;
+  if (fileName && /\.(mp4|webm|mov|ogg|m4v)$/i.test(fileName)) return true;
+  if (formatHint && /^(reel|video|short|story)$/i.test(formatHint) && extractDriveStreamId(trimmed)) {
+    return true;
+  }
+  return false;
 }
 
 function getInitialMediaMode(url: string, fileName?: string): 'image' | 'video' | 'unknown' {
@@ -30,20 +65,67 @@ function getInitialMediaMode(url: string, fileName?: string): 'image' | 'video' 
 export const UniversalMediaEmbed: React.FC<UniversalMediaEmbedProps> = ({
   url,
   fileName,
+  formatHint,
+  maxHeightPx = 540,
   className = '',
   mediaClassName = '',
   alt = 'Media preview',
   autoplay = false,
   thumbnail = false,
+  seekToSeconds = null,
+  onTimestampComment,
   onClick,
 }) => {
+  const trimmed = (url || '').trim();
+  const driveId = extractDriveStreamId(trimmed);
+
   const [fallbackStep, setFallbackStep] = useState<'initial' | 'try_video' | 'error'>('initial');
+  const [driveMeta, setDriveMeta] = useState<DriveMediaMeta | null>(() =>
+    driveId && driveMetaCache.has(driveId) ? driveMetaCache.get(driveId) || null : null
+  );
+  const [metaLoading, setMetaLoading] = useState<boolean>(() =>
+    Boolean(driveId && !driveMetaCache.has(driveId))
+  );
 
   useEffect(() => {
     setFallbackStep('initial');
-  }, [url, fileName]);
+    if (!driveId) {
+      setDriveMeta(null);
+      setMetaLoading(false);
+      return;
+    }
 
-  if (!url) {
+    if (driveMetaCache.has(driveId)) {
+      setDriveMeta(driveMetaCache.get(driveId) || null);
+      setMetaLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setMetaLoading(true);
+    fetch(`/api/drive/meta/${encodeURIComponent(driveId)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((meta: DriveMediaMeta | null) => {
+        driveMetaCache.set(driveId, meta);
+        if (!cancelled) {
+          setDriveMeta(meta);
+          setMetaLoading(false);
+        }
+      })
+      .catch(() => {
+        driveMetaCache.set(driveId, null);
+        if (!cancelled) {
+          setDriveMeta(null);
+          setMetaLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [trimmed, fileName, driveId]);
+
+  if (!trimmed) {
     return (
       <div className={`flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800/60 rounded-xl text-slate-400 p-8 ${className}`}>
         <ImageIcon className="w-12 h-12 stroke-1 mb-2 opacity-50" />
@@ -52,41 +134,79 @@ export const UniversalMediaEmbed: React.FC<UniversalMediaEmbedProps> = ({
     );
   }
 
-  const trimmed = url.trim();
-  const initialMode = getInitialMediaMode(trimmed, fileName);
+  const effectiveFileName = fileName || driveMeta?.name;
+  let resolvedMode = getInitialMediaMode(trimmed, effectiveFileName);
+  if (driveMeta?.mimeType) {
+    if (driveMeta.mimeType.startsWith('video/')) resolvedMode = 'video';
+    else if (driveMeta.mimeType.startsWith('image/')) resolvedMode = 'image';
+  }
+
+  // Mientras se consulta /api/drive/meta/:id (<2ms) para una URL sin extensión,
+  // evitar montar <img> sobre un video de 50MB.
+  if (driveId && metaLoading && resolvedMode === 'unknown') {
+    const isVertical = formatHint === 'reel' || formatHint === 'story';
+    return (
+      <div
+        style={{
+          aspectRatio: isVertical ? '9 / 16' : '16 / 9',
+          maxHeight: `${maxHeightPx}px`,
+        }}
+        className={`relative flex items-center justify-center overflow-hidden bg-slate-100 dark:bg-slate-900/70 rounded-2xl mx-auto ${
+          isVertical ? 'h-[420px] max-w-full' : 'w-full'
+        } ${className}`}
+      >
+        <Loader2 className="w-6 h-6 text-slate-400 animate-spin" />
+      </div>
+    );
+  }
 
   // 1. Explicit Image check
-  if (initialMode === 'image' && fallbackStep !== 'error') {
+  if (resolvedMode === 'image' && fallbackStep !== 'error') {
     return (
       <div
         onClick={onClick}
-        className={`relative flex items-center justify-center overflow-hidden bg-slate-900/5 dark:bg-slate-950/40 rounded-xl ${className}`}
+        className={`relative flex items-center justify-center overflow-hidden bg-slate-900/5 dark:bg-slate-950/40 rounded-xl ${
+          onClick ? 'cursor-zoom-in' : ''
+        } ${className}`}
       >
         <img
           src={trimmed}
           alt={alt}
           onError={() => setFallbackStep('error')}
-          className={mediaClassName || 'max-w-full max-h-full object-contain rounded-lg transition-transform hover:scale-[1.01]'}
+          style={{ maxHeight: `${maxHeightPx}px` }}
+          className={
+            mediaClassName ||
+            'max-w-full w-auto h-auto object-contain rounded-lg transition-transform duration-200 hover:scale-[1.01]'
+          }
         />
       </div>
     );
   }
 
-  // 2. Explicit Video File (.mp4, .webm, .mov, .m4v, .ogg)
-  if (initialMode === 'video' && fallbackStep !== 'error') {
+  // 2. Video (directo o streaming de Drive) -> Reproductor propio del sistema
+  if (resolvedMode === 'video' && fallbackStep !== 'error') {
+    const posterUrl = driveId
+      ? driveMeta?.thumbnailUrl || `/api/drive/thumbnail/${encodeURIComponent(driveId)}?size=960`
+      : undefined;
+    const initialDurationSec = driveMeta?.durationMillis
+      ? driveMeta.durationMillis / 1000
+      : null;
+
     return (
-      <div
-        onClick={onClick}
-        className={`relative flex items-center justify-center overflow-hidden bg-black rounded-xl ${className}`}
-      >
-        <video
+      <div className="relative flex items-center justify-center w-full">
+        <SystemVideoPlayer
           src={trimmed}
-          controls={!thumbnail}
+          poster={posterUrl}
+          initialWidth={driveMeta?.width || null}
+          initialHeight={driveMeta?.height || null}
+          initialDuration={initialDurationSec}
+          formatHint={formatHint}
           autoPlay={autoplay}
           muted={thumbnail}
-          playsInline
-          preload="metadata"
-          className={mediaClassName || 'max-w-full max-h-full rounded-lg'}
+          compact={thumbnail}
+          maxHeightPx={maxHeightPx}
+          seekToSeconds={seekToSeconds}
+          onTimestampComment={onTimestampComment}
           onError={() => setFallbackStep('error')}
         />
       </div>
@@ -211,18 +331,21 @@ export const UniversalMediaEmbed: React.FC<UniversalMediaEmbedProps> = ({
     );
   }
 
-  // 10. Extensionless / stream URL (e.g. /api/drive/stream/:id): try image first, then video
+  // 10. Extensionless external URL fallback: try image first, then SystemVideoPlayer
   if (fallbackStep === 'initial') {
     return (
       <div
         onClick={onClick}
-        className={`relative flex items-center justify-center overflow-hidden bg-slate-900/5 dark:bg-slate-950/40 rounded-xl ${className}`}
+        className={`relative flex items-center justify-center overflow-hidden bg-slate-900/5 dark:bg-slate-950/40 rounded-xl ${
+          onClick ? 'cursor-zoom-in' : ''
+        } ${className}`}
       >
         <img
           src={trimmed}
           alt={alt}
           onError={() => setFallbackStep('try_video')}
-          className={mediaClassName || 'max-w-full max-h-full object-contain rounded-lg'}
+          style={{ maxHeight: `${maxHeightPx}px` }}
+          className={mediaClassName || 'max-w-full w-auto h-auto object-contain rounded-lg'}
         />
       </div>
     );
@@ -230,19 +353,17 @@ export const UniversalMediaEmbed: React.FC<UniversalMediaEmbedProps> = ({
 
   if (fallbackStep === 'try_video') {
     return (
-      <div
-        onClick={onClick}
-        className={`relative flex items-center justify-center overflow-hidden bg-black rounded-xl ${className}`}
-      >
-        <video
+      <div className="relative flex items-center justify-center w-full">
+        <SystemVideoPlayer
           src={trimmed}
-          controls={!thumbnail}
+          formatHint={formatHint}
           autoPlay={autoplay}
           muted={thumbnail}
-          playsInline
-          preload="metadata"
+          compact={thumbnail}
+          maxHeightPx={maxHeightPx}
+          seekToSeconds={seekToSeconds}
+          onTimestampComment={onTimestampComment}
           onError={() => setFallbackStep('error')}
-          className={mediaClassName || 'max-w-full max-h-full rounded-lg'}
         />
       </div>
     );

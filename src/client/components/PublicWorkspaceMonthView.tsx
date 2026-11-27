@@ -20,8 +20,11 @@ import {
   Search,
   Bell,
   BellRing,
+  CheckCircle2,
+  MessageSquareWarning,
+  Clock,
 } from 'lucide-react';
-import { UniversalMediaEmbed } from './UniversalMediaEmbed';
+import { UniversalMediaEmbed, extractDriveStreamId, isLikelyVideoMedia } from './UniversalMediaEmbed';
 
 interface PublicWorkspaceMonthViewProps {
   token: string;
@@ -37,10 +40,13 @@ interface PublicPost {
   designerBrief?: string;
   notes?: string;
   status: string;
+  format?: string;
   pillar?: string;
   scheduledDate?: string;
   finalArtMediaUrl?: string;
+  finalArtMediaName?: string;
   referenceMediaUrl?: string;
+  referenceMediaName?: string;
   comments?: Array<{
     id: string;
     author: string;
@@ -169,6 +175,11 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
   const [commentAttachedImg, setCommentAttachedImg] = useState<string | null>(null);
   const [commentSuccessMsg, setCommentSuccessMsg] = useState(false);
   const commentFileInputRef = useRef<HTMLInputElement | null>(null);
+  const commentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Aprobación rápida en 1 clic y salto por marca de tiempo en video
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [seekToSeconds, setSeekToSeconds] = useState<{ time: number; nonce: number } | null>(null);
 
   // Notificaciones en tiempo real
   const [liveToast, setLiveToast] = useState<{ title: string; message: string } | null>(null);
@@ -232,57 +243,81 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
     fetchMonth();
   }, [token]);
 
-  // Sincronización de comentarios en TIEMPO REAL (Polling cada 3.5 segundos)
+  // Sincronización ligera de comentarios y estados (solo endpoint /comments cada 5s, sin re-renderizar multimedia)
   useEffect(() => {
     if (!isUnlocked || !data) return;
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/public/workspace/months/${encodeURIComponent(token)}`);
+        const res = await fetch(`/api/public/workspace/months/${encodeURIComponent(token)}/comments`);
         if (!res.ok) return;
-        const fresh: PublicMonthData = await res.json();
+        const fresh: { posts?: Array<{ id: string; status: string; comments: PublicPost['comments'] }> } =
+          await res.json();
+        if (!Array.isArray(fresh.posts)) return;
 
-        // Detectar nuevos comentarios que no hayamos visto
         let hasNewComments = false;
+        let hasStatusChange = false;
         let latestNewComment: { author: string; text: string; postTitle?: string } | null = null;
 
-        fresh.posts?.forEach((freshPost) => {
-          freshPost.comments?.forEach((c) => {
+        const freshById = new Map(fresh.posts.map((p) => [p.id, p]));
+
+        data.posts.forEach((existingPost) => {
+          const fp = freshById.get(existingPost.id);
+          if (!fp) return;
+          if (fp.status && fp.status !== existingPost.status) {
+            hasStatusChange = true;
+          }
+          (fp.comments || []).forEach((c) => {
             if (!knownCommentIdsRef.current.has(c.id)) {
               knownCommentIdsRef.current.add(c.id);
               hasNewComments = true;
               latestNewComment = {
                 author: c.author,
                 text: c.text,
-                postTitle: freshPost.title || freshPost.code,
+                postTitle: existingPost.title || existingPost.code,
               };
             }
           });
         });
 
-        if (hasNewComments && initialLoadDoneRef.current) {
-          setData(fresh);
-          playChimeSound();
+        if ((hasNewComments || hasStatusChange) && initialLoadDoneRef.current) {
+          setData((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              posts: prev.posts.map((p) => {
+                const fp = freshById.get(p.id);
+                if (!fp) return p;
+                return {
+                  ...p,
+                  status: fp.status || p.status,
+                  comments: fp.comments || p.comments,
+                };
+              }),
+            };
+          });
 
-          if (latestNewComment) {
-            const commentObj = latestNewComment as { author: string; text: string; postTitle?: string };
-            const cleanPreview = commentObj.text.replace(/\n?\[Imagen Adjunta\]:\s*\S+/, '').trim() || 'Adjuntó una imagen';
-            const toastTitle = `💬 Nuevo comentario de ${commentObj.author}`;
-            const toastBody = `En ${commentObj.postTitle || 'la publicación'}: "${cleanPreview.slice(0, 70)}${cleanPreview.length > 70 ? '...' : ''}"`;
+          if (hasNewComments) {
+            playChimeSound();
+            if (latestNewComment) {
+              const commentObj = latestNewComment as { author: string; text: string; postTitle?: string };
+              const cleanPreview =
+                commentObj.text.replace(/\n?\[Imagen Adjunta\]:\s*\S+/, '').trim() || 'Adjuntó una imagen';
+              const toastTitle = `Nuevo comentario de ${commentObj.author}`;
+              const toastBody = `En ${commentObj.postTitle || 'la publicación'}: "${cleanPreview.slice(0, 70)}${
+                cleanPreview.length > 70 ? '...' : ''
+              }"`;
 
-            // Mostrar toast visual en pantalla
-            setLiveToast({ title: toastTitle, message: toastBody });
-            setTimeout(() => setLiveToast(null), 5000);
+              setLiveToast({ title: toastTitle, message: toastBody });
+              setTimeout(() => setLiveToast(null), 5000);
 
-            // Mostrar notificación nativa del navegador
-            if ('Notification' in window && Notification.permission === 'granted') {
-              try {
-                new Notification(toastTitle, {
-                  body: toastBody,
-                  icon: data.tenant?.logoUrl || '/favicon.ico',
-                });
-              } catch {
-                // Notificación bloqueada
+              if ('Notification' in window && Notification.permission === 'granted') {
+                try {
+                  new Notification(toastTitle, {
+                    body: toastBody,
+                    icon: data.tenant?.logoUrl || '/favicon.ico',
+                  });
+                } catch {}
               }
             }
           }
@@ -290,7 +325,7 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
       } catch {
         // Error silencioso en background polling
       }
-    }, 3500);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [token, isUnlocked, data]);
@@ -334,6 +369,15 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
     activeMediaTab === 'final'
       ? currentPost?.finalArtMediaUrl || currentPost?.referenceMediaUrl
       : currentPost?.referenceMediaUrl || currentPost?.finalArtMediaUrl;
+
+  const currentMediaName =
+    activeMediaTab === 'final'
+      ? currentPost?.finalArtMediaUrl
+        ? currentPost?.finalArtMediaName
+        : currentPost?.referenceMediaName
+      : currentPost?.referenceMediaUrl
+      ? currentPost?.referenceMediaName
+      : currentPost?.finalArtMediaName;
 
   const comments = currentPost?.comments || [];
 
@@ -441,6 +485,99 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
         }
       }
     }
+  };
+
+  // Aprobar o solicitar cambios en 1 clic desde la vista pública
+  const handlePublicStatusChange = async (nextStatus: 'approved' | 'review') => {
+    if (!currentPost || isUpdatingStatus) return;
+    try {
+      setIsUpdatingStatus(true);
+      const res = await fetch(
+        `/api/public/workspace/months/${encodeURIComponent(token)}/posts/${currentPost.id}/status`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: nextStatus }),
+        }
+      );
+      if (res.ok) {
+        setData((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            posts: prev.posts.map((p) => (p.id === currentPost.id ? { ...p, status: nextStatus } : p)),
+          };
+        });
+        setLiveToast({
+          title: nextStatus === 'approved' ? 'Pieza aprobada' : 'Cambios solicitados',
+          message:
+            nextStatus === 'approved'
+              ? 'Tu aprobación fue registrada y notificada a la agencia.'
+              : 'Escribe los ajustes en comentarios para que el equipo los aplique.',
+        });
+        setTimeout(() => setLiveToast(null), 3500);
+        if (nextStatus === 'review') {
+          setMobileTab('comments');
+          setTimeout(() => commentTextareaRef.current?.focus(), 120);
+        }
+      }
+    } catch {
+      // Silencioso
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  // Insertar marca de tiempo desde el reproductor de video en el cajón de comentarios
+  const handleTimestampComment = useCallback((_seconds: number, formatted: string) => {
+    setCommentText((prev) => {
+      const prefix = `[${formatted}] `;
+      if (prev.startsWith(prefix)) return prev;
+      return prev ? `${prev.trimEnd()}\n${prefix}` : prefix;
+    });
+    setMobileTab('comments');
+    setTimeout(() => commentTextareaRef.current?.focus(), 80);
+  }, []);
+
+  // Convertir marcas de tiempo [MM:SS] o [H:MM:SS] en chips clickeables para saltar en el video
+  const handleSeekFromTimestamp = useCallback((ts: string) => {
+    const parts = ts.split(':').map((n) => parseInt(n, 10));
+    if (parts.some((n) => Number.isNaN(n))) return;
+    let totalSecs = 0;
+    if (parts.length === 2) totalSecs = parts[0] * 60 + parts[1];
+    else if (parts.length === 3) totalSecs = parts[0] * 3600 + parts[1] * 60 + parts[2];
+    setMobileTab('media');
+    setSeekToSeconds({ time: totalSecs, nonce: Date.now() });
+  }, []);
+
+  const renderCommentBody = (text: string) => {
+    const regex = /\[(\d{1,2}:\d{2}(?::\d{2})?)\]/g;
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+      const ts = match[1];
+      parts.push(
+        <button
+          key={`${match.index}-${ts}`}
+          type="button"
+          onClick={() => handleSeekFromTimestamp(ts)}
+          title={`Ir al minuto ${ts} del video`}
+          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 mx-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono text-[10px] font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/70 transition cursor-pointer align-baseline"
+        >
+          <Clock className="w-2.5 h-2.5" />
+          <span>{ts}</span>
+        </button>
+      );
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+    return parts;
   };
 
   // Helper para renderizar comentarios con imágenes adjuntas
@@ -625,8 +762,41 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
               </span>
             </div>
 
-            {/* Acciones Header: Notificaciones, Modo Claro/Oscuro y Buscador Rápido Off-Canvas */}
+            {/* Acciones Header: Aprobación 1 clic, Notificaciones, Modo Claro/Oscuro y Buscador Rápido */}
             <div className="flex items-center gap-2">
+              {currentPost && (
+                <div className="flex items-center gap-1.5 mr-1">
+                  <button
+                    type="button"
+                    disabled={isUpdatingStatus}
+                    onClick={() => handlePublicStatusChange('approved')}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-[transform,background-color] duration-150 active:scale-95 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
+                      currentPost.status === 'approved' || currentPost.status === 'client_approved'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
+                    }`}
+                    title="Aprobar esta publicación con 1 clic"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>
+                      {currentPost.status === 'approved' || currentPost.status === 'client_approved'
+                        ? 'Aprobado'
+                        : 'Aprobar pieza'}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isUpdatingStatus}
+                    onClick={() => handlePublicStatusChange('review')}
+                    className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/70 hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-[transform,background-color] duration-150 active:scale-95 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    title="Solicitar ajustes y escribir comentario"
+                  >
+                    <MessageSquareWarning className="w-3.5 h-3.5" />
+                    <span className="hidden xl:inline">Pedir cambios</span>
+                  </button>
+                </div>
+              )}
+
               {!notificationsGranted && (
                 <button
                   type="button"
@@ -759,20 +929,23 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
                   </button>
                 </div>
 
-                {/* Visor de Arte/Imagen con altura generosa */}
-                <div
-                  onClick={() => {
-                    if (currentMediaUrl) {
-                      setZoomImageUrl(currentMediaUrl);
-                      setIsZoomOpen(true);
-                    }
-                  }}
-                  className="flex-1 flex items-center justify-center min-h-[440px] xl:min-h-[540px] bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 p-2 sm:p-4 overflow-hidden cursor-zoom-in"
-                >
+                {/* Visor de Arte/Video respetando proporciones reales */}
+                <div className="flex-1 flex items-center justify-center min-h-[440px] xl:min-h-[540px] bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 p-2 sm:p-4 overflow-hidden">
                   <UniversalMediaEmbed
                     url={currentMediaUrl}
+                    fileName={currentMediaName}
+                    formatHint={currentPost.format}
+                    maxHeightPx={540}
                     alt={currentPost.title}
-                    className="w-full max-h-[560px]"
+                    className="w-full"
+                    seekToSeconds={seekToSeconds}
+                    onTimestampComment={handleTimestampComment}
+                    onClick={() => {
+                      if (currentMediaUrl) {
+                        setZoomImageUrl(currentMediaUrl);
+                        setIsZoomOpen(true);
+                      }
+                    }}
                   />
                 </div>
               </div>
@@ -819,7 +992,9 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
                               </span>
                             </div>
                             {cleanText && (
-                              <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{cleanText}</p>
+                              <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                                {renderCommentBody(cleanText)}
+                              </p>
                             )}
                             {attachedImg && (
                               <div className="mt-2">
@@ -844,6 +1019,7 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
                 {/* Input de Comentarios SIN el campo de nombre (Eliminado según Imagen 4) */}
                 <div className="pt-3 border-t border-slate-200/70 dark:border-slate-800 mt-3 space-y-2">
                   <textarea
+                    ref={commentTextareaRef}
                     rows={2}
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
@@ -1110,30 +1286,55 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
                       </button>
                     </div>
 
-                    {/* Visor de Arte Móvil */}
-                    <div
-                      onClick={() => {
-                        if (currentMediaUrl) {
-                          setZoomImageUrl(currentMediaUrl);
-                          setIsZoomOpen(true);
-                        }
-                      }}
-                      className="flex items-center justify-center min-h-[300px] bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-slate-100 dark:border-slate-800 p-2 overflow-hidden cursor-zoom-in"
-                    >
+                    {/* Visor de Arte Móvil respetando proporciones reales */}
+                    <div className="flex items-center justify-center min-h-[300px] bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-slate-100 dark:border-slate-800 p-2 overflow-hidden">
                       <UniversalMediaEmbed
                         url={currentMediaUrl}
+                        fileName={currentMediaName}
+                        formatHint={currentPost.format}
+                        maxHeightPx={440}
                         alt={currentPost.title}
-                        className="w-full max-h-[440px]"
+                        className="w-full"
+                        seekToSeconds={seekToSeconds}
+                        onTimestampComment={handleTimestampComment}
+                        onClick={() => {
+                          if (currentMediaUrl) {
+                            setZoomImageUrl(currentMediaUrl);
+                            setIsZoomOpen(true);
+                          }
+                        }}
                       />
                     </div>
                   </div>
 
-                  {/* Banner inferior de estado en español */}
-                  <div
-                    className={`w-full py-2.5 rounded-full font-black text-center text-xs tracking-wider uppercase flex items-center justify-center gap-2 border shadow-2xs ${statusBadgeClass}`}
-                  >
-                    <Check className="w-4 h-4" />
-                    <span>{statusLabel.toUpperCase()}</span>
+                  {/* Acciones de aprobación móvil en 1 clic */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={isUpdatingStatus}
+                      onClick={() => handlePublicStatusChange('approved')}
+                      className={`py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-95 disabled:opacity-50 ${
+                        currentPost.status === 'approved' || currentPost.status === 'client_approved'
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                      }`}
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>
+                        {currentPost.status === 'approved' || currentPost.status === 'client_approved'
+                          ? 'Aprobado'
+                          : 'Aprobar pieza'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isUpdatingStatus}
+                      onClick={() => handlePublicStatusChange('review')}
+                      className="py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/70 transition active:scale-95 disabled:opacity-50"
+                    >
+                      <MessageSquareWarning className="w-4 h-4" />
+                      <span>Pedir cambios</span>
+                    </button>
                   </div>
                 </div>
               )}
@@ -1224,7 +1425,9 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
                               </span>
                             </div>
                             {cleanText && (
-                              <p className="text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{cleanText}</p>
+                              <p className="text-slate-600 dark:text-slate-300 whitespace-pre-wrap">
+                                {renderCommentBody(cleanText)}
+                              </p>
                             )}
                             {attachedImg && (
                               <div className="mt-2">
@@ -1412,7 +1615,16 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
                   <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 sm:gap-3.5">
                     {filteredPosts.map(({ post, originalIndex }) => {
                       const isSelected = originalIndex === currentPostIndex;
-                      const thumbUrl = post.finalArtMediaUrl || post.referenceMediaUrl;
+                      const rawThumbUrl = post.finalArtMediaUrl || post.referenceMediaUrl;
+                      const rawThumbName = post.finalArtMediaUrl
+                        ? post.finalArtMediaName
+                        : post.referenceMediaName;
+                      const thumbDriveId = extractDriveStreamId(rawThumbUrl);
+                      const isThumbVideo = isLikelyVideoMedia(rawThumbUrl, rawThumbName, post.format);
+                      const thumbUrl =
+                        thumbDriveId && isThumbVideo
+                          ? `/api/drive/thumbnail/${encodeURIComponent(thumbDriveId)}?size=480`
+                          : rawThumbUrl;
                       const pStatusLabel = formatStatusSpanish(post.status);
                       const pBadgeStyle = getStatusBadgeStyle(post.status);
 
@@ -1499,10 +1711,13 @@ export const PublicWorkspaceMonthView: React.FC<PublicWorkspaceMonthViewProps> =
           <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-5xl max-h-[90vh] flex items-center justify-center cursor-default">
             <UniversalMediaEmbed
               url={zoomImageUrl || currentMediaUrl || ''}
+              fileName={zoomImageUrl === currentMediaUrl ? currentMediaName : undefined}
+              formatHint={currentPost?.format}
+              maxHeightPx={Math.round((typeof window !== 'undefined' ? window.innerHeight : 900) * 0.86)}
               alt="Zoom"
               autoplay
-              className="w-full max-h-[90vh] bg-transparent!"
-              mediaClassName="max-w-[95vw] max-h-[90vh] object-contain rounded-xl shadow-2xl"
+              className="w-full bg-transparent!"
+              mediaClassName="max-w-[95vw] max-h-[86vh] object-contain rounded-xl shadow-2xl"
             />
           </div>
         </div>

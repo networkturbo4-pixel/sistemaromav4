@@ -25,7 +25,9 @@ interface WorkspacePost {
   platforms?: string[];
   scheduledDate?: string;
   finalArtMediaUrl?: string;
+  finalArtMediaName?: string;
   referenceMediaUrl?: string;
+  referenceMediaName?: string;
   designerBrief?: string;
   notes?: string;
 }
@@ -264,7 +266,10 @@ export const WorkspacePresentationModal: React.FC<WorkspacePresentationModalProp
               <div className="flex-1 p-4 flex items-center justify-center overflow-y-auto">
                 <UniversalMediaEmbed
                   url={activeMediaTab === 'final' ? (currentPost.finalArtMediaUrl || currentPost.referenceMediaUrl) : (currentPost.referenceMediaUrl || currentPost.finalArtMediaUrl)}
-                  className="w-full max-h-full"
+                  fileName={activeMediaTab === 'final' ? (currentPost.finalArtMediaUrl ? currentPost.finalArtMediaName : currentPost.referenceMediaName) : (currentPost.referenceMediaUrl ? currentPost.referenceMediaName : currentPost.finalArtMediaName)}
+                  formatHint={currentPost.format}
+                  maxHeightPx={560}
+                  className="w-full"
                   alt={currentPost.title}
                 />
               </div>

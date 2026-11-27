@@ -2178,12 +2178,52 @@ class DatabaseManager {
     // ===========================================================================
     // WORKSPACE: REDES SOCIALES (POSTS)
     // ===========================================================================
+    sortWorkspacePostsAsc(posts) {
+        return [...posts].sort((a, b) => {
+            const aHasOrder = typeof a.orderIndex === 'number' && Number.isFinite(a.orderIndex);
+            const bHasOrder = typeof b.orderIndex === 'number' && Number.isFinite(b.orderIndex);
+            if (aHasOrder && bHasOrder && a.orderIndex !== b.orderIndex) {
+                return a.orderIndex - b.orderIndex;
+            }
+            if (aHasOrder !== bHasOrder) {
+                return aHasOrder ? -1 : 1;
+            }
+            const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            if (ta !== tb)
+                return ta - tb;
+            return String(a.id || '').localeCompare(String(b.id || ''));
+        });
+    }
+    async reorderWorkspacePosts(tenantId, orderedIds) {
+        if (!Array.isArray(orderedIds) || orderedIds.length === 0)
+            return false;
+        const orderMap = new Map();
+        orderedIds.forEach((id, index) => orderMap.set(id, index));
+        let changed = false;
+        const now = new Date().toISOString();
+        this.localState.workspacePosts = this.localState.workspacePosts.map((post) => {
+            if (post.tenantId === tenantId && orderMap.has(post.id)) {
+                changed = true;
+                return {
+                    ...post,
+                    orderIndex: orderMap.get(post.id),
+                    updatedAt: now,
+                };
+            }
+            return post;
+        });
+        if (changed) {
+            this.saveLocalState();
+        }
+        return changed;
+    }
     async getWorkspacePosts(tenantId, clientId) {
         let list = this.localState.workspacePosts.filter((p) => p.tenantId === tenantId);
         if (clientId) {
             list = list.filter((p) => p.clientId === clientId);
         }
-        return list;
+        return this.sortWorkspacePostsAsc(list);
     }
     async createWorkspacePost(tenantIdOrData, maybeData) {
         const data = typeof tenantIdOrData === 'string'
@@ -2218,7 +2258,7 @@ class DatabaseManager {
             createdAt: now,
             updatedAt: now,
         };
-        this.localState.workspacePosts.unshift(newPost);
+        this.localState.workspacePosts.push(newPost);
         this.saveLocalState();
         return newPost;
     }
@@ -2483,7 +2523,7 @@ class DatabaseManager {
             return null;
         const tenant = this.localState.tenants.find((t) => t.id === month.tenantId);
         const project = (this.localState.workspaceProjects || []).find((p) => p.id === month.projectId);
-        const posts = (this.localState.workspacePosts || []).filter((p) => p.monthId === month.id || (month.projectId && p.projectId === month.projectId));
+        const posts = this.sortWorkspacePostsAsc((this.localState.workspacePosts || []).filter((p) => p.monthId === month.id || (month.projectId && p.projectId === month.projectId)));
         return {
             month,
             project: project || null,

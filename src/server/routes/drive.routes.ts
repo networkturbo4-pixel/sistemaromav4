@@ -1416,24 +1416,92 @@ router.post(
   }
 );
 
-// STREAMING MULTIMEDIA NATIVO (HTTP Range 206 para Video, Audio y PDF)
+// Caché ligero en memoria para miniaturas públicas (evita llamadas repetidas a Drive)
+const thumbnailCache = new Map<string, { buffer: Buffer; contentType: string; expiresAt: number }>();
+const THUMB_CACHE_MAX = 120;
+const THUMB_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
+
+function getCachedThumb(key: string) {
+  const entry = thumbnailCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    thumbnailCache.delete(key);
+    return null;
+  }
+  return entry;
+}
+
+function setCachedThumb(key: string, buffer: Buffer, contentType: string) {
+  if (thumbnailCache.size >= THUMB_CACHE_MAX) {
+    const firstKey = thumbnailCache.keys().next().value;
+    if (firstKey) thumbnailCache.delete(firstKey);
+  }
+  thumbnailCache.set(key, { buffer, contentType, expiresAt: Date.now() + THUMB_CACHE_TTL_MS });
+}
+
+// STREAMING MULTIMEDIA NATIVO (HTTP Range 206 optimizado para Video, Audio y PDF)
+const VIDEO_CHUNK_BYTES = 4 * 1024 * 1024; // 4 MB por segmento inicial para arranque veloz
+
 async function streamDriveFileResponse(
-  req: { headers: { range?: string } },
+  req: { headers: { range?: string }; on?: (event: string, listener: () => void) => void },
   res: Response,
-  file: { googleFileId: string; mimeType?: string }
+  file: { googleFileId: string; mimeType?: string; size?: number }
 ): Promise<void> {
   if (!googleDriveService.isReady()) {
     res.status(503).json({ error: 'Google Drive no configurado.' });
     return;
   }
 
-  const rangeHeader = req.headers.range;
-  const driveRes = await googleDriveService.streamFileMedia(file.googleFileId, rangeHeader);
+  let effectiveRange = req.headers.range;
+  const isVideo = Boolean(file.mimeType && file.mimeType.startsWith('video/'));
+
+  // Si es video y el navegador pide un rango abierto (ej. bytes=0-), limitar el segmento a 4MB
+  // para obtener el primer frame casi al instante y evitar descargas masivas innecesarias.
+  if (isVideo && effectiveRange && file.size && file.size > VIDEO_CHUNK_BYTES) {
+    const openRangeMatch = effectiveRange.match(/^bytes=(\d+)-$/);
+    if (openRangeMatch) {
+      const start = parseInt(openRangeMatch[1], 10);
+      if (!Number.isNaN(start) && start < file.size) {
+        const end = Math.min(start + VIDEO_CHUNK_BYTES - 1, file.size - 1);
+        effectiveRange = `bytes=${start}-${end}`;
+      }
+    }
+  }
+
+  const abortController = new AbortController();
+  let clientClosed = false;
+
+  const handleClose = () => {
+    clientClosed = true;
+    abortController.abort();
+  };
+  res.on('close', handleClose);
+
+  let driveRes: globalThis.Response;
+  try {
+    driveRes = await googleDriveService.streamFileMedia(
+      file.googleFileId,
+      effectiveRange,
+      abortController.signal
+    );
+  } catch (err: any) {
+    res.off('close', handleClose);
+    if (clientClosed || err?.name === 'AbortError') return;
+    throw err;
+  }
+
+  if (clientClosed) {
+    try {
+      await driveRes.body?.cancel();
+    } catch {}
+    return;
+  }
 
   res.status(driveRes.status);
   driveRes.headers.forEach((value, key) => {
-    // Evitar re-enviar transfer-encoding chunked conflictivo
-    if (key.toLowerCase() !== 'transfer-encoding') {
+    const lower = key.toLowerCase();
+    // Evitar re-enviar cabeceras de transporte conflictivas
+    if (lower !== 'transfer-encoding' && lower !== 'connection') {
       res.setHeader(key, value);
     }
   });
@@ -1443,30 +1511,110 @@ async function streamDriveFileResponse(
   }
   res.setHeader('accept-ranges', 'bytes');
   if (!res.getHeader('cache-control')) {
-    res.setHeader('cache-control', 'public, max-age=3600');
+    res.setHeader('cache-control', 'public, max-age=86400');
   }
 
   if (!driveRes.body) {
+    res.off('close', handleClose);
     res.end();
     return;
   }
 
-  // Pipe WebStream to Node response stream
+  // Pipe WebStream -> Node response con backpressure y cancelación limpia al cerrar/hacer seek
   const reader = driveRes.body.getReader();
-  const pump = async () => {
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        res.write(value);
+  try {
+    while (!clientClosed && !res.writableEnded && !res.destroyed) {
+      const { done, value } = await reader.read();
+      if (done || clientClosed || res.writableEnded || res.destroyed) break;
+      const canContinue = res.write(value);
+      if (!canContinue) {
+        await new Promise<void>((resolve) => {
+          const onDrain = () => {
+            res.off('close', onDrain);
+            resolve();
+          };
+          res.once('drain', onDrain);
+          res.once('close', onDrain);
+        });
       }
+    }
+    if (!clientClosed && !res.writableEnded && !res.destroyed) {
       res.end();
-    } catch (streamErr) {
+    }
+  } catch (streamErr: any) {
+    if (!clientClosed && streamErr?.name !== 'AbortError' && !res.destroyed) {
       res.destroy();
     }
-  };
-  pump();
+  } finally {
+    res.off('close', handleClose);
+    try {
+      await reader.cancel();
+    } catch {}
+  }
 }
+
+// METADATA ULTRA-RÁPIDA (<2ms desde DB local) para detectar tipo MIME, dimensiones y duración sin descargar el archivo
+router.get('/meta/:id', async (req, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const file = await db.getDriveFileByIdAnyTenant(id);
+    if (!file) {
+      res.status(404).json({ error: 'Archivo no encontrado.' });
+      return;
+    }
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.json({
+      id: file.id,
+      name: file.name,
+      mimeType: file.mimeType,
+      size: file.size || 0,
+      width: file.width || null,
+      height: file.height || null,
+      durationMillis: file.durationMillis || null,
+      thumbnailUrl: `/api/drive/thumbnail/${encodeURIComponent(file.id)}?size=960`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// MINIATURA PÚBLICA EN ALTA RESOLUCIÓN (Para póster instantáneo de videos y tarjetas de grilla)
+router.get('/thumbnail/:id', async (req, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const size = Math.min(1600, Math.max(200, Number(req.query.size) || 960));
+    const cacheKey = `${id}:${size}`;
+    const cached = getCachedThumb(cacheKey);
+    if (cached) {
+      res.setHeader('Content-Type', cached.contentType);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.send(cached.buffer);
+      return;
+    }
+
+    const file = await db.getDriveFileByIdAnyTenant(id);
+    if (!file) {
+      res.status(404).json({ error: 'Archivo no encontrado.' });
+      return;
+    }
+
+    await ensureDriveConfigForTenant(file.tenantId);
+    const thumb = await googleDriveService.fetchHighResThumbnail(file.googleFileId, size);
+    if (!thumb) {
+      res.status(404).json({ error: 'Miniatura no disponible.' });
+      return;
+    }
+
+    setCachedThumb(cacheKey, thumb.buffer, thumb.contentType);
+    res.setHeader('Content-Type', thumb.contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(thumb.buffer);
+  } catch (err: any) {
+    if (!res.headersSent) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+});
 
 router.get('/stream/:id', async (req, res: Response) => {
   try {
